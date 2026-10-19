@@ -1,7 +1,7 @@
-# 同屏触摸原型运行库
+# 同屏触摸运行库
 
 已验证环境：Fedora 44 / ArmadaOS `20261010.c3d178c`，aarch64。
-这是开发依赖说明，不是通用安装器，不修改 bootc 系统镜像或启用服务。
+这是已测环境的依赖说明，不是通用安装器，不修改 bootc 系统镜像或启用自启动。
 宿主需要 Python GI / Cairo、GTK3、GStreamer 的 appsink / videoconvert / videoscale / videorate、
 PipeWire、libxcb 和 Wayland client。原生模式需要系统 libevdev 与正常用户的 `/dev/uinput` 权限；
 鼠标兼容模式另需 libei。Mac 可运行纯逻辑测试。
@@ -24,9 +24,25 @@ PipeWire、libxcb 和 Wayland client。原生模式需要系统 libevdev 与正�
 分包不含许可证文件，打包时保留对应版本 PipeWire 的 `COPYING` 与 `LICENSE`；
 本轮宿主相同版本文件在 `/usr/share/licenses/pipewire/`。
 
-启动器只为子进程设置 `GST_PLUGIN_PATH=<runtime>/usr/lib64/gstreamer-1.0`，
+独立预览启动器只为子进程设置 `GST_PLUGIN_PATH=<runtime>/usr/lib64/gstreamer-1.0`，
 在 runtime 旁创建独立 registry 缓存，不改全局环境和系统插件目录。
 系统更新后需重新核对 PipeWire / GStreamer 版本与 ABI，不能把 Fedora 44 二进制直接用于其他系统。
+
+### 原面板的持久部署
+
+已安装面板复用原入口、用户服务和配置，新增 Python 模块与其他代码一起放入
+`~/.local/share/thor-panel/`。插件放在该目录的
+`runtime/usr/lib64/gstreamer-1.0/libgstpipewire.so`，许可证放在
+`runtime/usr/share/licenses/pipewire/`。不要把临时开发目录写进快捷方式。
+`supervisor.py` 仅在插件存在时为面板子进程设置 `GST_PLUGIN_PATH` 和
+`GST_REGISTRY=~/.cache/thor-panel/gstreamer-registry.bin`（尊重 `XDG_CACHE_HOME`）。
+GTK 私有库路径仍沿用原设置；不写全局环境、不安装宿主 RPM、不新增开机启动。
+
+更新代码前备份现有程序目录及 `~/.config/thor-panel/config.json`；只重启自己的
+`thor-panel.service`，不重启 Steam、Gamescope 或官方下屏服务。
+需要回退时停止该用户服务，恢复备份的程序目录，保留当前配置中其他设置；
+若 `mode` 是 `mirror`，旧代码会按默认键鼠页加载。服务应继续为 `disabled`，手动启动时可为 `active`。
+实际部署的备份位置保存在设备自己的备份目录，仓库不提交个人配置、二进制或备份。
 
 ## GTK layer-shell
 

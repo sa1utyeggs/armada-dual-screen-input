@@ -29,6 +29,8 @@ class CompactPanelLayoutTests(unittest.TestCase):
         self.app.show_debug_hud = False
         self.app.window = SimpleNamespace(get_mapped=Mock(return_value=True))
         self.app.keyboard_guard = Mock()
+        self.app.mirror = Mock(active=False, input_mode='native', armed=False,
+                               enable_label='启用触摸')
         self.app.touch = SimpleNamespace(release_all=Mock())
         self.app.gesture.touch_down = Mock()
         self.app.gesture.touch_move = Mock()
@@ -47,10 +49,10 @@ class CompactPanelLayoutTests(unittest.TestCase):
         patch.object(self.panel.Gtk, "Window",
                      side_effect=AssertionError("No GTK windows in tests")).start()
 
-    def test_header_exposes_only_two_modes_and_has_no_overlapping_buttons(self):
+    def test_header_exposes_three_modes_and_has_no_overlapping_buttons(self):
         buttons = self.panel.upstream.HEADER_BUTTONS
         names = [name for name, _, _ in buttons]
-        self.assertEqual(names[:2], ["trackpad", "split"])
+        self.assertEqual(names[:3], ["trackpad", "split", "mirror"])
         self.assertTrue({"keyboard", "settings", "hud"}.isdisjoint(names))
         self.assertEqual(len(names), len(set(names)))
         for (_, x, width), (_, next_x, _) in zip(buttons, buttons[1:]):
@@ -62,9 +64,9 @@ class CompactPanelLayoutTests(unittest.TestCase):
             self.assertLessEqual(x + width, self.panel.SCREEN_WIDTH)
         self.assertEqual(self.app._header_button_look("split")[0], "键鼠")
 
-    def test_header_mode_buttons_route_to_the_two_visible_modes(self):
+    def test_header_mode_buttons_route_to_the_three_visible_modes(self):
         with patch.object(self.app, "set_mode") as select:
-            for mode in ("trackpad", "split"):
+            for mode in ("trackpad", "split", "mirror"):
                 _, x, width = next(button for button in self.panel.upstream.HEADER_BUTTONS
                                    if button[0] == mode)
                 self.app._handle_header_touch(1, x + width / 2, 30, True)
@@ -72,7 +74,7 @@ class CompactPanelLayoutTests(unittest.TestCase):
         self.assertFalse(self.bridge.events)
 
     def test_status_strip_is_inert_through_move_and_lift_in_both_modes(self):
-        for mode in ("trackpad", "split"):
+        for mode in ("trackpad", "split", "mirror"):
             for y in (80.0, 102.0, 123.999):
                 with self.subTest(mode=mode, y=y), patch.object(self.app, "set_mode") as select:
                     self.app.mode = mode
@@ -151,6 +153,77 @@ class CompactPanelLayoutTests(unittest.TestCase):
         self.app.save_config.assert_not_called()
         self.app.keyboard_guard.update.assert_not_called()
         self.assertFalse(self.bridge.events)
+
+    def test_mirror_page_never_feeds_trackpad_or_keyboard(self):
+        self.app.mode = "mirror"
+        self.app._handle_touch_down(21, 620, 600, 1.0)
+        self.app._handle_touch_move(21, 630, 610, 1.1)
+        self.app._handle_timed_touch_move(21, 640, 620, 1.2, 0.01)
+        self.app._handle_touch_up(21, 1.3)
+        self.assertEqual([c.args[0] for c in self.app.mirror.touch.call_args_list],
+                         ['begin', 'move', 'move', 'end'])
+        self.app.gesture.touch_down.assert_not_called()
+        self.app.gesture.touch_move.assert_not_called()
+        self.app.gesture.touch_up.assert_not_called()
+        self.assertFalse(self.bridge.events)
+
+    def test_mirror_header_contacts_and_stale_ids_do_not_move_upper_pointer(self):
+        self.app.mode = "mirror"
+        self.app._touch_owner[2] = 'header'
+        for tid in (2, 999):
+            self.app._handle_touch_move(tid, 620, 650, 1.0)
+            self.app._handle_timed_touch_move(tid, 620, 660, 1.1, 0.01)
+            self.app._handle_touch_up(tid, 1.2)
+        self.app.mirror.touch.assert_not_called()
+        self.app.gesture.touch_move.assert_not_called()
+        self.app.gesture.touch_up.assert_not_called()
+
+    def test_enter_mirror_releases_keyboard_guard_and_leave_stops_capture(self):
+        self.app.set_mode('mirror')
+        self.assertEqual(self.app.mode, 'mirror')
+        self.app.mirror.start.assert_called_once()
+        self.app.keyboard_guard.update.assert_called_with(False)
+        self.app.mirror.stop.reset_mock()
+        self.app.set_mode('split')
+        self.app.mirror.stop.assert_called_once()
+        self.app.keyboard_guard.update.assert_called_with(True)
+        self.assertFalse(self.bridge.events)
+
+    def test_mirror_control_buttons_do_not_emit_ordinary_mouse_buttons(self):
+        self.app.mode = 'mirror'
+        for key in ('left', 'right', 'pen'):
+            _, x, width = next(b for b in self.panel.upstream.HEADER_BUTTONS if b[0] == key)
+            self.app._handle_header_touch(1, x + width / 2, 30, True)
+        self.app.mirror.toggle.assert_called_once()
+        self.app.mirror.set_input_mode.assert_called_once_with('mouse')
+        self.app.mirror.pause.assert_called_once()
+        self.assertFalse(self.bridge.events)
+
+    def test_discard_pre_arm_contacts_does_not_pause_new_native_sender(self):
+        self.app.touch.release_all.side_effect = lambda: self.app._cancel_contact(7, 1.0)
+        self.app._clear_panel_contacts()
+        self.app.mirror.pause.assert_not_called()
+        self.app._cancel_contact(8, 2.0)
+        self.app.mirror.pause.assert_called_once()
+
+    def test_unmap_stops_mirror_and_restores_native_steam_keyboard(self):
+        self.app.mode = 'mirror'
+        self.app._on_unmap()
+        self.app.mirror.stop.assert_called_once()
+        self.app.touch.release_all.assert_called_once()
+        self.app.keyboard_guard.update.assert_called_with(False)
+        self.assertFalse(self.bridge.events)
+
+    def test_collapse_and_expand_restart_preview_without_arming(self):
+        self.app.mode = 'mirror'
+        with patch.object(self.app, '_apply_anchors'):
+            self.app._set_collapsed(True)
+            self.app.mirror.stop.assert_called_once()
+            self.app.mirror.start.assert_not_called()
+            self.app._set_collapsed(False)
+        self.app.mirror.start.assert_called_once()
+        self.app.mirror.toggle.assert_not_called()
+        self.app.keyboard_guard.update.assert_called_with(False)
 
 
 if __name__ == "__main__":
