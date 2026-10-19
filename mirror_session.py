@@ -8,8 +8,9 @@ from mirrored_touch import MirroredTouch
 
 
 class MirrorSession:
-    def __init__(self, sender) -> None:
+    def __init__(self, sender, *, gesture_factory=MirroredTouch) -> None:
         self.sender = sender
+        self.gesture_factory = gesture_factory
         self.frame: CapturedFrame | None = None
         self.transform: MirrorTransform | None = None
         self.gesture: MirroredTouch | None = None
@@ -32,7 +33,7 @@ class MirrorSession:
                 self.pause(now)
                 self.transform = transform
                 if self.gesture is None:
-                    self.gesture = MirroredTouch(transform)
+                    self.gesture = self.gesture_factory(transform)
                 else:
                     self.gesture.set_transform(transform, now)
         self.tick(now)

@@ -20,6 +20,9 @@ from gamescope_focus import FocusWatcher
 from mirror_capture import MirrorCapture, SourceMonitor
 from mirror_geometry import Rect
 from mirror_session import MirrorSession
+from native_input import NativeTouchInput
+from native_gesture import NativeMirroredTouch
+from mirrored_touch import MirroredTouch
 from toolkit_touch import ToolkitTouch
 
 
@@ -60,6 +63,7 @@ def run(args) -> int:
             self.surface = self.surface_frame = None
             self.drawn_sequence = 0
             self.last_status = ''
+            self.last_armed = False
             self.rate_started, self.rate_sequence, self.rate = time.monotonic(), 0, 0.0
             self.message = '预览已启动；触摸尚未启用'
             self.touch = ToolkitTouch(self.begin, self.move, self.end, self.cancel,
@@ -82,7 +86,14 @@ def run(args) -> int:
             box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
             box.set_border_width(8)
             self.window.add(box)
-            heading = Gtk.Label(label='同屏触摸 · 实验预览')
+            heading = Gtk.Box(spacing=12)
+            heading.pack_start(Gtk.Label(label='同屏触摸 · 实验预览'), True, True, 0)
+            self.mode = Gtk.ComboBoxText()
+            self.mode.append('native', '原生触摸')
+            self.mode.append('mouse', '鼠标兼容')
+            self.mode.set_active_id(args.input_mode)
+            self.mode.set_can_focus(False)
+            heading.pack_end(self.mode, False, False, 0)
             box.pack_start(heading, False, False, 0)
             buttons = Gtk.Box(spacing=8, homogeneous=True)
             self.enable = Gtk.Button(label='启用触摸')
@@ -107,14 +118,15 @@ def run(args) -> int:
             self.canvas.connect('touch-event', self.touch_event)
             self.canvas.connect('size-allocate', self.allocated)
             box.pack_start(self.canvas, True, True, 0)
-            hint = Gtk.Label(label='单指点按 / 拖动 · 双指滑动滚轮 · 无惯性')
-            box.pack_start(hint, False, False, 0)
+            self.hint = Gtk.Label()
+            box.pack_start(self.hint, False, False, 0)
             css = Gtk.CssProvider()
             css.load_from_data(b'window { background: #101820; color: #eff5fa; } '
                                b'label, button { font-family: "Noto Sans CJK SC", Sans; font-size: 15px; } '
                                b'button { color: #eff5fa; background: #29404e; border-radius: 8px; }')
             Gtk.StyleContext.add_provider_for_screen(display.get_default_screen(), css, 600)
             self.enable.connect('clicked', self.toggle)
+            self.mode.connect('changed', self.mode_changed)
             release.connect('clicked', lambda *_: self.pause('已释放输入；触摸已暂停'))
             close.connect('clicked', self.close)
             self.window.connect('delete-event', lambda *_: (self.close(), True)[1])
@@ -123,6 +135,7 @@ def run(args) -> int:
             self.focus.start()
             self.source.start()
             self.capture.start()
+            self.update_hint()
             self.window.show_all()
             GLib.timeout_add(16, self.tick)
             if args.quit_after:
@@ -142,6 +155,8 @@ def run(args) -> int:
                               'size': [allocation.width, allocation.height],
                               'missing_glyphs': self.status.get_layout().get_unknown_glyphs_count(),
                               'armed': self.session.armed,
+                              'input_mode': self.mode.get_active_id(),
+                              'native_events_sent': getattr(self.session.sender, 'native_events_sent', 0),
                               'capture_status': self.capture.status,
                               'capture_error': self.capture.error,
                               'frame_sequence': self.drawn_sequence,
@@ -165,9 +180,21 @@ def run(args) -> int:
 
         def pause(self, message):
             self.pending_until = 0
+            self.last_armed = False
             self.session.pause(time.monotonic())
             self.touch.release_all()
+            self.session.sender.close()
             self.message = message
+
+        def update_hint(self):
+            self.hint.set_text('触屏动作按上屏应用设置处理 · 释放等同抬手'
+                               if self.mode.get_active_id() == 'native' else
+                               '单指左键点按 / 拖动 · 双指滚轮 · 无惯性')
+
+        def mode_changed(self, *_):
+            self.pause('模式已切换；请重新启用触摸')
+            self.session = MirrorSession(PausedSender())
+            self.update_hint()
 
         def toggle(self, *_):
             if self.session.armed or self.pending_until:
@@ -184,16 +211,22 @@ def run(args) -> int:
             if not state.snapshot.compatible(self.capture.source_size):
                 self.message = '请关闭 Steam 覆盖菜单；首版需上屏窗口与画面宽高比一致'
                 return
+            if self.mode.get_active_id() == 'native' and state.snapshot.touch_mode not in (1, 4):
+                self.message = '上屏触屏模式暂不支持；可选择鼠标兼容'
+                return
             self.pause('正在连接上屏输入…')
             self.session.sender.close()
             self.expected_focus = state.snapshot
             expected = state.snapshot
             try:
-                sender = LibEIInput(target, (expected.width, expected.height),
-                                    x_server_pid=expected.server_pid,
-                                    focus_check=lambda: self.focus.latest().matches(
-                                        expected, time.monotonic()))
-                self.session = MirrorSession(sender)
+                focus_check = lambda: self.focus.latest().matches(expected, time.monotonic())
+                if self.mode.get_active_id() == 'native':
+                    sender = NativeTouchInput(target, expected, focus_check=focus_check)
+                else:
+                    sender = LibEIInput(target, (expected.width, expected.height),
+                                        x_server_pid=expected.server_pid, focus_check=focus_check)
+                self.session = MirrorSession(sender, gesture_factory=(NativeMirroredTouch
+                    if self.mode.get_active_id() == 'native' else MirroredTouch))
                 self.session.update(frame, self.viewport(), now, live=True,
                                     cached_frame_current=self.cached_current(now))
                 self.pending_until = now + 2
@@ -231,7 +264,9 @@ def run(args) -> int:
                 return False
             now = time.monotonic()
             frame = self.capture.frames.latest()
-            was_armed = self.session.armed
+            # A touch callback can disarm between timer ticks. Remember the
+            # prior visible state so those failures also close the device.
+            was_armed = self.last_armed
             self.session.update(frame, self.viewport(), now, live=self.capture.status == 'running',
                                 cached_frame_current=self.cached_current(now))
             if self.pending_until:
@@ -240,15 +275,19 @@ def run(args) -> int:
                 if self.session.arm(now):
                     self.pending_until = 0
                     self.message = '触摸已启用；动作作用于上屏'
+                    if self.mode.get_active_id() == 'native' and self.expected_focus.touch_mode == 1:
+                        self.message = '触摸已启用；沿用应用的触屏鼠标映射'
                     print(json.dumps({'event': 'armed', 'surface_size': [
                         self.expected_focus.width, self.expected_focus.height]}), flush=True)
                 elif now >= self.pending_until or self.session.failed:
                     self.pause('连接上屏失败；请重新启用触摸')
             if was_armed and not self.session.armed:
                 self.touch.release_all()
+                self.session.sender.close()
                 self.message = '画面或前台窗口已变化；请重新启用触摸'
                 print(json.dumps({'event': 'input_paused', 'reason': self.session.reason,
                                   'error': self.session.last_error}), flush=True)
+            self.last_armed = self.session.armed
             if frame and frame.sequence != self.drawn_sequence:
                 self.canvas.queue_draw()
             if now - self.rate_started >= 1:
@@ -265,14 +304,17 @@ def run(args) -> int:
             elif self.capture.status == 'error':
                 message = '捕获已停止；请关闭后重新打开预览'
             gesture = self.session.gesture.state if self.session.gesture else 'idle'
-            activity = {'pending': '等待双指', 'single': '单指拖动',
+            activity = {'pending': '等待双指', 'single': ('单指触摸' if
+                        self.mode.get_active_id() == 'native' else '单指拖动'),
+                        'multi': '多点触摸',
                         'scroll-pending': '双指就绪', 'scrolling': '双指滚动',
                         'blocked': '请全部抬手'}.get(gesture, '等待触摸')
             if self.session.armed:
                 message += ' · ' + activity
-            status = (f'{message}\n画面 {self.rate:.0f} 帧/秒 · '
-                      f'手指 {len(self.touch.active)} · 滚轮 '
-                      f'{getattr(self.session.sender, "wheel_notches_sent", 0)} 格')
+            output = (f'触摸 {getattr(self.session.sender, "native_events_sent", 0)} 次'
+                      if self.mode.get_active_id() == 'native' else
+                      f'滚轮 {getattr(self.session.sender, "wheel_notches_sent", 0)} 格')
+            status = f'{message}\n画面 {self.rate:.0f} 帧/秒 · 手指 {len(self.touch.active)} · {output}'
             if status != self.last_status:
                 self.status.set_text(status)
                 self.last_status = status
@@ -362,6 +404,7 @@ def main() -> int:
     parser.add_argument('--upper-display', required=True)
     parser.add_argument('--x-display', required=True)
     parser.add_argument('--fps', type=int, default=60)
+    parser.add_argument('--input-mode', choices=('native', 'mouse'), default='native')
     parser.add_argument('--quit-after', type=float, default=0)
     parser.add_argument('--proof', type=Path, help='explicit development-only preview PNG')
     args = parser.parse_args()

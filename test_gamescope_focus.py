@@ -1,3 +1,4 @@
+from dataclasses import replace
 import unittest
 
 from gamescope_focus import FocusSnapshot, FocusState, UpperFocus
@@ -28,6 +29,10 @@ class FocusTests(unittest.TestCase):
         self.assertFalse(state.matches(focus, 0.9))
         self.assertFalse(state.matches(FocusSnapshot(11, 42, 42, 1280, 720), 1.1))
         self.assertFalse(FocusState(focus, 1.0, 'disconnected').matches(focus, 1.1))
+
+    def test_touch_passthrough_change_invalidates_existing_focus_guard(self):
+        focus = FocusSnapshot(10, 769, 769, 1920, 1080, touch_mode=4)
+        self.assertFalse(FocusState(replace(focus, touch_mode=1), 1).matches(focus, 1.1))
 
 
 if __name__ == '__main__':

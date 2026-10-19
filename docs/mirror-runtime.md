@@ -3,7 +3,8 @@
 已验证环境：Fedora 44 / ArmadaOS `20261010.c3d178c`，aarch64。
 这是开发依赖说明，不是通用安装器，不修改 bootc 系统镜像或启用服务。
 宿主需要 Python GI / Cairo、GTK3、GStreamer 的 appsink / videoconvert / videoscale / videorate、
-PipeWire、libei、libxcb 和 Wayland client。Mac 可运行纯逻辑测试。
+PipeWire、libxcb 和 Wayland client。原生模式需要系统 libevdev 与正常用户的 `/dev/uinput` 权限；
+鼠标兼容模式另需 libei。Mac 可运行纯逻辑测试。
 
 ## 私有 PipeWire 插件
 
@@ -51,6 +52,9 @@ python3 -B mirror_launch.py --x-display :0 \
 探测不取帧或发送输入。预览取帧但默认暂停触摸；上屏控制 display 需先核实。
 `--quit-after 7` 是有限时长检查；`--proof /path/to/preview.png` 显式保存布局截图。
 截图可能含用户内容，留在本地且不提交 Git。`--fps 30` / `--fps 60` 只影响这个预览进程。
+默认 `--input-mode native`，右上角可切换“原生触摸 / 鼠标兼容”；切换后重新启用。
+原生模式没有双指滚轮转换，直接传递最多两个触点，沿用应用的 Gamescope 触屏模式 1 / 4。
+不支持的模式会拒绝启用，不修改 `STEAM_TOUCH_CLICK_MODE`。
 
 真实按钮 / 滚轮检查使用自己的上屏测试窗口：
 
@@ -60,6 +64,10 @@ python3 -B mirror_input_smoke.py --x-display :0 --steam-ui-parent
 
 只允许 Steam 首页前台、没有游戏或覆盖层时短暂附加；只给测试程序自己的窗口写属性，
 不改 Steam 库或全局焦点控制。测试窗口未获得焦点时退出并报告 `input_sent: false`。
+
+原生触摸的隔离路由和退出检查见[原生触摸路由验证](native-touch-routing.md)。
+`native_touch_probe.py --preview-backend` 可检查预览输入后端；仍只允许 Steam 首页前台，
+否则报告不发送输入，不会为了测试打断运行中的游戏。
 
 使用“关闭预览”退出。开发诊断可给自己的预览 PID 发送 SIGUSR1 输出线程栈；
 不记录触摸坐标、按键内容或图像，日志不提交 Git。

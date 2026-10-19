@@ -27,6 +27,7 @@ class FocusSnapshot:
     surface_display: str = ''
     input_window: int = 0
     input_in_surface: bool = True
+    touch_mode: int | None = None
 
     def compatible(self, source_size: tuple[int, int]) -> bool:
         # The first prototype supports a full-frame, matching-aspect surface.
@@ -61,6 +62,7 @@ class UpperFocus:
                   'GAMESCOPE_FOCUSED_APP_GFX')
 
     DISPLAY_PROPERTIES = ('GAMESCOPE_FOCUS_DISPLAY', 'GAMESCOPE_MOUSE_FOCUS_DISPLAY')
+    TOUCH_PROPERTY = 'STEAM_TOUCH_CLICK_MODE'
 
     def __init__(self, display: str, *, _controller=None) -> None:
         if not re.fullmatch(r':[0-9]+(?:\.[0-9]+)?', display):
@@ -111,13 +113,13 @@ class UpperFocus:
                 raise InputUnavailable('upper XWayland screen is unavailable')
             self.root = c.c_uint32.from_address(it.data).value
             self.atoms = {}
-            for name in (() if _controller else self.PROPERTIES + self.DISPLAY_PROPERTIES):
+            for name in (() if _controller else self.PROPERTIES + self.DISPLAY_PROPERTIES + (self.TOUCH_PROPERTY,)):
                 encoded = name.encode()
                 cookie = self.api.xcb_intern_atom(self.connection, True, len(encoded), encoded)
                 reply = self._reply('xcb_intern_atom_reply', cookie)
                 try:
                     atom = c.c_uint32.from_address(reply + 8).value
-                    if not atom:
+                    if not atom and name != self.TOUCH_PROPERTY:
                         raise InputUnavailable('selected display is not a Gamescope root')
                     self.atoms[name] = atom
                 finally:
@@ -172,7 +174,21 @@ class UpperFocus:
             self.libc.free(reply)
         input_window, input_in_surface = surface._input_focus(values[0])
         return FocusSnapshot(*values, width, height, self.server_pid, surface_display,
-                             input_window, input_in_surface)
+                             input_window, input_in_surface, self._touch_mode())
+
+    def _touch_mode(self) -> int | None:
+        atom = self.atoms.get(self.TOUCH_PROPERTY, 0)
+        if not atom:
+            return None
+        cookie = self.api.xcb_get_property(self.connection, False, self.root, atom, 0, 0, 1)
+        reply = self._reply('xcb_get_property_reply', cookie)
+        try:
+            if (c.c_uint8.from_address(reply + 1).value != 32
+                    or self.api.xcb_get_property_value_length(reply) != 4):
+                return None
+            return c.c_uint32.from_address(self.api.xcb_get_property_value(reply)).value
+        finally:
+            self.libc.free(reply)
 
     def _display_property(self, name: str) -> str:
         cookie = self.api.xcb_get_property(self.connection, False, self.root,

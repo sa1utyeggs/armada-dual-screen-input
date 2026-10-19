@@ -20,6 +20,7 @@ class TouchIntent:
     kind: Literal["down", "move", "up", "cancel", "wheel"]
     position: tuple[float, float]
     wheel: tuple[float, float] = (0.0, 0.0)
+    contact_id: int = 1
 
 
 class MirroredTouch:

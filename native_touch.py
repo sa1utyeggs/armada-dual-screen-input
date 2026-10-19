@@ -1,8 +1,8 @@
-"""Developer-only Type B touchscreen probe, not an installed input backend.
+"""Transient Type B touchscreen for the probe and opt-in native preview.
 
 Creates its own transient uinput device through libevdev. Never opens physical
 input devices, changes udev rules, or sends mouse buttons. Callers must verify
-the route and their own foreground test window before every contact update.
+the route and foreground target before every contact update.
 Releasing uinput contacts is a lift, not a true Wayland touch cancellation.
 """
 from __future__ import annotations

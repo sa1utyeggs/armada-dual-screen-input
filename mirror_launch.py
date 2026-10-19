@@ -30,6 +30,7 @@ def main() -> int:
     parser.add_argument('--quit-after', type=float, default=0, help='bounded development smoke run')
     parser.add_argument('--proof', type=Path, help='explicit development-only preview PNG')
     parser.add_argument('--fps', type=int, choices=(30, 60), default=60)
+    parser.add_argument('--input-mode', choices=('native', 'mouse'), default='native')
     args = parser.parse_args()
     if not sys.platform.startswith('linux') or os.getuid() == 0:
         parser.error('run as the normal handheld Linux user')
@@ -57,7 +58,8 @@ def main() -> int:
     command = [sys.executable, '-B', str(base / 'mirror_preview.py'),
                '--node', str(result['pipewire_node_id']),
                '--upper-display', args.upper_display, '--x-display', args.x_display,
-               '--quit-after', str(args.quit_after), '--fps', str(args.fps)]
+               '--quit-after', str(args.quit_after), '--fps', str(args.fps),
+               '--input-mode', args.input_mode]
     if args.proof:
         command += ['--proof', str(args.proof.resolve())]
     with (target.runtime_dir / 'armada-mirror-preview.lock').open('a') as lock:

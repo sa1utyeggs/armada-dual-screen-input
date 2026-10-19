@@ -166,6 +166,10 @@ def upper_test(args, folder: Path, child) -> dict:
     actions = [('down', 1, .5, .5), ('move', 1, .25, .3), ('move', 1, .75, .7), ('up', 1),
                ('down', 2, .3, .5), ('down', 3, .7, .5),
                ('move', 2, .3, .4), ('move', 3, .7, .4), ('up', 2), ('up', 3)]
+    if args.preview_backend:
+        actions = [('down', 1, .5, .5), ('move', 1, .25, .3), ('move', 1, .75, .7), ('up', 1),
+                   ('down', 2, .3, .5), ('down', 3, .7, .5),
+                   ('move', 2, .3, .4), ('move', 3, .7, .4), ('up', 2), ('close',)]
     def guard():
         return (expected is not None and focus.snapshot() == expected
                 and touch_mode(focus) == 4 and owners(sender.node) == {expected.server_pid})
@@ -181,14 +185,34 @@ def upper_test(args, folder: Path, child) -> dict:
                         raise RuntimeError('own windows did not become ready; no input sent')
                     return True
                 expected = current
-                sender = VirtualTouchProbe(rotation=args.rotation, guard=guard)
+                if args.preview_backend:
+                    from ei_input import GamescopeTarget
+                    from native_input import NativeTouchInput
+                    sender = NativeTouchInput(GamescopeTarget.resolve(Path(os.environ['XDG_RUNTIME_DIR'])),
+                                              expected, focus_check=lambda: focus.snapshot() == expected)
+                else:
+                    sender = VirtualTouchProbe(rotation=args.rotation, guard=guard)
                 outcome['surface_size'] = [expected.width, expected.height]
                 ready_at = time.monotonic()
                 return True
             if time.monotonic() - ready_at < 1:
                 return True  # udev/libinput hotplug; no contact events yet
             if sent < len(actions):
-                sender.contact(*actions[sent])
+                if args.preview_backend:
+                    from mirrored_touch import TouchIntent
+                    sender.poll()
+                    if not sender.ready:
+                        if time.monotonic() - started > 4.5:
+                            raise RuntimeError('preview backend did not become ready')
+                        return True
+                    action = actions[sent]
+                    if action[0] == 'close':
+                        sender.close()  # actual close with a native contact still held
+                    else:
+                        point = tuple(action[2:]) if len(action) == 4 else (.5, .5)
+                        sender.send(TouchIntent(action[0], point, contact_id=action[1]))
+                else:
+                    sender.contact(*actions[sent])
                 sent += 1
                 outcome['input_sent'] = True
                 return True
@@ -200,9 +224,11 @@ def upper_test(args, folder: Path, child) -> dict:
                                for p in points) for want in expected_points)
             outcome.update(upper_counts=counts, coordinate_match=coords_ok,
                            native_source=all(e['source'] == 'touchscreen' for e in events))
-            outcome['passed'] = (counts['begin'] == counts['end'] == 3 and counts['move'] >= 4
+            outcome['passed'] = (counts['begin'] == counts['end'] == 3
+                                 and counts['move'] >= 4
                                  and not counts['cancel'] and not active
-                                 and outcome['max_contacts'] == 2 and coords_ok and outcome['native_source'])
+                                 and outcome['max_contacts'] == 2
+                                 and coords_ok and outcome['native_source'])
             loop.quit()
             return False
         except Exception as error:
@@ -233,6 +259,8 @@ def main() -> int:
                         help='explicit virtual-device transform; do not copy physical panel rotation')
     parser.add_argument('--gtk-runtime-root', type=Path)
     parser.add_argument('--report', type=Path)
+    parser.add_argument('--preview-backend', action='store_true',
+                        help='verify the preview sender, including close with a contact held')
     parser.add_argument('--observe-bottom', type=Path, help=argparse.SUPPRESS)
     args = parser.parse_args()
     if os.getuid() == 0 or not sys.platform.startswith('linux'):
@@ -241,6 +269,8 @@ def main() -> int:
         return observe_bottom(args.observe_bottom)
     if args.rotation is None:
         parser.error('select an explicit virtual-device rotation for the bounded test')
+    if args.preview_backend and args.rotation != 'normal':
+        parser.error('preview backend currently requires the verified normal transform')
     target = detect_target_session(game_only=True)
     if target is None:
         parser.error('verified Game Mode bottom session required')
