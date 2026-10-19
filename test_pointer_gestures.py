@@ -6,6 +6,7 @@ All timestamps and touch positions are synthetic; all output stays in memory.
 from pathlib import Path
 import sys
 import unittest
+from unittest.mock import patch
 
 
 VENDOR = Path(__file__).resolve().parent / "vendor" / "ratatoskr"
@@ -185,12 +186,12 @@ class PointerGestureTests(unittest.TestCase):
                 remaining = 3 - first_lift
                 x = 318 if remaining == 1 else 500
                 bridge.events.clear()
-                gesture.touch_move(remaining, x + 1, 300, 100.12)
-                self.assertLessEqual(abs(bridge.total_motion[0]), 2)
+                gesture.touch_move(remaining, x + 30, 300, 100.12)
+                self.assertEqual(bridge.moves, [])
                 gesture.touch_up(remaining, 100.15)
                 self.assertEqual(bridge.clicks, [])
 
-    def test_scroll_to_one_finger_can_move_without_click_or_glide(self):
+    def test_scroll_to_one_finger_waits_for_all_lifts_without_click_or_glide(self):
         gesture, bridge = fresh()
         gesture.set_settings(glide=True)
         glides = []
@@ -210,15 +211,86 @@ class PointerGestureTests(unittest.TestCase):
         bridge.events.clear()
 
         gesture.touch_move(1, 300, 418, 100.16)
-        self.assertEqual(len(bridge.moves), 1)
-        self.assertEqual(bridge.total_motion[0], 0)
-        self.assertGreaterEqual(bridge.total_motion[1], 6)
-        self.assertLessEqual(bridge.total_motion[1], 8)
+        self.assertEqual(bridge.events, [])
         gesture.touch_move(1, 300, 448, 100.18)
-        self.assertGreater(bridge.total_motion[1], 35)
+        self.assertEqual(bridge.events, [])
+        self.assertEqual((gesture.vel_x, gesture.vel_y), (0.0, 0.0))
+        self.assertEqual((gesture.rest_x, gesture.rest_y), (0.0, 0.0))
         gesture.touch_up(1, 100.19)
         self.assertEqual(bridge.clicks, [])
         self.assertEqual(glides, [])
+
+    def test_repeated_scroll_with_staggered_lifts_never_drifts_pointer(self):
+        gesture, bridge = fresh()
+        gesture.set_settings(glide=True, sensitivity=1.5, scroll_speed=1)
+        glides = []
+        gesture._start_glide = lambda vx, vy: glides.append((vx, vy))
+        for cycle in range(40):
+            with self.subTest(cycle=cycle):
+                first, second = cycle * 2 + 1, cycle * 2 + 2
+                now = 100.0 + cycle * 0.5
+                gesture.touch_down(first, 300, 400, now)
+                gesture.touch_down(second, 500, 400, now + 0.01)
+                gesture.touch_move(first, 300, 350, now + 0.08)
+                gesture.touch_move(second, 500, 350, now + 0.09)
+                lifted, remaining = ((first, second) if cycle % 2
+                                     else (second, first))
+                gesture.touch_up(lifted, now + 0.10)
+                x = 300 if remaining == first else 500
+                gesture.touch_move(remaining, x, 330, now + 0.14)
+                gesture.touch_up(remaining, now + 0.16)
+                self.assertEqual(bridge.moves, [])
+                self.assertEqual(bridge.clicks, [])
+                self.assertFalse(gesture.active_contacts)
+        self.assertEqual(sum(event[0] == "scroll" for event in bridge.events), 80)
+        self.assertEqual(glides, [])
+
+    def test_trailing_finger_movement_rejects_false_two_finger_tap(self):
+        for dx, dy in ((0, -40), (0, 40), (-40, 0), (40, 0)):
+            for first_lift in (1, 2):
+                with self.subTest(dx=dx, dy=dy, first_lift=first_lift):
+                    gesture, bridge = fresh()
+                    gesture.touch_down(1, 300, 300, 100.0)
+                    gesture.touch_down(2, 500, 300, 100.01)
+                    gesture.touch_up(first_lift, 100.05)
+                    remaining = 3 - first_lift
+                    x = 300 if remaining == 1 else 500
+                    gesture.touch_move(remaining, x + dx, 300 + dy, 100.10)
+                    gesture.touch_up(remaining, 100.15)
+                    self.assertEqual(bridge.events, [])
+
+    def test_second_finger_rejoining_continues_scroll_without_pointer_motion(self):
+        gesture, bridge = fresh()
+        gesture.touch_down(1, 300, 300, 100.0)
+        gesture.touch_down(2, 500, 300, 100.01)
+        gesture.touch_move(1, 300, 350, 100.05)
+        gesture.touch_up(2, 100.08)
+        gesture.touch_move(1, 300, 400, 100.10)
+        gesture.touch_down(3, 500, 400, 100.12)
+        gesture.touch_move(3, 500, 450, 100.15)
+        gesture.touch_up(1, 100.18)
+        gesture.touch_move(3, 500, 490, 100.20)
+        gesture.touch_up(3, 100.22)
+        self.assertEqual(sum(event[0] == "scroll" for event in bridge.events), 2)
+        self.assertEqual(bridge.moves, [])
+        self.assertEqual(bridge.clicks, [])
+
+    def test_fresh_pointer_moves_after_all_scroll_contacts_lift(self):
+        gesture, bridge = fresh()
+        gesture.touch_down(1, 300, 300, 100.0)
+        gesture.touch_down(2, 500, 300, 100.01)
+        gesture.touch_move(1, 300, 350, 100.05)
+        gesture.touch_up(1, 100.08)
+        gesture.touch_move(2, 500, 400, 100.10)
+        gesture.touch_up(2, 100.12)
+        bridge.events.clear()
+        gesture.touch_down(3, 300, 300, 100.15)
+        gesture.touch_move(3, 350, 300, 100.20)
+        self.assertTrue(bridge.moves)
+        self.assertGreater(bridge.total_motion[0], 0)
+        self.assertEqual(bridge.total_motion[1], 0)
+        gesture.touch_up(3, 100.22)
+        self.assertEqual(bridge.clicks, [])
 
     def test_fresh_finger_after_scroll_and_all_lifts_is_normal_tap(self):
         gesture, bridge = fresh()
@@ -243,6 +315,101 @@ class PointerGestureTests(unittest.TestCase):
         gesture.touch_up(2, 100.08)
         gesture.touch_up(1, 100.10)
         self.assertEqual(bridge.events, [("click", E.BTN_RIGHT)])
+
+    def test_recovery_group_suppresses_taps_including_later_added_fingers(self):
+        for fingers in (1, 2, 3):
+            with self.subTest(fingers=fingers):
+                gesture, bridge = fresh()
+                gesture.set_settings(three_finger_middle_click=True)
+                settings = gesture.get_settings()
+                gesture.touch_down(1, 300, 300, 100.0)
+                gesture.suppress_taps_for_current_group()
+                for tid in range(2, fingers + 1):
+                    gesture.touch_down(tid, 300 + tid * 100, 300, 100.02)
+                for tid in range(fingers, 0, -1):
+                    gesture.touch_up(tid, 100.10)
+                self.assertEqual(bridge.events, [])
+                self.assertEqual(gesture.get_settings(), settings)
+                # A genuinely new group can tap normally after every lift.
+                gesture.touch_down(4, 300, 300, 100.15)
+                gesture.touch_up(4, 100.25)
+                self.assertEqual(bridge.events, [("click", E.BTN_LEFT)])
+
+    def test_recovery_group_still_allows_pointer_motion_and_scroll(self):
+        gesture, bridge = fresh()
+        gesture.touch_down(1, 300, 300, 100.0)
+        gesture.suppress_taps_for_current_group()
+        gesture.touch_move(1, 350, 300, 100.05)
+        self.assertTrue(bridge.moves)
+        bridge.events.clear()
+        gesture.touch_down(2, 500, 300, 100.06)
+        gesture.touch_move(2, 500, 350, 100.10)
+        self.assertTrue(any(event[0] == "scroll" for event in bridge.events))
+        self.assertEqual(bridge.moves, [])
+        gesture.touch_up(2, 100.12)
+        gesture.touch_up(1, 100.14)
+        self.assertEqual(bridge.clicks, [])
+
+    def test_reset_clears_recovery_suppression_for_the_next_group(self):
+        gesture, bridge = fresh()
+        gesture.touch_down(1, 300, 300, 100.0)
+        gesture.suppress_taps_for_current_group()
+        gesture.reset_all()
+        self.assertFalse(gesture._suppress_group_taps)
+        gesture.touch_down(2, 300, 300, 100.05)
+        gesture.touch_up(2, 100.15)
+        self.assertEqual(bridge.events, [("click", E.BTN_LEFT)])
+
+    def test_recovery_cancels_long_press_and_late_callback_cannot_cross_groups(self):
+        timers = []
+
+        class ManualTimer:
+            def __init__(self, delay, callback, args=()):
+                self.callback = callback
+                self.args = args
+                self.alive = False
+                self.cancelled = False
+                timers.append(self)
+
+            def start(self):
+                self.alive = True
+
+            def is_alive(self):
+                return self.alive
+
+            def cancel(self):
+                self.cancelled = True
+                self.alive = False
+
+            def fire_even_if_cancelled(self):
+                # Timer.cancel cannot stop an already-dispatched callback.
+                self.callback(*self.args)
+
+        gesture, bridge = fresh()
+        gesture.set_settings(long_press_right_click=True)
+        with patch.object(E.threading, "Timer", ManualTimer):
+            gesture.touch_down(1, 300, 300, 100.0)
+            old_timer = timers[-1]
+            gesture.suppress_taps_for_current_group()
+            self.assertTrue(old_timer.cancelled)
+            self.assertIsNone(gesture.long_press_timer)
+            old_timer.fire_even_if_cancelled()
+            self.assertFalse(gesture.long_press_triggered)
+            self.assertEqual(bridge.events, [])
+            gesture.touch_up(1, 100.10)
+            self.assertEqual(bridge.events, [])
+
+            gesture.touch_down(2, 300, 300, 100.15)
+            new_timer = timers[-1]
+            self.assertIsNot(new_timer, old_timer)
+            old_timer.fire_even_if_cancelled()
+            self.assertEqual(bridge.events, [])
+            self.assertFalse(gesture.long_press_triggered)
+            new_timer.fire_even_if_cancelled()
+            self.assertEqual(bridge.events, [("click", E.BTN_RIGHT)])
+            self.assertTrue(gesture.long_press_triggered)
+            gesture.touch_up(2, 100.70)
+            self.assertEqual(bridge.events, [("click", E.BTN_RIGHT)])
 
 
 if __name__ == "__main__":

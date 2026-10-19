@@ -374,6 +374,7 @@ class TouchGestureProcessor:
         self.max_fingers: int = 0
         self.is_dragging: bool = False
         self.pointer_active: bool = False  # False while a one-finger touch could still turn out to be a tap
+        self._suppress_group_taps: bool = False  # recovery-created groups may move/scroll, but must not click
         self.misuse_lock: bool = False  # True from the MISUSE_FINGERS-th finger until no contact is left
         self._expired_tids: set[int] = set()  # contacts dropped as stale: the kernel may reuse their slot
         self.strip: str | None = None  # 'v' / 'h' while the current stylus touch is a strip scroll
@@ -388,6 +389,7 @@ class TouchGestureProcessor:
 
         # Long-press right click timer
         self.long_press_timer: threading.Timer | None = None
+        self._long_press_generation: int = 0
         self.long_press_triggered: bool = False
 
         # Multi-finger gesture tracking
@@ -483,6 +485,7 @@ class TouchGestureProcessor:
         self.accum_dist = 0.0
         self.max_excursion = 0.0
         self.pointer_active = False
+        self._suppress_group_taps = False
         self.rest_x = self.rest_y = 0.0
         self.vel_x = 0.0
         self.vel_y = 0.0
@@ -566,12 +569,30 @@ class TouchGestureProcessor:
             self.last_state_label = "PEN SCROLL"
 
     def _cancel_long_press(self) -> None:
+        # Invalidate a callback even if Timer.cancel() came too late to stop
+        # its dispatch. A later gesture must not revive the old callback.
+        self._long_press_generation += 1
         if self.long_press_timer and self.long_press_timer.is_alive():
             self.long_press_timer.cancel()
         self.long_press_timer = None
 
-    def _on_long_press(self) -> None:
-        if len(self.active_contacts) == 1 and not self.is_dragging and self.accum_dist < LONG_PRESS_MAX_DIST_PX:
+    def suppress_taps_for_current_group(self) -> None:
+        """Disable taps/long-press for an already-started recovery group.
+
+        Call after touch_down has established the replacement group. Later
+        fingers share the suppression until every contact lifts; a new group
+        or reset_all restores normal tapping. Pointer motion and scrolling
+        stay enabled, including when another finger joins this group.
+        """
+        self._cancel_long_press()
+        if self.active_contacts:
+            self._suppress_group_taps = True
+            self._pen_tap_prev = None
+
+    def _on_long_press(self, generation: int) -> None:
+        if (generation == self._long_press_generation and not self._suppress_group_taps
+                and len(self.active_contacts) == 1 and not self.is_dragging
+                and self.accum_dist < LONG_PRESS_MAX_DIST_PX):
             self.long_press_triggered = True
             self.last_state_label = "LONG PRESS RIGHT"
             self.logger.log(DebugCode.STATUS_LONG_PRESS)
@@ -583,6 +604,9 @@ class TouchGestureProcessor:
         self._drop_stale_contacts(now)
         if self.stylus_mode and self.active_contacts:
             return  # one pointer only: a resting palm or a second hand is ignored for as long as the first touch lasts
+        if not self.active_contacts:
+            self._suppress_group_taps = False
+            self._cancel_long_press()
         contact = {"id": tid, "start_x": x, "start_y": y, "last_x": x, "last_y": y, "start_t": now, "seen_t": now}
         self.active_contacts[tid] = contact
         count = len(self.active_contacts)
@@ -622,7 +646,8 @@ class TouchGestureProcessor:
             if (self.long_press_right_click or self.stylus_mode) and not self.strip:
                 self._cancel_long_press()
                 delay_s = self.long_press_delay_ms / 1000.0
-                self.long_press_timer = threading.Timer(delay_s, self._on_long_press)
+                self.long_press_timer = threading.Timer(
+                    delay_s, self._on_long_press, args=(self._long_press_generation,))
                 self.long_press_timer.start()
 
         elif count >= 2:
@@ -663,6 +688,16 @@ class TouchGestureProcessor:
         self.last_move_time = now
 
         if count == 1:
+            if self.max_fingers >= 2:
+                # Fingers rarely lift together after scrolling. The trailing
+                # finger still belongs to that multi-finger gesture, not to a
+                # new pointer stroke. Keep its travel above for tap rejection,
+                # but wait for every finger to lift before moving the pointer.
+                self.rest_x = self.rest_y = 0.0
+                self.vel_x = self.vel_y = 0.0
+                self.vel_time = 0.0
+                self.last_state_label = "MULTI-FINGER HOLD"
+                return
             if self.strip:
                 self._strip_scroll(dx, dy, dt)
                 return
@@ -787,12 +822,11 @@ class TouchGestureProcessor:
             self.swipe_triggered = False  # a new three-finger swipe can start once a finger has lifted
 
         if len(self.active_contacts) == 1:
-            # Two fingers have become one. Scroll travel is not pointer travel:
-            # starting from the original landing point would replay the whole
-            # scroll on the remaining finger's first small move. Begin a fresh
-            # pointer leg, while retaining duration, accumulated travel and
-            # max_fingers instead of reclassifying it as a new single-finger
-            # tap or a single-finger gesture eligible for glide.
+            # Two fingers have become one. Keep the gesture multi-finger until
+            # the last contact lifts; scroll travel and trailing motion must
+            # neither move the pointer nor become a single-finger glide/tap.
+            # Clear motion state without changing duration, cumulative travel
+            # or max_fingers, which still classify a genuine two-finger tap.
             remaining = next(iter(self.active_contacts.values()))
             remaining["start_x"] = remaining["last_x"]
             remaining["start_y"] = remaining["last_y"]
@@ -820,7 +854,8 @@ class TouchGestureProcessor:
             tap_distance = self.max_excursion if self.max_fingers == 1 else self.accum_dist / max(1, self.max_fingers)
             if self.long_press_triggered:
                 self.last_state_label = "LONG PRESS DONE"
-            elif not self.pointer_active and tap_distance < TAP_MAX_DISTANCE_PX and duration < TAP_MAX_TIME_S:
+            elif (not self._suppress_group_taps and not self.pointer_active
+                  and tap_distance < TAP_MAX_DISTANCE_PX and duration < TAP_MAX_TIME_S):
                 if self.max_fingers == 1 and self.tap_to_click and self.stylus_mode:
                     self._pen_tap(now)
                 elif self.max_fingers == 1 and self.tap_to_click:

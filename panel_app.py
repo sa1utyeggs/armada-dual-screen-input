@@ -196,6 +196,31 @@ class PanelApp(upstream.ThorApp):
         if contact is not None:
             contact["seen_t"] = now
 
+    def _stalled_trackpad_begin(self, sequence, x, y) -> bool:
+        """Recover one quiet leftover scroll contact on a fresh trackpad press.
+
+        The Thor driver can retain an old slot too, so GTK may never report
+        an authoritative new group. This deliberately narrow fallback waits
+        for three seconds without any real touch event (including a lift).
+        It never times out a held keyboard key or a continuing contact.
+        """
+        if (sequence is None or self.collapsed or self.mode not in ("trackpad", "split")
+                or not self.touch.enabled or self.touch.owns_sequence(sequence)):
+            return False
+        contacts = self.touch.active
+        if (len(contacts) != 1 or self.gesture.max_fingers < 2
+                or self._touch_owner.get(contacts[0].tid) != "trackpad"
+                or self.gesture.is_dragging or self.held_ui_button is not None
+                or self.held_key is not None
+                or getattr(self.bridge, "held_buttons", ())
+                or getattr(self.bridge, "held_keys", ())):
+            return False
+        try:
+            lx, ly = self.touch.to_logical(x, y)
+        except (ValueError, TypeError):
+            return False
+        return self._owner_at(lx, ly) == "trackpad" and self.touch.quiet_for() >= 3.0
+
     def _start_key_repeat(self, key) -> None:
         self.key_pulses.begin_repeat(
             key.code, self.keyboard_cfg["keyboard_repeat_delay_ms"],
@@ -277,9 +302,15 @@ class PanelApp(upstream.ThorApp):
                 # On Wayland GTK marks only the first touch of an empty seat
                 # as pointer-emulating. A new group invalidates any old
                 # application sequences whose END/CANCEL was not delivered.
+                initial = event.get_pointer_emulated()
+                recover = not initial and self._stalled_trackpad_begin(sequence, event.x, event.y)
                 self.touch.begin(sequence, event.x, event.y,
                                  source_ms=event.get_time(),
-                                 starts_new_group=event.get_pointer_emulated())
+                                 starts_new_group=initial, cancel_previous=recover)
+                if recover:
+                    # A quiet real anchor cannot be distinguished from a
+                    # stale driver slot here. Recovery must never make a tap.
+                    self.gesture.suppress_taps_for_current_group()
             elif event.type == Gdk.EventType.TOUCH_UPDATE:
                 self.touch.update(sequence, event.x, event.y, source_ms=event.get_time())
             elif event.type == Gdk.EventType.TOUCH_END:

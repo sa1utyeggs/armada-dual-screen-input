@@ -100,6 +100,16 @@ class ToolkitTouchTests(unittest.TestCase):
         self.touch.begin("first", 10, 20, starts_new_group=True)
         self.assertEqual(self.events, [("begin", 1, 10.0, 20.0, 100.0)])
 
+    def test_explicit_adapter_recovery_cancels_without_claiming_a_new_group(self):
+        self.touch.begin("old", 10, 20)
+        self.clock.value += 5
+        self.touch.begin("new", 30, 40, cancel_previous=True)
+        self.assertEqual([event[:2] for event in self.events], [
+            ("begin", 1), ("cancel", 1), ("begin", 2),
+        ])
+        self.assertFalse(self.touch.update("old", 40, 50))
+        self.assertEqual([c.tid for c in self.touch.active], [2])
+
     def test_ordinary_second_finger_preserves_long_stationary_or_keyboard_touch(self):
         for first in ("stationary-trackpad", "held-key"):
             with self.subTest(first=first):
@@ -177,6 +187,92 @@ class ToolkitTouchTests(unittest.TestCase):
         self.assertEqual(self.touch.active[0].updated_at, 100)
         self.touch.begin("b", 30, 40)
         self.assertEqual(self.activity[-1], (1, 110.0))
+
+    def test_real_event_quiet_time_ignores_keepalive_and_preserves_long_hold(self):
+        self.assertEqual(self.touch.quiet_for(), math.inf)
+        self.touch.begin("held-key", 10, 20)
+        self.assertEqual(self.touch.quiet_for(), 0.0)
+        for _ in range(120):
+            self.clock.value += 1
+            self.touch.keepalive()
+        self.assertEqual(self.touch.quiet_for(), 120.0)
+        self.assertEqual(len(self.touch.active), 1)
+        self.assertEqual(self.touch.active[0].updated_at, 100.0)
+        self.assertEqual([event[0] for event in self.events], ["begin"])
+
+    def test_update_and_second_finger_end_reset_whole_group_quiet_time(self):
+        self.touch.begin("stationary-anchor", 10, 20)
+        self.clock.value += 10
+        self.touch.begin("scroll-finger", 30, 40)
+        self.clock.value += .5
+        self.assertEqual(self.touch.quiet_for(), .5)
+        self.touch.update("scroll-finger", 30, 50)
+        self.assertEqual(self.touch.quiet_for(), 0.0)
+        self.clock.value += .5
+        self.touch.end("scroll-finger")
+        self.assertEqual(self.touch.quiet_for(), 0.0)
+        # The anchor has not moved for 11 seconds, but the group just received
+        # a real END. It must not look quiet while a second finger is re-landed.
+        self.assertEqual(self.touch.active[0].updated_at, 100.0)
+        self.clock.value += .25
+        self.assertEqual(self.touch.quiet_for(), .25)
+        self.touch.begin("scroll-finger-again", 30, 40)
+        self.assertEqual(self.touch.quiet_for(), 0.0)
+        self.assertTrue(self.touch.owns_sequence("stationary-anchor"))
+
+    def test_cancel_and_nonempty_release_reset_quiet_but_empty_release_does_not(self):
+        self.touch.begin("a", 10, 20)
+        self.touch.begin("b", 30, 40)
+        self.clock.value += 5
+        self.touch.cancel("a")
+        self.assertEqual(self.touch.quiet_for(), 0.0)
+        self.clock.value += 5
+        self.touch.release_all()
+        self.assertEqual(self.touch.quiet_for(), 0.0)
+        self.clock.value += 5
+        self.assertEqual(self.touch.release_all(), 0)
+        self.assertEqual(self.touch.quiet_for(), 5.0)
+
+    def test_invalid_and_unknown_events_do_not_reset_real_event_quiet_time(self):
+        self.touch.begin("held", 10, 20)
+        self.clock.value += 5
+        self.assertFalse(self.touch.begin(None, 10, 20))
+        self.assertFalse(self.touch.update("unknown", 10, 20))
+        self.assertFalse(self.touch.end("unknown"))
+        self.assertFalse(self.touch.cancel("unknown"))
+        self.assertFalse(self.touch.end(None))
+        self.assertFalse(self.touch.cancel(None))
+        with self.assertRaises(ValueError):
+            self.touch.begin("bad", math.nan, 20, starts_new_group=True)
+        with self.assertRaises(ValueError):
+            self.touch.update("held", 10, math.inf)
+        self.assertEqual(self.touch.quiet_for(), 5.0)
+        self.assertTrue(self.touch.owns_sequence("held"))
+
+        self.touch.set_enabled(False)
+        self.clock.value += 5
+        self.assertFalse(self.touch.begin("disabled", 10, 20))
+        self.assertEqual(self.touch.quiet_for(), 5.0)
+
+    def test_sequence_ownership_is_read_only_and_tracks_lifecycle(self):
+        self.assertFalse(self.touch.owns_sequence(None))
+        self.assertFalse(self.touch.owns_sequence("a"))
+        self.touch.begin("a", 10, 20)
+        self.assertTrue(self.touch.owns_sequence("a"))
+        self.clock.value += 5
+        self.assertFalse(self.touch.owns_sequence("new"))
+        self.assertEqual(self.touch.quiet_for(), 5.0)
+        self.touch.begin("a", 30, 40)
+        self.assertTrue(self.touch.owns_sequence("a"))
+        self.assertEqual(self.touch.quiet_for(), 0.0)
+        self.touch.end("a")
+        self.assertFalse(self.touch.owns_sequence("a"))
+        self.touch.begin("b", 10, 20)
+        self.touch.cancel("b")
+        self.assertFalse(self.touch.owns_sequence("b"))
+        self.touch.begin("c", 10, 20)
+        self.touch.release_all()
+        self.assertFalse(self.touch.owns_sequence("c"))
 
     def test_stationary_contact_refresh_precedes_second_begin(self):
         seen = {}

@@ -72,6 +72,7 @@ class ToolkitTouch:
         self._on_timed_update = on_timed_update
         self._clock = clock
         self._last_time = -math.inf
+        self._last_event_time: float | None = None
         self._next_tid = 1
         self._contacts: dict[Hashable, Contact] = {}
         self.enabled = True
@@ -104,6 +105,21 @@ class ToolkitTouch:
         """An immutable snapshot, in contact-begin order."""
         return tuple(self._contacts.values())
 
+    def owns_sequence(self, sequence: Hashable | None) -> bool:
+        """Whether this exact toolkit sequence is already registered."""
+        return sequence is not None and sequence in self._contacts
+
+    def quiet_for(self) -> float:
+        """Seconds since an accepted real event or contact cancellation.
+
+        Keepalive never changes this baseline. Before the first accepted event
+        the result is infinity. This observation does not expire any contacts.
+        """
+        now = self._now()
+        if self._last_event_time is None:
+            return math.inf
+        return max(0.0, now - self._last_event_time)
+
     def _refresh_activity(self, now: float) -> None:
         if self._on_activity is not None:
             for contact in tuple(self._contacts.values()):
@@ -117,6 +133,7 @@ class ToolkitTouch:
     def begin(
         self, sequence: Hashable | None, x: float, y: float, *,
         source_ms: int | None = None, starts_new_group: bool = False,
+        cancel_previous: bool = False,
     ) -> bool:
         """Register a touch, optionally reconciling a trusted new-group boundary.
 
@@ -125,12 +142,15 @@ class ToolkitTouch:
         a quiet contact: a real finger may stay stationary indefinitely. The
         boundary repairs a missed application END, not a contact still held by
         the kernel/compositor, which cannot report a fresh group in that case.
+
+        ``cancel_previous`` is a separate explicit adapter recovery decision.
+        It cancels old state without asserting that the toolkit saw all lifts.
         """
         if sequence is None or not self.enabled:
             return False
         x, y = self.to_logical(x, y)
         now = self._now()
-        if starts_new_group and self._contacts:
+        if (starts_new_group or cancel_previous) and self._contacts:
             # Cancel, never lift: ghost fingers must not produce a late tap.
             # Clear all old sequences before reusing even the same boxed key.
             self.release_all()
@@ -138,10 +158,12 @@ class ToolkitTouch:
         self._refresh_activity(now)
         previous = self._contacts.pop(sequence, None)
         if previous is not None:
+            self._last_event_time = now
             self._on_cancel(previous.tid, now)
         contact = Contact(self._next_tid, x, y, now, now, source_ms)
         self._next_tid += 1
         self._contacts[sequence] = contact
+        self._last_event_time = now
         self._on_begin(contact.tid, x, y, now)
         return True
 
@@ -165,6 +187,7 @@ class ToolkitTouch:
                 elif delta == 0:
                     interval = contact.motion_interval or 0.0
         self._contacts[sequence] = Contact(contact.tid, x, y, contact.started_at, now, source_ms, interval)
+        self._last_event_time = now
         if self._on_timed_update is not None:
             self._on_timed_update(contact.tid, x, y, now, interval)
         else:
@@ -177,6 +200,7 @@ class ToolkitTouch:
         now = self._now()
         self._refresh_activity(now)
         contact = self._contacts.pop(sequence)
+        self._last_event_time = now
         self._on_end(contact.tid, now)
         return True
 
@@ -186,6 +210,7 @@ class ToolkitTouch:
         now = self._now()
         self._refresh_activity(now)
         contact = self._contacts.pop(sequence)
+        self._last_event_time = now
         self._on_cancel(contact.tid, now)
         return True
 
@@ -196,6 +221,7 @@ class ToolkitTouch:
         now = self._now()
         contacts = self.active
         self._contacts.clear()
+        self._last_event_time = now
         first_error: Exception | None = None
         for contact in contacts:
             try:
