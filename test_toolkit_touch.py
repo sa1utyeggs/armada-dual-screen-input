@@ -1,8 +1,16 @@
 """Pure touch-adapter tests: python3 -m unittest test_toolkit_touch.py."""
 import math
+from pathlib import Path
+import sys
 import unittest
 
 from toolkit_touch import ToolkitTouch
+
+# The gesture engine imports without opening devices; only a fake bridge is
+# constructed below. Include its package directory for debug_codes.
+VENDOR = Path(__file__).resolve().parent / "vendor" / "ratatoskr"
+sys.path[:0] = [str(VENDOR / "bin"), str(VENDOR)]
+from engine import TouchGestureProcessor
 
 
 class Clock:
@@ -62,6 +70,68 @@ class ToolkitTouchTests(unittest.TestCase):
         self.assertEqual(self.events[1], ("cancel", 1, 100.0))
         self.assertEqual(self.events[2], ("begin", 2, 30.0, 40.0, 100.0))
         self.assertEqual(len(self.touch.active), 1)
+
+    def test_new_group_cancels_every_old_contact_before_registering_touch(self):
+        self.touch.begin("old-a", 10, 20)
+        self.touch.begin("old-b", 30, 40)
+        self.clock.value += 1
+        self.touch.begin("new", 50, 60, starts_new_group=True)
+        self.assertEqual(self.events[2:], [
+            ("cancel", 1, 101.0), ("cancel", 2, 101.0),
+            ("begin", 3, 50.0, 60.0, 101.0),
+        ])
+        self.assertEqual([contact.tid for contact in self.touch.active], [3])
+        self.assertFalse(self.touch.end("old-a"))
+        self.assertFalse(self.touch.update("old-b", 40, 50))
+
+    def test_new_group_reused_sequence_is_cancelled_once_and_gets_fresh_id(self):
+        self.touch.begin("reused", 10, 20)
+        self.touch.begin("other", 30, 40)
+        self.touch.begin("reused", 50, 60, starts_new_group=True)
+        self.assertEqual([event[:2] for event in self.events], [
+            ("begin", 1), ("begin", 2), ("cancel", 1), ("cancel", 2),
+            ("begin", 3),
+        ])
+        self.assertEqual(len(self.touch.active), 1)
+        self.assertTrue(self.touch.end("reused"))
+        self.assertEqual(self.events[-1], ("end", 3, 100.0))
+
+    def test_first_group_with_no_old_contacts_does_not_cancel(self):
+        self.touch.begin("first", 10, 20, starts_new_group=True)
+        self.assertEqual(self.events, [("begin", 1, 10.0, 20.0, 100.0)])
+
+    def test_ordinary_second_finger_preserves_long_stationary_or_keyboard_touch(self):
+        for first in ("stationary-trackpad", "held-key"):
+            with self.subTest(first=first):
+                self.setUp()
+                self.touch.begin(first, 10, 20, starts_new_group=True)
+                self.clock.value += 120
+                self.touch.keepalive()
+                self.touch.begin("second", 30, 40, starts_new_group=False)
+                self.assertEqual([event[0] for event in self.events], ["begin", "begin"])
+                self.assertEqual([contact.tid for contact in self.touch.active], [1, 2])
+                self.assertEqual(self.touch.active[0].updated_at, 100.0)
+
+    def test_invalid_new_group_begin_does_not_clear_existing_contacts(self):
+        self.touch.begin("held", 10, 20)
+        self.assertFalse(self.touch.begin(None, 10, 20, starts_new_group=True))
+        for x, y in ((math.nan, 20), (10, math.inf), ("bad", 20)):
+            with self.assertRaises((ValueError, TypeError)):
+                self.touch.begin("invalid", x, y, starts_new_group=True)
+        self.assertEqual(self.events, [("begin", 1, 10.0, 20.0, 100.0)])
+        self.assertEqual([contact.tid for contact in self.touch.active], [1])
+        self.clock.value = math.nan
+        with self.assertRaises(ValueError):
+            self.touch.begin("invalid-clock", 30, 40, starts_new_group=True)
+        self.assertEqual([contact.tid for contact in self.touch.active], [1])
+
+    def test_disabled_new_group_begin_does_not_emit_another_cancel_or_begin(self):
+        self.touch.begin("held", 10, 20)
+        self.touch.set_enabled(False)
+        before = list(self.events)
+        self.assertFalse(self.touch.begin("new", 30, 40, starts_new_group=True))
+        self.assertEqual(self.events, before)
+        self.assertEqual(self.touch.active, ())
 
     def test_cancel_never_dispatches_a_normal_end_or_synthetic_tap(self):
         self.touch.begin("a", 10, 20)
@@ -161,6 +231,100 @@ class ToolkitTouchTests(unittest.TestCase):
         self.clock.value = 101
         self.touch.end("a")
         self.assertEqual([event[-1] for event in self.events], [100, 100, 101])
+
+
+class NewGroupGestureRecoveryTests(unittest.TestCase):
+    """Lost-END regressions against the real gesture math, with fake output."""
+
+    def setUp(self):
+        self.clock = Clock()
+        self.events = []
+
+        class Bridge:
+            def emit_mouse_rel(_self, dx, dy):
+                self.events.append(("move", dx, dy))
+
+            def emit_scroll(_self, dx, dy):
+                self.events.append(("scroll", dx, dy))
+
+            def tap_button(_self, button):
+                self.events.append(("click", button))
+
+        class Logger:
+            def log(_self, *args):
+                pass
+
+        self.gesture = TouchGestureProcessor(Bridge(), Logger())
+        self.gesture.set_settings(glide=False)
+
+        def activity(tid, now):
+            contact = self.gesture.active_contacts.get(tid)
+            if contact is not None:
+                contact["seen_t"] = now
+
+        self.touch = ToolkitTouch(
+            self.gesture.touch_down, self.gesture.touch_move,
+            self.gesture.touch_up, lambda *_: self.gesture.reset_all(),
+            on_activity=activity, clock=self.clock,
+        )
+
+    def test_lost_scroll_end_recovers_on_authoritative_new_group(self):
+        self.touch.begin("a", 300, 300, starts_new_group=True)
+        self.touch.begin("lost-end", 400, 300)
+        self.clock.value += .02
+        self.touch.update("a", 300, 340)
+        self.touch.update("lost-end", 400, 340)
+        self.touch.end("a")
+        for _ in range(120):
+            self.clock.value += .25
+            self.touch.keepalive()
+            self.gesture.expire_stale(self.clock.value)
+        self.assertEqual(len(self.gesture.active_contacts), 1)
+
+        # Without a new-group indication, the old behavior remains: a second
+        # contact must still scroll instead of interrupting a held finger.
+        self.events.clear()
+        self.touch.begin("ordinary", 300, 300)
+        self.clock.value += .02
+        self.touch.update("ordinary", 360, 340)
+        self.assertEqual([event[0] for event in self.events], ["scroll"])
+        self.touch.end("ordinary")
+
+        self.events.clear()
+        self.touch.begin("fresh", 300, 300, starts_new_group=True)
+        self.assertEqual(self.events, [])  # cancellation is not a synthetic tap
+        self.assertEqual(len(self.touch.active), 1)
+        self.assertEqual(len(self.gesture.active_contacts), 1)
+        self.clock.value += .02
+        self.touch.update("fresh", 360, 340)
+        self.assertTrue(any(event[0] == "move" for event in self.events))
+        self.assertFalse(any(event[0] in ("click", "scroll") for event in self.events))
+
+    def test_accumulated_ghosts_and_misuse_lock_are_cleared_for_fresh_group(self):
+        for index in range(4):
+            self.touch.begin(f"ghost-{index}", 300 + index * 30, 300)
+        self.assertTrue(self.gesture.misuse_lock)
+        self.touch.update("ghost-0", 400, 300)
+        self.assertEqual(self.events, [])
+
+        self.touch.begin("fresh", 300, 300, starts_new_group=True)
+        self.assertFalse(self.gesture.misuse_lock)
+        self.assertEqual(self.gesture.max_fingers, 1)
+        self.assertEqual(len(self.gesture.active_contacts), 1)
+        self.assertEqual(self.events, [])
+        self.clock.value += .02
+        self.touch.update("fresh", 360, 300)
+        self.assertEqual([event[0] for event in self.events], ["move"])
+
+    def test_reused_ghost_sequence_starts_a_clean_one_finger_gesture(self):
+        self.touch.begin("reused", 300, 300)
+        self.touch.begin("other-ghost", 400, 300)
+        old_ids = {contact.tid for contact in self.touch.active}
+        self.touch.begin("reused", 500, 300, starts_new_group=True)
+        self.assertFalse(old_ids & set(self.gesture.active_contacts))
+        self.clock.value += .02
+        self.touch.update("reused", 560, 300)
+        self.assertEqual([event[0] for event in self.events], ["move"])
 
 
 if __name__ == "__main__":

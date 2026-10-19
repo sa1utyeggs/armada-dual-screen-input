@@ -786,6 +786,24 @@ class TouchGestureProcessor:
         if len(self.active_contacts) < 3:
             self.swipe_triggered = False  # a new three-finger swipe can start once a finger has lifted
 
+        if len(self.active_contacts) == 1:
+            # Two fingers have become one. Scroll travel is not pointer travel:
+            # starting from the original landing point would replay the whole
+            # scroll on the remaining finger's first small move. Begin a fresh
+            # pointer leg, while retaining duration, accumulated travel and
+            # max_fingers instead of reclassifying it as a new single-finger
+            # tap or a single-finger gesture eligible for glide.
+            remaining = next(iter(self.active_contacts.values()))
+            remaining["start_x"] = remaining["last_x"]
+            remaining["start_y"] = remaining["last_y"]
+            # Preserve an already-established pointer intent: clearing it
+            # could turn a short move followed by a second finger into a tap.
+            self.max_excursion = 0.0
+            self.rest_x = self.rest_y = 0.0
+            self.vel_x = self.vel_y = 0.0
+            self.vel_time = 0.0
+            self.last_move_time = now
+
         if len(self.active_contacts) == 0:
 
             if self.strip:

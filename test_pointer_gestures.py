@@ -158,6 +158,92 @@ class PointerGestureTests(unittest.TestCase):
         gesture.touch_up(1, 100.10)
         self.assertEqual(bridge.clicks, [])
 
+    def test_scroll_to_one_finger_tiny_motion_does_not_replay_scroll(self):
+        gesture, bridge = fresh()
+        gesture.touch_down(1, 300, 300, 100.0)
+        gesture.touch_down(2, 500, 300, 100.01)
+        gesture.touch_move(1, 300, 400, 100.10)
+        gesture.touch_move(2, 500, 400, 100.11)
+        self.assertTrue(any(event[0] == "scroll" for event in bridge.events))
+        gesture.touch_up(2, 100.12)
+        bridge.events.clear()
+
+        gesture.touch_move(1, 300, 401, 100.13)
+        gesture.touch_up(1, 100.14)
+        self.assertEqual(bridge.events, [])
+
+    def test_pointer_move_then_second_finger_never_becomes_a_right_tap(self):
+        for first_lift in (1, 2):
+            with self.subTest(first_lift=first_lift):
+                gesture, bridge = fresh()
+                gesture.touch_down(1, 300, 300, 100.0)
+                gesture.touch_move(1, 318, 300, 100.05)
+                self.assertTrue(gesture.pointer_active)
+                gesture.touch_down(2, 500, 300, 100.06)
+                gesture.touch_up(first_lift, 100.10)
+                self.assertTrue(gesture.pointer_active)
+                remaining = 3 - first_lift
+                x = 318 if remaining == 1 else 500
+                bridge.events.clear()
+                gesture.touch_move(remaining, x + 1, 300, 100.12)
+                self.assertLessEqual(abs(bridge.total_motion[0]), 2)
+                gesture.touch_up(remaining, 100.15)
+                self.assertEqual(bridge.clicks, [])
+
+    def test_scroll_to_one_finger_can_move_without_click_or_glide(self):
+        gesture, bridge = fresh()
+        gesture.set_settings(glide=True)
+        glides = []
+        gesture._start_glide = lambda vx, vy: glides.append((vx, vy))
+        gesture.touch_down(1, 300, 300, 100.0)
+        gesture.touch_down(2, 500, 300, 100.01)
+        gesture.touch_move(1, 300, 400, 100.10)
+        gesture.touch_move(2, 500, 400, 100.11)
+        # Fractional output and velocity may also belong to the earlier
+        # single-finger leg; neither should survive this transition.
+        gesture.rest_x, gesture.rest_y = 0.75, -0.75
+        gesture.vel_x, gesture.vel_y = 2000, -2000
+        gesture.touch_up(2, 100.12)
+        self.assertEqual((gesture.rest_x, gesture.rest_y), (0.0, 0.0))
+        self.assertEqual((gesture.vel_x, gesture.vel_y), (0.0, 0.0))
+        self.assertEqual(gesture.max_fingers, 2)
+        bridge.events.clear()
+
+        gesture.touch_move(1, 300, 418, 100.16)
+        self.assertEqual(len(bridge.moves), 1)
+        self.assertEqual(bridge.total_motion[0], 0)
+        self.assertGreaterEqual(bridge.total_motion[1], 6)
+        self.assertLessEqual(bridge.total_motion[1], 8)
+        gesture.touch_move(1, 300, 448, 100.18)
+        self.assertGreater(bridge.total_motion[1], 35)
+        gesture.touch_up(1, 100.19)
+        self.assertEqual(bridge.clicks, [])
+        self.assertEqual(glides, [])
+
+    def test_fresh_finger_after_scroll_and_all_lifts_is_normal_tap(self):
+        gesture, bridge = fresh()
+        gesture.touch_down(1, 300, 300, 100.0)
+        gesture.touch_down(2, 500, 300, 100.01)
+        gesture.touch_move(1, 300, 400, 100.10)
+        gesture.touch_move(2, 500, 400, 100.11)
+        gesture.touch_up(2, 100.12)
+        gesture.touch_up(1, 100.13)
+        self.assertEqual(bridge.clicks, [])
+        self.assertEqual(gesture.active_contacts, {})
+        bridge.events.clear()
+
+        gesture.touch_down(3, 600, 600, 100.20)
+        gesture.touch_up(3, 100.30)
+        self.assertEqual(bridge.events, [("click", E.BTN_LEFT)])
+
+    def test_two_finger_tap_still_right_clicks_after_first_lift(self):
+        gesture, bridge = fresh()
+        gesture.touch_down(1, 300, 300, 100.0)
+        gesture.touch_down(2, 500, 300, 100.02)
+        gesture.touch_up(2, 100.08)
+        gesture.touch_up(1, 100.10)
+        self.assertEqual(bridge.events, [("click", E.BTN_RIGHT)])
+
 
 if __name__ == "__main__":
     unittest.main()

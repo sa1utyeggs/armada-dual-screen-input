@@ -88,6 +88,7 @@ journalctl --user -u thor-panel.service -n 60 --no-pager
 
 ## 已验证与限制
 
+- 双指滚动后的残留触点恢复正在独立分支准备，尚未安装或实机复测；机制、验证范围和后续复测见[触点恢复说明](docs/trackpad-recovery.md)。
 - 系统 GTK3、Cairo 与正常用户 `/dev/uinput` 权限可用；GUI 通过原生 GTK 运行。
 - 只打开虚拟键盘／鼠标的 `/dev/uinput`，不打开 raw evdev，不独占物理触摸屏。
 - Game Mode 连接官方底层 KWin 的 `armada-plasma-bottom`，不是直接连接 bottom Gamescope。真实唯一输出为 `X11-0`，逻辑尺寸 `689×600`。

@@ -4,3 +4,5 @@ MIT; see LICENSE and CREDITS.md. Local adapter is outside vendor/.
 Local engine.py patches (2026-10-19): tap jitter tolerance, 350 ms tap window,
 distance-based pointer start, fresh subpixel state, and report-rate-independent gain.
 GTK source-event intervals optionally drive velocity; lifetime timing stays monotonic.
+Two-to-one touch transitions reset pointer origin/velocity without replaying scroll
+travel; gesture duration, cumulative travel and max finger count remain unchanged.

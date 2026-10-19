@@ -274,7 +274,12 @@ class PanelApp(upstream.ThorApp):
         with self.input_lock:
             if event.type == Gdk.EventType.TOUCH_BEGIN:
                 self.burn_in.record_touch()
-                self.touch.begin(sequence, event.x, event.y, source_ms=event.get_time())
+                # On Wayland GTK marks only the first touch of an empty seat
+                # as pointer-emulating. A new group invalidates any old
+                # application sequences whose END/CANCEL was not delivered.
+                self.touch.begin(sequence, event.x, event.y,
+                                 source_ms=event.get_time(),
+                                 starts_new_group=event.get_pointer_emulated())
             elif event.type == Gdk.EventType.TOUCH_UPDATE:
                 self.touch.update(sequence, event.x, event.y, source_ms=event.get_time())
             elif event.type == Gdk.EventType.TOUCH_END:

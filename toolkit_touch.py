@@ -14,7 +14,10 @@ them with raw-frame or wall-clock timestamps. Optional GDK source times supply
 only per-contact motion intervals, never absolute gesture times. Call keepalive() periodically and before
 gesture expiry; on_activity should refresh ONLY the engine contact's seen_t.
 Stationary toolkit contacts remain valid until END/CANCEL, not until an evdev
-silence timeout.  Cancel all contacts on unmap, session exit, or mode handoff.
+silence timeout. A trusted toolkit first-contact indication may mark a new
+group, cancelling contacts whose END/CANCEL was not delivered to this adapter.
+Do not infer that indication from elapsed time or a previously unseen sequence.
+Cancel all contacts on unmap, session exit, or mode handoff.
 
 Callbacks run synchronously on the caller's thread; use the GTK main thread or
 the application's input lock.  Cancellation is distinct from an ordinary lift:
@@ -111,11 +114,27 @@ class ToolkitTouch:
         self._refresh_activity(self._now())
         return len(self._contacts)
 
-    def begin(self, sequence: Hashable | None, x: float, y: float, *, source_ms: int | None = None) -> bool:
+    def begin(
+        self, sequence: Hashable | None, x: float, y: float, *,
+        source_ms: int | None = None, starts_new_group: bool = False,
+    ) -> bool:
+        """Register a touch, optionally reconciling a trusted new-group boundary.
+
+        ``starts_new_group`` means the toolkit knows that its previous group
+        ended. It must not be set for ordinary second fingers or inferred from
+        a quiet contact: a real finger may stay stationary indefinitely. The
+        boundary repairs a missed application END, not a contact still held by
+        the kernel/compositor, which cannot report a fresh group in that case.
+        """
         if sequence is None or not self.enabled:
             return False
         x, y = self.to_logical(x, y)
         now = self._now()
+        if starts_new_group and self._contacts:
+            # Cancel, never lift: ghost fingers must not produce a late tap.
+            # Clear all old sequences before reusing even the same boxed key.
+            self.release_all()
+            now = self._now()
         self._refresh_activity(now)
         previous = self._contacts.pop(sequence, None)
         if previous is not None:

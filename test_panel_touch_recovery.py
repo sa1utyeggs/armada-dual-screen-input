@@ -1,0 +1,85 @@
+"""Exercise real GTK callback routing with synthetic events and memory output."""
+import sys
+from types import SimpleNamespace
+import unittest
+from unittest.mock import Mock, patch
+
+
+IS_LINUX = sys.platform == "linux"
+if IS_LINUX:
+    import test_panel_keyboard as fixture
+    from engine import TouchGestureProcessor
+    from toolkit_touch import ToolkitTouch
+
+
+@unittest.skipUnless(IS_LINUX, "Real GTK callback integration requires Linux")
+class PanelTouchRecoveryTests(unittest.TestCase):
+    def setUp(self):
+        fixture.PanelKeyboardTests.setUp(self)
+        self.panel = fixture.panel_app
+        self.app.mode = "trackpad"
+        self.app.collapsed = False
+        self.app.show_debug_hud = False
+        self.app.burn_in = SimpleNamespace(record_touch=Mock())
+        self.output = []
+        self.bridge.emit_mouse_rel = lambda x, y: self.output.append(("move", x, y))
+        self.bridge.emit_scroll = lambda x, y: self.output.append(("scroll", x, y))
+        self.bridge.tap_button = lambda button: self.output.append(("click", button))
+        self.app.gesture = TouchGestureProcessor(self.bridge, Mock())
+        self.app.gesture.set_settings(glide=False, scroll_speed=1)
+        self.app.touch = ToolkitTouch(
+            self.app._handle_touch_down, self.app._handle_touch_move,
+            self.app._handle_touch_up, self.app._cancel_contact,
+            on_activity=self.app._refresh_contact,
+            on_timed_update=self.app._handle_timed_touch_move,
+            clock=lambda: self.scheduler.now / 1000,
+        )
+        patch.object(self.panel.Gtk, "Window",
+                     side_effect=AssertionError("No real windows")).start()
+        patch.object(self.panel.upstream, "UInputBridge",
+                     side_effect=AssertionError("No real input devices")).start()
+
+    def event(self, kind, sequence, x=300, y=250, *, initial=False):
+        self.scheduler.now += 20
+        event = SimpleNamespace(
+            type=getattr(self.panel.Gdk.EventType, "TOUCH_" + kind), x=x, y=y,
+            get_event_sequence=lambda: sequence,
+            get_time=lambda: self.scheduler.now,
+            get_pointer_emulated=lambda: initial,
+        )
+        self.assertTrue(self.app._on_touch(None, event))
+
+    def test_new_wayland_group_recovers_pointer_after_a_missing_end(self):
+        self.event("BEGIN", "one", initial=True)
+        self.event("BEGIN", "ghost", x=500)
+        self.event("UPDATE", "one", y=300)
+        self.event("UPDATE", "ghost", x=500, y=300)
+        self.event("END", "one")
+        self.assertEqual(len(self.app.touch.active), 1)
+        self.assertEqual(len(self.app.gesture.active_contacts), 1)
+        # No END for the other old contact reaches the application. GDK's
+        # next initial-touch flag is authoritative: the seat started empty.
+        self.output.clear()
+        self.event("BEGIN", "new", initial=True)
+        self.event("UPDATE", "new", x=360, y=280)
+        self.assertTrue(any(e[0] == "move" for e in self.output))
+        self.assertFalse(any(e[0] in ("scroll", "click") for e in self.output))
+        self.event("END", "new")
+        self.assertFalse(self.app.touch.active)
+        self.assertFalse(self.app.gesture.active_contacts)
+        self.assertFalse(self.app._touch_owner)
+
+    def test_secondary_touch_keeps_stationary_first_finger_for_scrolling(self):
+        self.event("BEGIN", "one", initial=True)
+        self.scheduler.now += 30000
+        self.app._keep_contacts_alive()
+        self.event("BEGIN", "two", x=500)
+        self.assertEqual(len(self.app.touch.active), 2)
+        self.assertEqual(len(self.app.gesture.active_contacts), 2)
+        self.event("UPDATE", "two", x=500, y=310)
+        self.assertTrue(any(e[0] == "scroll" for e in self.output))
+        self.assertFalse(any(e[0] == "move" for e in self.output))
+
+
+if __name__ == "__main__":
+    unittest.main()
