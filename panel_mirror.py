@@ -7,6 +7,7 @@ manual pause lasts until resumed or the page is entered again.
 from __future__ import annotations
 
 import os
+import json
 from pathlib import Path
 from queue import Empty, SimpleQueue
 import threading
@@ -207,6 +208,24 @@ class PanelMirror:
             self._retry(now, '上屏输入暂不可用；稍后自动重试')
 
     def _retry(self, now, message):
+        # Transition-only diagnostics: never record contact positions, touch
+        # IDs, screenshots or text. Preserve the pre-pause failure reason.
+        frame = self.session.frame
+        focus = self.focus.latest() if self.focus else None
+        print('[mirror] ' + json.dumps({
+            'event': 'input_interrupted', 'reason': self.session.reason,
+            'error': self.session.last_error,
+            'frame_age_ms': round((now - frame.received_at) * 1000, 2) if frame else None,
+            'capture_age_ms': round((now - self.capture.checked_at) * 1000, 2)
+                if self.capture and isinstance(self.capture.checked_at, (int, float)) else None,
+            'focus_age_ms': round((now - focus.received_at) * 1000, 2) if focus else None,
+            'focus_changed': bool(focus and self.expected and (focus.snapshot is None
+                                  or not focus.snapshot.same_target(self.expected))),
+            'changed_fields': [name for name in self.expected.__dataclass_fields__
+                               if getattr(focus.snapshot, name) != getattr(self.expected, name)]
+                if focus and focus.snapshot and self.expected else [],
+            'delivered': dict(self.session.delivered),
+        }), flush=True)
         self.pause(message, manual=False)
         self._retry_after = now + 1.5
 
@@ -218,7 +237,7 @@ class PanelMirror:
             self._candidate = None
             self._candidate_since = self._clear_since = None
             return
-        if expected != self._candidate:
+        if self._candidate is None or not expected.same_target(self._candidate):
             self._candidate, self._candidate_since = expected, now
         if contacts_down:
             self._clear_since = None

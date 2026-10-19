@@ -34,6 +34,21 @@ class FocusTests(unittest.TestCase):
         focus = FocusSnapshot(10, 769, 769, 1920, 1080, touch_mode=4)
         self.assertFalse(FocusState(replace(focus, touch_mode=1), 1).matches(focus, 1.1))
 
+    def test_verified_child_focus_change_within_same_surface_keeps_drag_target(self):
+        focus = FocusSnapshot(10, 769, 769, 1920, 1080, 42, ':0', 11, True, 4)
+        child = replace(focus, input_window=12)
+        self.assertTrue(FocusState(child, 1).matches(focus, 1.1))
+        self.assertTrue(focus.same_target(child))
+
+    def test_real_target_changes_and_unverified_children_are_still_rejected(self):
+        focus = FocusSnapshot(10, 769, 769, 1920, 1080, 42, ':0', 11, True, 4)
+        for change in ({'window': 20}, {'app_id': 42}, {'graphics_app_id': 42},
+                       {'width': 1280}, {'height': 720}, {'server_pid': 43},
+                       {'surface_display': ':1'}, {'touch_mode': 1},
+                       {'input_window': 12, 'input_in_surface': False}):
+            with self.subTest(change=change):
+                self.assertFalse(FocusState(replace(focus, **change), 1).matches(focus, 1.1))
+
 
 if __name__ == '__main__':
     unittest.main()

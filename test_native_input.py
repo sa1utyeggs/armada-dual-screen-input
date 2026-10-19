@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import patch
 
 from ei_input import InputUnavailable
-from gamescope_focus import FocusSnapshot
+from gamescope_focus import FocusSnapshot, FocusState
 from mirror_capture import CapturedFrame
 from mirror_geometry import Rect
 from mirror_session import MirrorSession
@@ -80,6 +80,19 @@ class NativeInputTests(unittest.TestCase):
         self.sender.close(); self.sender.close()
         self.assertEqual(self.sender.touch.events, ['down', 'up'])
         self.assertTrue(self.sender.route.stopped)
+
+    def test_native_drag_survives_verified_child_change_but_not_new_surface(self):
+        current = self.expected
+        self.sender.focus_check = lambda: FocusState(current, 10).matches(self.expected, 10.1)
+        self.sender.send(TouchIntent('down', (.4, .4)))
+        current = replace(current, input_window=11)
+        self.sender.send(TouchIntent('move', (.5, .5)))
+        self.assertEqual(self.sender.touch.events, ['down', 'move'])
+        current = replace(current, window=20)
+        with self.assertRaises(InputUnavailable):
+            self.sender.send(TouchIntent('move', (.6, .6)))
+        self.sender.close()
+        self.assertEqual(self.sender.touch.events, ['down', 'move', 'up'])
 
     def test_route_loss_after_ready_disables_input(self):
         self.sender.poll()

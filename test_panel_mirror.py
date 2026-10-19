@@ -239,6 +239,23 @@ class PanelMirrorTests(unittest.TestCase):
         self.panel.touch('end', 7, self.now)
         self.sender.send.assert_not_called()
 
+    def test_child_focus_changes_do_not_restart_settle_timer_or_native_connection(self):
+        from dataclasses import replace
+        self.enter()
+        self.advance(0.1)
+        self.snapshot = replace(self.snapshot, input_window=2)
+        self.advance(0.15)
+        self.advance(0.1)
+        self.assertTrue(self.panel.armed)
+        self.panel.touch('begin', 7, self.now, 500, 500)
+        self.snapshot = replace(self.snapshot, input_window=3)
+        self.advance(0.02, contacts_down=True)
+        self.panel.touch('move', 7, self.now, 600, 500)
+        self.panel.touch('end', 7, self.now)
+        self.assertTrue(self.panel.armed)
+        self.native_factory.assert_called_once()
+        self.sender.close.assert_not_called()
+
 
 if __name__ == '__main__':
     unittest.main()

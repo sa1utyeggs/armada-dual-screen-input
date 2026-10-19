@@ -29,6 +29,19 @@ class FocusSnapshot:
     input_in_surface: bool = True
     touch_mode: int | None = None
 
+    def same_target(self, other: FocusSnapshot) -> bool:
+        # Chromium/Steam can move keyboard focus between child windows while
+        # the same visible input surface remains active. _input_focus() has
+        # already verified ancestry. A child XID alone is not a new target;
+        # surface, app, geometry, server, display and touch policy still are.
+        return (self.input_in_surface and other.input_in_surface
+                and (self.window, self.app_id, self.graphics_app_id,
+                     self.width, self.height, self.server_pid,
+                     self.surface_display, self.touch_mode)
+                == (other.window, other.app_id, other.graphics_app_id,
+                    other.width, other.height, other.server_pid,
+                    other.surface_display, other.touch_mode))
+
     def compatible(self, source_size: tuple[int, int]) -> bool:
         # The first prototype supports a full-frame, matching-aspect surface.
         # Letterboxing/cropping/zoom require the compositor's actual transform.
@@ -245,7 +258,8 @@ class FocusState:
     error: str | None = None
 
     def matches(self, expected: FocusSnapshot, now: float) -> bool:
-        return (self.error is None and self.snapshot == expected
+        return (self.error is None and self.snapshot is not None
+                and self.snapshot.same_target(expected)
                 and 0 <= now - self.received_at <= 0.2)
 
 
