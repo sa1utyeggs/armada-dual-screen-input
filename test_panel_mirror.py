@@ -23,7 +23,7 @@ class PanelMirrorTests(unittest.TestCase):
         self.snapshot = FocusSnapshot(1, 769, 769, 1600, 900, 123,
                                       ':0', 1, True, 4)
         self.focus = Mock()
-        self.focus.latest.return_value = FocusState(self.snapshot, self.now)
+        self.focus.latest.side_effect = lambda: FocusState(self.snapshot, self.now)
         self.sender = Mock(ready=True)
         self.native_factory = Mock(return_value=self.sender)
         self.mouse_factory = Mock(return_value=self.sender)
@@ -52,18 +52,25 @@ class PanelMirrorTests(unittest.TestCase):
 
     def arm(self):
         self.enter()
-        self.panel.toggle(self.now)
-        self.panel.tick(self.now)
+        self.advance(0.25)
+        self.advance(0.1)
         self.assertTrue(self.panel.armed)
 
-    def test_only_entering_mirror_starts_capture_and_starts_paused(self):
+    def advance(self, seconds, *, contacts_down=False):
+        self.now += seconds
+        self.panel.tick(self.now, contacts_down=contacts_down)
+
+    def test_entering_mirror_waits_for_stable_focus_then_automatically_enables(self):
         self.panel.tick(self.now)
         self.panel.capture_factory.assert_not_called()
         self.enter()
         self.capture.start.assert_called_once()
         self.assertFalse(self.panel.armed)
         self.native_factory.assert_not_called()
-        self.assertIn('镜像已连接', self.panel.message)
+        self.assertTrue(self.panel.auto_requested)
+        self.advance(0.25)
+        self.advance(0.1)
+        self.assertTrue(self.panel.armed)
 
     def test_default_native_drag_and_no_dual_finger_wheel(self):
         self.arm()
@@ -97,15 +104,16 @@ class PanelMirrorTests(unittest.TestCase):
         self.assertFalse(self.panel.armed)
         self.sender.close.assert_called()
 
-    def test_input_mode_switch_always_requires_manual_rearm(self):
+    def test_input_mode_switch_automatically_connects_after_fingers_lift(self):
         self.arm()
         self.panel.set_input_mode('mouse')
         self.assertFalse(self.panel.armed)
         self.sender.close.assert_called_once()
-        self.panel.tick(self.now)
+        self.advance(0.1, contacts_down=True)
         self.mouse_factory.assert_not_called()
-        self.panel.toggle(self.now)
-        self.panel.tick(self.now)
+        self.advance(0.25)
+        self.advance(0.1)
+        self.advance(0.1)
         self.mouse_factory.assert_called_once()
         self.assertTrue(self.panel.armed)
 
@@ -138,6 +146,98 @@ class PanelMirrorTests(unittest.TestCase):
         self.assertIn('still stopping', self.panel.last_error)
         self.panel.capture_factory.assert_called_once()
         self.assertFalse(self.discovered.is_set())
+
+    def test_tab_selecting_finger_blocks_device_creation_until_real_lift(self):
+        self.enter()
+        self.advance(1, contacts_down=True)
+        self.advance(2, contacts_down=True)
+        self.native_factory.assert_not_called()
+        self.assertIn('抬起', self.panel.message)
+        self.advance(0.1)
+        self.advance(0.1)
+        self.advance(0.1)
+        self.assertTrue(self.panel.armed)
+        self.sender.send.assert_not_called()
+
+    def test_finger_arriving_during_connection_prevents_arm_without_retry_churn(self):
+        self.enter()
+        self.sender.ready = False
+        self.advance(0.25)
+        self.native_factory.assert_called_once()
+        self.sender.ready = True
+        self.advance(3, contacts_down=True)
+        self.assertFalse(self.panel.armed)
+        self.native_factory.assert_called_once()
+        self.advance(0.1)
+        self.advance(0.1)
+        self.assertTrue(self.panel.armed)
+
+    def test_manual_pause_stays_paused_until_user_resumes(self):
+        self.arm()
+        self.panel.toggle(self.now)
+        self.advance(10)
+        self.assertFalse(self.panel.armed)
+        self.assertFalse(self.panel.auto_requested)
+        self.native_factory.assert_called_once()
+        self.panel.toggle(self.now)
+        self.advance(0.1)
+        self.advance(0.25)
+        self.advance(0.1)
+        self.assertTrue(self.panel.armed)
+
+    def test_switching_input_style_while_manually_paused_does_not_resume(self):
+        self.arm()
+        self.panel.pause()
+        self.panel.set_input_mode('mouse')
+        self.advance(5)
+        self.mouse_factory.assert_not_called()
+        self.assertFalse(self.panel.auto_requested)
+
+    def test_unstable_focus_restarts_settle_delay(self):
+        from dataclasses import replace
+        self.enter()
+        self.advance(0.1)
+        self.snapshot = replace(self.snapshot, window=2, input_window=2)
+        self.advance(0.15)
+        self.native_factory.assert_not_called()
+        self.advance(0.1)
+        self.native_factory.assert_not_called()
+        self.advance(0.15)
+        self.advance(0.1)
+        self.assertTrue(self.panel.armed)
+        self.assertEqual(self.native_factory.call_args.args[1], self.snapshot)
+
+    def test_failed_connection_retries_with_backoff(self):
+        self.native_factory.side_effect = OSError('temporarily unavailable')
+        self.enter()
+        self.advance(0.25)
+        self.assertEqual(self.native_factory.call_count, 1)
+        for _ in range(10):
+            self.advance(0.1)
+        self.assertEqual(self.native_factory.call_count, 1)
+        self.advance(0.6)
+        self.advance(0.25)
+        self.assertEqual(self.native_factory.call_count, 2)
+        self.assertTrue(self.panel.auto_requested)
+
+    def test_focus_loss_releases_then_recovers_without_replaying_old_finger(self):
+        self.arm()
+        self.panel.touch('begin', 7, self.now, 500, 500)
+        self.sender.poll.side_effect = OSError('focus changed')
+        self.panel.touch('move', 7, self.now, 550, 500)
+        self.assertFalse(self.panel.armed)
+        self.sender.poll.side_effect = None
+        self.advance(2, contacts_down=True)
+        self.assertFalse(self.panel.armed)
+        self.advance(0.1)
+        self.advance(0.1)
+        self.advance(0.1)
+        self.advance(0.1)
+        self.assertTrue(self.panel.armed)
+        self.sender.send.reset_mock()
+        self.panel.touch('move', 7, self.now, 600, 600)
+        self.panel.touch('end', 7, self.now)
+        self.sender.send.assert_not_called()
 
 
 if __name__ == '__main__':

@@ -77,6 +77,9 @@ class PanelApp(upstream.ThorApp):
         self.keyboard_guard = None
         self.mirror = None
         self._mirror_discarding = False
+        # Unlike ToolkitTouch, this set survives logical-contact resets when
+        # selecting a tab/control. Never mistake the selecting finger for up.
+        self._physical_sequences = set()
         self._mirror_surface = self._mirror_surface_frame = None
         self._mirror_draw_state = None
         self.main_loop = None
@@ -209,7 +212,7 @@ class PanelApp(upstream.ThorApp):
             return False
         if not self._mirror_visible() or self.mirror is None:
             return True
-        self.mirror.tick()
+        self.mirror.tick(contacts_down=bool(self._physical_sequences))
         if self._mirror_revision != self.mirror.revision:
             self._clear_panel_contacts()
             self._mirror_revision = self.mirror.revision
@@ -283,11 +286,12 @@ class PanelApp(upstream.ThorApp):
         # A compositor cancel must not turn into a click on lift.
         if (getattr(self, "mirror", None) is not None
                 and not getattr(self, "_mirror_discarding", False)):
-            self.mirror.pause()
+            self.mirror.pause(manual=False)
         self._reset_input()
 
     def _on_unmap(self, *_) -> None:
         self._stop_mirror()
+        self._physical_sequences.clear()
         if getattr(self, "keyboard_guard", None) is not None:
             self.keyboard_guard.update(False)
         if hasattr(self, "touch"):
@@ -317,16 +321,21 @@ class PanelApp(upstream.ThorApp):
             with self.input_lock:
                 if self.touch.set_viewport(allocation.width, allocation.height):
                     if self.mirror is not None:
-                        self.mirror.pause('窗口尺寸已变化；请重新启用触摸')
+                        self.mirror.pause('窗口尺寸已变化；就绪并抬手后自动恢复', manual=False)
 
     def _on_touch(self, widget, event) -> bool:
         if self._cleaned:
             return True
+        sequence = event.get_event_sequence()
+        if sequence is not None:
+            if event.type == Gdk.EventType.TOUCH_BEGIN:
+                self._physical_sequences.add(sequence)
+            elif event.type in (Gdk.EventType.TOUCH_END, Gdk.EventType.TOUCH_CANCEL):
+                self._physical_sequences.discard(sequence)
         if self.collapsed:
             if event.type == Gdk.EventType.TOUCH_BEGIN:
                 self._set_collapsed(False)
             return True
-        sequence = event.get_event_sequence()
         with self.input_lock:
             if event.type == Gdk.EventType.TOUCH_BEGIN:
                 self.burn_in.record_touch()
@@ -338,7 +347,7 @@ class PanelApp(upstream.ThorApp):
             elif event.type == Gdk.EventType.TOUCH_CANCEL:
                 self.touch.release_all()
                 if self.mirror is not None:
-                    self.mirror.pause()
+                    self.mirror.pause(manual=False)
                 self._reset_input()
         # Do not forward a touch to the toolkit's emulated pointer handlers.
         return True

@@ -26,6 +26,7 @@ class CompactPanelLayoutTests(unittest.TestCase):
         self.app.mode = "split"
         self.app.session_mode = "game"
         self.app.collapsed = False
+        self.app._physical_sequences = set()
         self.app.show_debug_hud = False
         self.app.window = SimpleNamespace(get_mapped=Mock(return_value=True))
         self.app.keyboard_guard = Mock()
@@ -224,6 +225,31 @@ class CompactPanelLayoutTests(unittest.TestCase):
         self.app.mirror.start.assert_called_once()
         self.app.mirror.toggle.assert_not_called()
         self.app.keyboard_guard.update.assert_called_with(False)
+
+    def test_logical_contact_reset_preserves_physical_down_gate_until_actual_end(self):
+        self.app.mode = 'mirror'
+        self.app.touch = Mock()
+        self.app.burn_in.record_touch = Mock()
+        sequence = object()
+        event = SimpleNamespace(get_event_sequence=lambda: sequence,
+                                get_time=lambda: 100, x=300, y=20,
+                                type=self.panel.Gdk.EventType.TOUCH_BEGIN)
+        self.app._on_touch(None, event)
+        self.app._clear_panel_contacts()
+        self.assertEqual(self.app._physical_sequences, {sequence})
+        event.type = self.panel.Gdk.EventType.TOUCH_END
+        self.app._on_touch(None, event)
+        self.assertFalse(self.app._physical_sequences)
+
+    def test_expanding_touch_stays_down_for_auto_enable_gate(self):
+        self.app.collapsed = True
+        sequence = object()
+        event = SimpleNamespace(get_event_sequence=lambda: sequence,
+                                type=self.panel.Gdk.EventType.TOUCH_BEGIN)
+        with patch.object(self.app, '_set_collapsed') as expand:
+            self.app._on_touch(None, event)
+        expand.assert_called_once_with(False)
+        self.assertEqual(self.app._physical_sequences, {sequence})
 
 
 if __name__ == "__main__":
