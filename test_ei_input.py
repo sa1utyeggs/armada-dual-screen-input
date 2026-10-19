@@ -55,7 +55,8 @@ class FakeEI:
         return [(name, args) for name, args in self.calls if name in (
             'ei_device_start_emulating', 'ei_device_pointer_motion_absolute',
             'ei_device_pointer_motion',
-            'ei_device_button_button', 'ei_device_scroll_delta', 'ei_device_frame')]
+            'ei_device_button_button', 'ei_device_scroll_delta',
+            'ei_device_scroll_discrete', 'ei_device_frame')]
 
 
 class EIInputTests(unittest.TestCase):
@@ -126,32 +127,41 @@ class EIInputTests(unittest.TestCase):
         self.assertEqual(sum(name == 'ei_device_frame' for name, _ in calls), 3)
         self.assertFalse(self.sender.held)
 
-    def test_tiny_wheel_travel_is_preserved_as_continuous_notch_fractions(self):
+    def test_tiny_wheel_travel_accumulates_to_whole_notches_without_double_scroll(self):
         self.ready()
-        for _ in range(3): self.sender.send(TouchIntent('wheel', (0.5, 0.5), (0.4, 0.4)))
-        wheels = [args for name, args in self.api.calls if name == 'ei_device_scroll_delta']
-        self.assertEqual(len(wheels), 3)
-        self.assertAlmostEqual(sum(args[1] for args in wheels), 1.2 / 120)
-        self.assertAlmostEqual(sum(args[2] for args in wheels), -1.2 / 120)
+        for _ in range(299): self.sender.send(TouchIntent('wheel', (0.5, 0.5), (0.4, 0.4)))
         self.assertFalse(any(name == 'ei_device_scroll_discrete' for name, _ in self.api.calls))
+        self.sender.send(TouchIntent('wheel', (0.5, 0.5), (0.4, 0.4)))
+        wheels = [args for name, args in self.api.calls if name == 'ei_device_scroll_discrete']
+        self.assertEqual(wheels, [(10, 120, -120)])
+        self.assertEqual(self.sender.wheel_notches_sent, 2)
+        self.assertFalse(any(name == 'ei_device_scroll_delta' for name, _ in self.api.calls))
 
-    def test_reversing_continuous_wheel_does_not_retain_old_direction_travel(self):
+    def test_reversing_wheel_cancels_pending_travel_before_emitting_a_notch(self):
         self.ready()
-        for delta in (0.4, 0.4, -0.6, -0.6):
+        for delta in (60, 40, -60, -100, -60):
             self.sender.send(TouchIntent('wheel', (0.5, 0.5), (delta, 0)))
-        wheels = [args for name, args in self.api.calls if name == 'ei_device_scroll_delta']
-        self.assertEqual([args[1] for args in wheels], [delta / 120 for delta in (0.4, 0.4, -0.6, -0.6)])
+        wheels = [args for name, args in self.api.calls if name == 'ei_device_scroll_discrete']
+        self.assertEqual(wheels, [(10, -120, 0)])
+
+    def test_release_discards_fractional_wheel_travel(self):
+        self.ready()
+        self.sender.send(TouchIntent('wheel', (0.5, 0.5), (0, 119)))
+        self.sender.release_all()
+        self.sender.send(TouchIntent('wheel', (0.5, 0.5), (0, 1)))
+        self.assertEqual(self.sender.wheel_notches_sent, 0)
+        self.assertFalse(any(name == 'ei_device_scroll_discrete' for name, _ in self.api.calls))
 
     def test_scroll_wakes_hidden_pointer_once_then_restores_exact_centroid(self):
         self.ready()
-        self.sender.send(TouchIntent('wheel', (0.5, 0.5), (0, -12)))
-        self.sender.send(TouchIntent('wheel', (0.5, 0.5), (0, -12)))
+        self.sender.send(TouchIntent('wheel', (0.5, 0.5), (0, -60)))
+        self.sender.send(TouchIntent('wheel', (0.5, 0.5), (0, -60)))
         motions = [args for name, args in self.api.calls if name == 'ei_device_pointer_motion']
         self.assertEqual(motions, [(10, 1.0, 0.0), (10, -1.0, 0.0)])
         calls = self.api.input_calls()
         absolute = next(i for i, (name, _) in enumerate(calls)
                         if name == 'ei_device_pointer_motion_absolute')
-        wheel = next(i for i, (name, _) in enumerate(calls) if name == 'ei_device_scroll_delta')
+        wheel = next(i for i, (name, _) in enumerate(calls) if name == 'ei_device_scroll_discrete')
         self.assertLess(absolute, wheel)
         self.assertEqual(calls[absolute][1], (10, 959.5, 539.5))
         self.sender.release_all()

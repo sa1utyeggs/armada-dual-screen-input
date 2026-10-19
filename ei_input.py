@@ -80,7 +80,7 @@ def load_libei():
         'ei_device_pointer_motion_absolute': (None, [p, d, d]),
         'ei_device_pointer_motion': (None, [p, d, d]),
         'ei_device_button_button': (None, [p, u, c.c_bool]),
-        'ei_device_scroll_delta': (None, [p, d, d]),
+        'ei_device_scroll_discrete': (None, [p, c.c_int32, c.c_int32]),
         'ei_device_scroll_cancel': (None, [p, c.c_bool, c.c_bool]),
         'ei_device_frame': (None, [p, c.c_uint64]),
         'ei_now': (c.c_uint64, [p]),
@@ -110,6 +110,8 @@ class LibEIInput:
         self.devices: dict[int, dict] = {}
         self.held = False
         self.scrolled = False
+        self._wheel_rest = [0.0, 0.0]
+        self.wheel_notches_sent = 0
         self.emulating = False
         self._active_device = None
         self._closed = False
@@ -250,13 +252,25 @@ class LibEIInput:
                 self.api.ei_device_button_button(device, self.BTN_LEFT, False)
             self.held = False
         elif intent.kind == 'wheel':
-            # libei's discrete API requires whole 120-unit notches and rejects
-            # tiny deltas. Gamescope forwards continuous EI deltas directly to
-            # wlserver_mousewheel(), in notch units (discrete values / 120).
-            # Preserve sub-notch travel with its continuous API instead.
+            # Steam's UI did not react to individually tiny continuous deltas,
+            # while whole notches scrolled the same library view. Keep all
+            # fractional travel until one notch, then send ONLY the discrete
+            # API's required multiples of 120. Sending both APIs would scroll
+            # twice in Gamescope. Remainders never survive a gesture release.
             if any(raw):
-                self.api.ei_device_scroll_delta(device, raw[0] / 120, raw[1] / 120)
                 self.scrolled = True
+                steps = []
+                for axis, delta in enumerate(raw):
+                    value = self._wheel_rest[axis] + delta
+                    # Ignore round-off at a whole-notch boundary, not actual
+                    # sub-notch input. Negative travel truncates toward zero.
+                    notches = math.trunc((value + math.copysign(1e-9, value)) / 120)
+                    remainder = value - notches * 120
+                    self._wheel_rest[axis] = 0.0 if abs(remainder) < 1e-9 else remainder
+                    steps.append(notches * 120)
+                if any(steps):
+                    self.api.ei_device_scroll_discrete(device, *steps)
+                    self.wheel_notches_sent += sum(abs(step) // 120 for step in steps)
         self.api.ei_device_frame(device, self.api.ei_now(self.context))
 
     def release_all(self) -> None:
@@ -270,6 +284,7 @@ class LibEIInput:
             if self.held or self.scrolled:
                 self.api.ei_device_frame(device, self.api.ei_now(self.context))
         self.held = self.scrolled = False
+        self._wheel_rest[:] = (0.0, 0.0)
 
     def close(self) -> None:
         if self._closed:

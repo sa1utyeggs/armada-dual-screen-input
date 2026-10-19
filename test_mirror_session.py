@@ -115,6 +115,27 @@ class MirrorSessionTests(unittest.TestCase):
         self.assertFalse(self.session.armed)
         self.assertTrue(self.session.arm(11))
 
+    def test_delivery_counters_separate_buttons_from_two_finger_wheel(self):
+        self.prepare()
+        self.session.touch('begin', 1, 10.01, 40, 50)
+        self.session.touch('begin', 2, 10.02, 60, 50)
+        self.session.touch('move', 1, 10.03, 40, 30)
+        self.session.touch('end', 1, 10.04)
+        self.assertEqual(self.session.delivered['wheel'], 1)
+        self.assertEqual(self.session.delivered['down'], 0)
+        self.session.pause(10.05)
+        self.assertEqual(self.session.delivered['wheel'], 1)
+
+    def test_failed_wheel_delivery_is_not_counted_as_sent(self):
+        self.prepare()
+        def unavailable(_): raise InputUnavailable('disconnected while sending')
+        self.sender.send = unavailable
+        self.session.touch('begin', 1, 10.01, 40, 50)
+        self.session.touch('begin', 2, 10.02, 60, 50)
+        self.session.touch('move', 1, 10.03, 40, 30)
+        self.assertFalse(self.session.armed)
+        self.assertEqual(self.session.delivered['wheel'], 0)
+
 
 if __name__ == '__main__':
     unittest.main()

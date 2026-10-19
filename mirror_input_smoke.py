@@ -73,8 +73,8 @@ def main() -> int:
     actions = [TouchIntent('move', (.25, .3)), TouchIntent('down', (.25, .3)),
                TouchIntent('move', (.75, .7)), TouchIntent('up', (.75, .7)),
                TouchIntent('wheel', (.5, .5), (0, -120)),  # initialize GTK/XI2 valuator
-               TouchIntent('wheel', (.5, .5), (0, -12)),
-               TouchIntent('wheel', (.5, .5), (0, -12)),
+               TouchIntent('wheel', (.5, .5), (0, -60)),  # half-notch: no output yet
+               TouchIntent('wheel', (.5, .5), (0, -60)),  # accumulated whole notch
                TouchIntent('wheel', (.5, .5), (0, -240)),
                TouchIntent('wheel', (.5, .5), (0, 240)),
                TouchIntent('wheel', (.5, .5), (240, 0)),
@@ -122,7 +122,7 @@ def main() -> int:
             deltas = [event['delta'] for event in scrolls]
             outcome['passed'] = (len(presses) == len(releases) == 1
                                  and presses[0]['button'] == releases[0]['button'] == 1
-                                 and any(0 < abs(delta[1]) < 1 for delta in deltas)
+                                 and any(abs(delta[1]) >= 1 for delta in deltas)
                                  and all(any(delta[axis] * sign > 0 for delta in deltas)
                                          for axis in (0, 1) for sign in (-1, 1)))
             Gtk.main_quit()

@@ -56,43 +56,25 @@ class FrameStore:
             self._frame = None
 
 
-def scaled_size(source_width: int, source_height: int, max_width: int) -> tuple[int, int]:
-    if any(type(value) is not int or not 0 < value <= 8192
-           for value in (source_width, source_height, max_width)):
-        raise ValueError('invalid source or preview dimensions')
-    width = min(source_width, max_width)
-    return width, max(1, round(source_height * width / source_width))
-
-
-def pipeline_description(node_id: int, width: int, fps: int, height: int | None = None) -> str:
+def pipeline_description(node_id: int, fps: int) -> str:
     if type(node_id) is not int or not 0 < node_id < 0xffffffff:
         raise ValueError('an advertised PipeWire node ID is required')
-    if type(width) is not int or not 160 <= width <= 4096:
-        raise ValueError('preview width must be between 160 and 4096')
     if type(fps) is not int or not 1 <= fps <= 120:
         raise ValueError('invalid preview frame rate')
-    if height is not None and (type(height) is not int or not 1 <= height <= 8192):
-        raise ValueError('invalid preview height')
-    scaling = '' if height is None else (
-        '! videoscale add-borders=false '
-        f'! video/x-raw,format=BGRx,width={width},height={height},pixel-aspect-ratio=1/1 '
-    )
-    rate = '' if height is None else (
-        f'! videorate drop-only=true ! video/x-raw,framerate={fps}/1 '
-    )
     return (
-        f'pipewiresrc name=source path={node_id} do-timestamp=true '
+        f'pipewiresrc name=source path={node_id} do-timestamp=true on-disconnect=error '
+        'use-bufferpool=false max-buffers=4 '
         '! queue max-size-buffers=1 max-size-bytes=0 max-size-time=0 leaky=downstream '
-        + rate + '! videoconvert ! video/x-raw,format=BGRx '
-        + scaling +
+        f'! videorate drop-only=true ! video/x-raw,framerate={fps}/1 '
+        '! videoconvert ! video/x-raw,format=BGRx '
         '! appsink name=frames max-buffers=1 drop=true sync=false wait-on-eos=false'
     )
 
 
 class MirrorCapture:
-    def __init__(self, node_id: int, *, width: int = 960, fps: int = 60) -> None:
-        self.description = pipeline_description(node_id, width, fps)
-        self.node_id, self.width, self.fps = node_id, width, fps
+    def __init__(self, node_id: int, *, fps: int = 60) -> None:
+        self.description = pipeline_description(node_id, fps)
+        self.node_id, self.fps = node_id, fps
         self.source_size: tuple[int, int] | None = None
         self.frames = FrameStore()
         self._stop = threading.Event()
@@ -130,34 +112,14 @@ class MirrorCapture:
             Gst.init(None)
             if Gst.ElementFactory.find('pipewiresrc') is None:
                 raise RuntimeError('PipeWire GStreamer plugin is unavailable')
-            # Gamescope advertises a variable 0/1 rate. Guessing one dimension
-            # through videoscale can negotiate a 1px height and integer overflow
-            # with GStreamer 1.28.8. Read native caps first, then request both.
+            # Keep one native-size stream for its entire lifetime. Reconnecting
+            # or renegotiating a scaled stream caused missing first frames and
+            # buffer removal with the tested PipeWire/GStreamer versions.
+            # A static source may wait for its next commit; don't fail after 2s.
             pipeline = Gst.parse_launch(self.description)
             sink = pipeline.get_by_name('frames')
             if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
                 raise RuntimeError('capture pipeline failed to start')
-            deadline = time.monotonic() + 2.0
-            while not self._stop.is_set() and time.monotonic() < deadline:
-                sample = sink.emit('try-pull-sample', 100 * Gst.MSECOND)
-                if sample is not None:
-                    info = GstVideo.VideoInfo.new_from_caps(sample.get_caps())
-                    self.source_size = (info.width, info.height)
-                    break
-            sample = None  # release the probe buffer before disconnecting its stream
-            pipeline.set_state(Gst.State.NULL)
-            pipeline = None
-            if self._stop.is_set():
-                return
-            if self.source_size is None:
-                raise RuntimeError('capture source did not provide a frame')
-            width, height = scaled_size(*self.source_size, self.width)
-            self.description = pipeline_description(self.node_id, width, self.fps, height)
-            pipeline = Gst.parse_launch(self.description)
-            sink = pipeline.get_by_name('frames')
-            source_pad = pipeline.get_by_name('source').get_static_pad('src')
-            if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
-                raise RuntimeError('scaled capture pipeline failed to start')
             sequence = 0
             while not self._stop.is_set():
                 sample = sink.emit('try-pull-sample', 100 * Gst.MSECOND)
@@ -170,10 +132,11 @@ class MirrorCapture:
                 self.checked_at = time.monotonic()
                 if sample is None:
                     continue
-                native = GstVideo.VideoInfo.new_from_caps(source_pad.get_current_caps())
-                if (native.width, native.height) != self.source_size:
-                    raise RuntimeError('capture source size changed; reopen the preview')
                 info = GstVideo.VideoInfo.new_from_caps(sample.get_caps())
+                if self.source_size is None:
+                    self.source_size = (info.width, info.height)
+                elif (info.width, info.height) != self.source_size:
+                    raise RuntimeError('capture source size changed; reopen the preview')
                 stride, offset = info.stride[0], info.offset[0]
                 size = stride * info.height
                 if not (0 < info.width <= 8192 and 0 < info.height <= 8192

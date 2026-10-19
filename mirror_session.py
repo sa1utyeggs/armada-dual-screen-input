@@ -19,6 +19,8 @@ class MirrorSession:
         self.reason = 'waiting_frame'
         self.last_error: str | None = None
         self.cached_frame_current = False
+        # Aggregate delivery counts only: no positions or input contents.
+        self.delivered = {'down': 0, 'move': 0, 'up': 0, 'cancel': 0, 'wheel': 0}
 
     def update(self, frame: CapturedFrame | None, viewport: Rect, now: float,
                *, live: bool, cached_frame_current: bool = False) -> None:
@@ -79,6 +81,7 @@ class MirrorSession:
         try:
             for event in events:
                 self.sender.send(event)
+                self.delivered[event.kind] += 1
             if previous in ('scroll-pending', 'scrolling') and self.gesture.state not in (
                     'scroll-pending', 'scrolling'):
                 self.sender.release_all()  # cancel wheel continuation

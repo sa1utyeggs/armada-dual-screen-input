@@ -52,7 +52,7 @@ def run(args) -> int:
             self.started_at, self.started_cpu = time.monotonic(), time.process_time()
             self.closed = False
             self.session = MirrorSession(PausedSender())
-            self.capture = MirrorCapture(args.node, width=args.width, fps=args.fps)
+            self.capture = MirrorCapture(args.node, fps=args.fps)
             self.source = SourceMonitor(target.runtime, args.upper_display, args.node)
             self.focus = FocusWatcher(args.x_display)
             self.expected_focus = None
@@ -141,7 +141,14 @@ def run(args) -> int:
             print(json.dumps({'event': 'preview_layout',
                               'size': [allocation.width, allocation.height],
                               'missing_glyphs': self.status.get_layout().get_unknown_glyphs_count(),
-                              'armed': self.session.armed}), flush=True)
+                              'armed': self.session.armed,
+                              'capture_status': self.capture.status,
+                              'capture_error': self.capture.error,
+                              'frame_sequence': self.drawn_sequence,
+                              'gesture': self.session.gesture.state if self.session.gesture else 'idle',
+                              'contacts': len(self.touch.active),
+                              'wheel_notches_sent': getattr(self.session.sender, 'wheel_notches_sent', 0),
+                              'delivered': self.session.delivered}), flush=True)
             return False
 
         def viewport(self):
@@ -253,7 +260,9 @@ def run(args) -> int:
             if self.enable.get_label() != label:
                 self.enable.set_label(label)
             message = self.message
-            if self.capture.status == 'error':
+            if self.capture.status == 'starting':
+                message = '等待上屏首帧；可用手柄切换一次项目'
+            elif self.capture.status == 'error':
                 message = '捕获已停止；请关闭后重新打开预览'
             gesture = self.session.gesture.state if self.session.gesture else 'idle'
             activity = {'pending': '等待双指', 'single': '单指拖动',
@@ -261,7 +270,9 @@ def run(args) -> int:
                         'blocked': '请全部抬手'}.get(gesture, '等待触摸')
             if self.session.armed:
                 message += ' · ' + activity
-            status = f'{message}\n画面更新 {self.rate:.0f} 帧/秒 · 静止画面不重复取帧'
+            status = (f'{message}\n画面 {self.rate:.0f} 帧/秒 · '
+                      f'手指 {len(self.touch.active)} · 滚轮 '
+                      f'{getattr(self.session.sender, "wheel_notches_sent", 0)} 格')
             if status != self.last_status:
                 self.status.set_text(status)
                 self.last_status = status
@@ -321,6 +332,11 @@ def run(args) -> int:
         faulthandler.dump_traceback_later(args.quit_after + 5)
     for sig in (signal.SIGINT, signal.SIGTERM):
         GLib.unix_signal_add(GLib.PRIORITY_HIGH, sig, app.close)
+    if args.proof:
+        # Development-only snapshots reuse this capture, never attach a second
+        # PipeWire consumer. No signal handler is enabled without explicit opt-in.
+        GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGUSR2,
+                             lambda: (app.proof(), True)[1])
     try:
         loop.run()
     finally:
@@ -345,7 +361,6 @@ def main() -> int:
     parser.add_argument('--node', type=int, required=True)
     parser.add_argument('--upper-display', required=True)
     parser.add_argument('--x-display', required=True)
-    parser.add_argument('--width', type=int, default=960)
     parser.add_argument('--fps', type=int, default=60)
     parser.add_argument('--quit-after', type=float, default=0)
     parser.add_argument('--proof', type=Path, help='explicit development-only preview PNG')
