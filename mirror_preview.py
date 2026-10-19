@@ -45,6 +45,7 @@ def run(args) -> int:
     if display is None or display.get_n_monitors() != 1:
         raise RuntimeError('the dedicated lower session must expose one unambiguous output')
     target = GamescopeTarget.resolve(Path(os.environ['XDG_RUNTIME_DIR']), args.upper_display)
+    loop = GLib.MainLoop()
 
     class Preview:
         def __init__(self):
@@ -116,7 +117,7 @@ def run(args) -> int:
             self.enable.connect('clicked', self.toggle)
             release.connect('clicked', lambda *_: self.pause('已释放输入；触摸已暂停'))
             close.connect('clicked', self.close)
-            self.window.connect('delete-event', self.close)
+            self.window.connect('delete-event', lambda *_: (self.close(), True)[1])
             self.window.connect('unmap', lambda *_: self.pause('窗口已隐藏；触摸已暂停'))
             display.connect('monitor-removed', self.close)
             self.focus.start()
@@ -254,6 +255,12 @@ def run(args) -> int:
             message = self.message
             if self.capture.status == 'error':
                 message = '捕获已停止；请关闭后重新打开预览'
+            gesture = self.session.gesture.state if self.session.gesture else 'idle'
+            activity = {'pending': '等待双指', 'single': '单指拖动',
+                        'scroll-pending': '双指就绪', 'scrolling': '双指滚动',
+                        'blocked': '请全部抬手'}.get(gesture, '等待触摸')
+            if self.session.armed:
+                message += ' · ' + activity
             status = f'{message}\n画面更新 {self.rate:.0f} 帧/秒 · 静止画面不重复取帧'
             if status != self.last_status:
                 self.status.set_text(status)
@@ -304,8 +311,9 @@ def run(args) -> int:
             self.focus.stop()
             self.closed = True
             self.window.hide()
-            Gtk.main_quit()
-            return True
+            loop.quit()
+            print(json.dumps({'event': 'window_closed'}), flush=True)
+            return False
 
     app = Preview()
     faulthandler.register(signal.SIGUSR1, all_threads=True)
@@ -314,7 +322,7 @@ def run(args) -> int:
     for sig in (signal.SIGINT, signal.SIGTERM):
         GLib.unix_signal_add(GLib.PRIORITY_HIGH, sig, app.close)
     try:
-        Gtk.main()
+        loop.run()
     finally:
         app.close()
         app.capture.wait()

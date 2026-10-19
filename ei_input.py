@@ -78,8 +78,9 @@ def load_libei():
         'ei_device_start_emulating': (None, [p, u]),
         'ei_device_stop_emulating': (None, [p]),
         'ei_device_pointer_motion_absolute': (None, [p, d, d]),
+        'ei_device_pointer_motion': (None, [p, d, d]),
         'ei_device_button_button': (None, [p, u, c.c_bool]),
-        'ei_device_scroll_discrete': (None, [p, c.c_int32, c.c_int32]),
+        'ei_device_scroll_delta': (None, [p, d, d]),
         'ei_device_scroll_cancel': (None, [p, c.c_bool, c.c_bool]),
         'ei_device_frame': (None, [p, c.c_uint64]),
         'ei_now': (c.c_uint64, [p]),
@@ -93,7 +94,7 @@ def load_libei():
 
 
 class LibEIInput:
-    REQUIRED = (2, 16, 32)  # absolute pointer, scroll, button
+    REQUIRED = (1, 2, 16, 32)  # relative wake, absolute pointer, scroll, button
     BTN_LEFT = 0x110
 
     def __init__(self, target: GamescopeTarget, surface_size: tuple[int, int], *,
@@ -111,7 +112,6 @@ class LibEIInput:
         self.scrolled = False
         self.emulating = False
         self._active_device = None
-        self._wheel_remainder = [0.0, 0.0]
         self._closed = False
         if not self.context:
             raise InputUnavailable('could not create an EI sender')
@@ -233,6 +233,13 @@ class LibEIInput:
         # coordinate domain. InputEmulation.cpp forwards these values directly
         # to wlserver_mousewarp(), in focused-surface pixels.
         width, height = self.surface_size
+        if intent.kind == 'wheel' and any(raw) and not self.scrolled:
+            # Synthetic absolute warp leaves Gamescope's hidden-pointer state
+            # unchanged. A balanced relative nudge wakes it before scrolling,
+            # just as the installed trackpad does. Warp back to the exact
+            # intended centroid below, before delivering any wheel movement.
+            self.api.ei_device_pointer_motion(device, 1.0, 0.0)
+            self.api.ei_device_pointer_motion(device, -1.0, 0.0)
         self.api.ei_device_pointer_motion_absolute(device, u * (width - 1),
                                                   v * (height - 1))
         if intent.kind == 'down':
@@ -243,16 +250,12 @@ class LibEIInput:
                 self.api.ei_device_button_button(device, self.BTN_LEFT, False)
             self.held = False
         elif intent.kind == 'wheel':
-            # Intent Y uses evdev wheel-up-positive; EI Y is down-positive.
-            integer = []
-            for axis, value in enumerate(raw):
-                if value * self._wheel_remainder[axis] < 0:
-                    self._wheel_remainder[axis] = 0.0
-                self._wheel_remainder[axis] += value
-                integer.append(math.trunc(self._wheel_remainder[axis]))
-                self._wheel_remainder[axis] -= integer[-1]
-            if any(integer):
-                self.api.ei_device_scroll_discrete(device, *integer)
+            # libei's discrete API requires whole 120-unit notches and rejects
+            # tiny deltas. Gamescope forwards continuous EI deltas directly to
+            # wlserver_mousewheel(), in notch units (discrete values / 120).
+            # Preserve sub-notch travel with its continuous API instead.
+            if any(raw):
+                self.api.ei_device_scroll_delta(device, raw[0] / 120, raw[1] / 120)
                 self.scrolled = True
         self.api.ei_device_frame(device, self.api.ei_now(self.context))
 
@@ -267,7 +270,6 @@ class LibEIInput:
             if self.held or self.scrolled:
                 self.api.ei_device_frame(device, self.api.ei_now(self.context))
         self.held = self.scrolled = False
-        self._wheel_remainder = [0.0, 0.0]
 
     def close(self) -> None:
         if self._closed:

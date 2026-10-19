@@ -81,7 +81,7 @@ class MirrorSession:
                 self.sender.send(event)
             if previous in ('scroll-pending', 'scrolling') and self.gesture.state not in (
                     'scroll-pending', 'scrolling'):
-                self.sender.release_all()  # cancel wheel continuation and fractions
+                self.sender.release_all()  # cancel wheel continuation
         except (InputUnavailable, OSError, ValueError) as error:
             self.last_error = str(error)
             self.pause(now, reason='input_unavailable')
