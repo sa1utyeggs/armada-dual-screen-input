@@ -48,21 +48,24 @@ import thor_app as upstream
 from engine import SCREEN_HEIGHT, SCREEN_WIDTH
 from monitor_select import choose_bottom_monitor, MODE_GAMEMODE, MODE_DESKTOP
 from toolkit_touch import ToolkitTouch
-from text_render import draw_text
+import steam_style
+import steam_keys
 from keyboard_pulses import KeyboardPulses
 from scroll_output import ScaledScroll, read_scroll_scale
+from steam_keyboard_guard import SteamKeyboardGuard, keyboard_guard_wanted
 
 # Isolate our settings/socket names from a separately installed Ratatoskr.
 upstream.CONFIG_PATH = str(Path(os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config"))) / "thor-panel/config.json")
 upstream.SOCKET_PATH = str(Path(os.environ["XDG_RUNTIME_DIR"]) / "thor-panel-unused.sock")
-# Keep a dedicated Close button at the right edge without removing Reset,
-# Collapse, or the existing mode controls.
+# Keep two visible modes and a single shared table for rendering and hit tests.
 upstream.HEADER_BUTTONS = (
-    ("trackpad", 12, 128), ("split", 148, 90), ("keyboard", 246, 122),
-    ("settings", 376, 152), ("hud", 536, 64), ("left", 608, 108),
-    ("right", 724, 108), ("pen", 840, 148), ("hide", 996, 108),
-    ("close", 1112, 116),
+    ("trackpad", 12, 152), ("split", 172, 132),
+    ("left", 420, 132), ("right", 560, 132), ("pen", 700, 220),
+    ("hide", 928, 144), ("close", 1080, 148),
 )
+# Reclaim one status row for the trackpad; keep the keyboard bounds unchanged.
+upstream.STATUS_RIBBON_H = 44.0
+upstream.HEADER_HEIGHT = upstream.HEADER_BUTTONS_H + upstream.STATUS_RIBBON_H
 
 
 class PanelApp(upstream.ThorApp):
@@ -70,6 +73,7 @@ class PanelApp(upstream.ThorApp):
         self.session_mode = mode
         self.monitor = monitor
         self.collapsed = False
+        self.keyboard_guard = None
         super().__init__()
         self.scroll_output = ScaledScroll(self.bridge.emit_scroll, self.scroll_scale)
         self.bridge.emit_scroll = self.scroll_output.scroll
@@ -118,6 +122,9 @@ class PanelApp(upstream.ThorApp):
         self.drawing_area.connect("touch-event", self._on_touch)
         self.drawing_area.connect("size-allocate", self._on_allocate)
         self.window.connect("unmap", self._on_unmap)
+        self.window.connect("map", self._sync_keyboard_guard)
+        if self.session_mode == "game":
+            self.keyboard_guard = SteamKeyboardGuard()
         Gdk.Display.get_default().connect("monitor-removed", self._on_monitor_removed)
         Gdk.Display.get_default().get_default_screen().connect("monitors-changed", self._on_monitors_changed)
 
@@ -128,7 +135,7 @@ class PanelApp(upstream.ThorApp):
             cfg = json.loads(Path(upstream.CONFIG_PATH).read_text(encoding="utf-8"))
             if isinstance(cfg, dict):
                 self.scroll_scale = read_scroll_scale(cfg.get("scroll_scale", 1.0))
-                if cfg.get("mode") in ("trackpad", "split", "keyboard", "settings"):
+                if cfg.get("mode") in ("trackpad", "split"):
                     self.mode = cfg["mode"]
                 self.gesture.set_settings(**cfg)
                 upstream.keyboard_settings.apply(self.keyboard_cfg, cfg)
@@ -154,6 +161,8 @@ class PanelApp(upstream.ThorApp):
         raise RuntimeError("Decky IPC is disabled in this adapter")
 
     def start(self) -> None:
+        if getattr(self, "keyboard_guard", None) is not None:
+            self.keyboard_guard.start()
         self.stats.start_sampler()
         # Gamescope may swallow clicks/scroll while its pointer is hidden.
         # This only enables the upstream +/-1px wake nudge, not an OS override.
@@ -165,8 +174,15 @@ class PanelApp(upstream.ThorApp):
     def _on_stats_tick(self) -> bool:
         if self._cleaned:
             return False
+        self._sync_keyboard_guard()
         self.drawing_area.queue_draw()
         return True
+
+    def _sync_keyboard_guard(self, *_) -> None:
+        if getattr(self, "keyboard_guard", None) is not None:
+            self.keyboard_guard.update(keyboard_guard_wanted(
+                self.session_mode, self.mode, self.collapsed, self.window.get_mapped(),
+            ))
 
     def _keep_contacts_alive(self) -> bool:
         if self._cleaned:
@@ -218,6 +234,8 @@ class PanelApp(upstream.ThorApp):
         self._reset_input()
 
     def _on_unmap(self, *_) -> None:
+        if getattr(self, "keyboard_guard", None) is not None:
+            self.keyboard_guard.update(False)
         if hasattr(self, "touch"):
             with self.input_lock:
                 self.touch.release_all()
@@ -277,6 +295,14 @@ class PanelApp(upstream.ThorApp):
         else:
             self._handle_touch_move(tid, x, y, now)
 
+    def _handle_touch_down(self, tid, x, y, now) -> None:
+        # Status is display-only. The vendor ribbon opens its old controls page.
+        if not self.ui_hidden and upstream.HEADER_BUTTONS_H <= y < upstream.HEADER_HEIGHT:
+            self.last_event_time = time.time()
+            self._touch_owner[tid] = "status"
+            return
+        super()._handle_touch_down(tid, x, y, now)
+
     def _apply_anchors(self) -> None:
         for edge in (GtkLayerShell.Edge.LEFT, GtkLayerShell.Edge.RIGHT, GtkLayerShell.Edge.BOTTOM):
             GtkLayerShell.set_anchor(self.window, edge, True)
@@ -290,13 +316,20 @@ class PanelApp(upstream.ThorApp):
             self._reset_input()
             self.collapsed = collapsed
         self._apply_anchors()
+        self._sync_keyboard_guard()
         self.drawing_area.queue_draw()
 
     def set_mode(self, mode: str, restart_hint: bool = True) -> None:
+        # Old settings or callers may still name a removed page.
+        if mode in ("keyboard", "settings"):
+            mode = "split"
+        elif mode not in ("trackpad", "split"):
+            return
         if hasattr(self, "touch"):
             self.touch.release_all()
             self._reset_input()
         super().set_mode(mode, restart_hint)
+        self._sync_keyboard_guard()
 
     def _handle_header_touch(self, tid, x, y, down) -> None:
         key = next((k for k, bx, bw in upstream.HEADER_BUTTONS if bx <= x <= bx + bw), None)
@@ -323,17 +356,32 @@ class PanelApp(upstream.ThorApp):
         if key == "hide":
             return "收起", False, upstream.theme.BTN_ACCENT_DEFAULT
         label, active, accent = super()._header_button_look(key)
-        label = {"trackpad": "触控板", "split": "分屏", "keyboard": "键盘", "settings": "监控", "left": "左键", "right": "右键"}.get(key, label)
+        label = {"trackpad": "触控板", "split": "键鼠", "left": "左键", "right": "右键"}.get(key, label)
         return label, active, accent
 
     def _draw_button(self, cr, x, y, w, h, text, active,
                      accent_color=upstream.theme.BTN_ACCENT_DEFAULT) -> None:
-        # Keep the upstream border/active-state styling; its Cairo toy text
-        # API lacks per-glyph fallback, so draw labels with Pango instead.
-        super()._draw_button(cr, x, y, w, h, "", active, accent_color)
-        draw_text(cr, text, x + w / 2.0, y + h / 2.0,
-                  min(h * 0.40, upstream.BUTTON_TEXT_MAX_PX),
-                  bold=True, max_width=w - 16, centered=True)
+        steam_style.button(cr, x, y, w, h, text, active)
+
+    def _draw_ui(self, cr) -> None:
+        cr.set_source_rgb(*steam_style.BG)
+        cr.paint()
+        super()._draw_ui(cr)
+
+    def _draw_header(self, cr) -> None:
+        steam_style.draw_header(self, cr, upstream.HEADER_BUTTONS,
+                                upstream.HEADER_BUTTON_Y, upstream.HEADER_BUTTON_H,
+                                SCREEN_WIDTH)
+
+    def _draw_status_ribbon(self, cr) -> None:
+        steam_style.draw_status(self, cr, upstream.HEADER_BUTTONS_H,
+                                upstream.STATUS_RIBBON_H, SCREEN_WIDTH)
+
+    def _draw_trackpad_surface(self, cr, y, h) -> None:
+        steam_style.draw_trackpad(self, cr, y, h, SCREEN_WIDTH)
+
+    def _draw_keyboard(self, cr) -> None:
+        steam_keys.draw_keyboard(self, cr)
 
     def _handle_settings_touch(self, *_) -> None:
         pass  # Monitoring is read-only; Armada keeps hardware controls.
@@ -342,31 +390,16 @@ class PanelApp(upstream.ThorApp):
         pass
 
     def _draw_quick_settings(self, cr) -> None:
-        stats = self.stats.get_stats()
-        lines = [
-            "Thor 下屏面板 · 独立应用原型",
-            "游戏模式" if self.session_mode == "game" else "桌面模式",
-            f"CPU: {stats.get('cpu_load', 0)}%  {stats.get('cpu_temp', 0)} °C",
-            f"GPU: {stats.get('gpu_mhz', 0)} MHz  {stats.get('gpu_temp', 0)} °C",
-            f"RAM: {stats.get('ram_used_gb', 0)} / {stats.get('ram_total_gb', 0)} GB",
-            f"电量: {stats.get('bat_cap', 0)}%",
-            "收起：显示官方下屏；点击底部条可展开",
-        ]
-        cr.set_source_rgb(0.8, 0.85, 0.85)
-        for index, line in enumerate(lines):
-            draw_text(cr, line, 45, upstream.HEADER_HEIGHT + 70 + index * 88,
-                      30, max_width=SCREEN_WIDTH - 90)
+        steam_style.draw_monitor(self, cr, upstream.HEADER_HEIGHT,
+                                 SCREEN_WIDTH, SCREEN_HEIGHT)
+
+    def _draw_collapsed(self, cr, width, height) -> None:
+        steam_style.draw_collapsed(cr, width, height)
 
     def on_draw(self, widget, cr) -> bool:
         allocation = widget.get_allocation()
         if self.collapsed:
-            cr.set_source_rgb(0.03, 0.05, 0.05)
-            cr.paint()
-            cr.set_source_rgb(0.8, 0.9, 0.9)
-            draw_text(cr, "Thor 下屏面板 · 点击展开",
-                      allocation.width / 2.0, allocation.height / 2.0,
-                      min(28, allocation.height * 0.45),
-                      max_width=max(1, allocation.width - 40), centered=True)
+            self._draw_collapsed(cr, allocation.width, allocation.height)
             return True
         cr.save()
         cr.scale(allocation.width / SCREEN_WIDTH, allocation.height / SCREEN_HEIGHT)
@@ -378,6 +411,8 @@ class PanelApp(upstream.ThorApp):
     def cleanup(self) -> None:
         if self._cleaned:
             return
+        if getattr(self, "keyboard_guard", None) is not None:
+            self.keyboard_guard.stop()
         try:
             if hasattr(self, "touch"):
                 self.touch.release_all()
