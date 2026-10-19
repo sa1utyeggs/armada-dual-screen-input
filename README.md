@@ -1,10 +1,18 @@
-# Thor 下屏面板：Game Mode 版本
+# Armada Dual Screen Input（虚拟键鼠）
+
+面向 ArmadaOS 双屏设备的副屏输入工具，提供虚拟键盘、触控板和设备监控；同屏镜像触摸正在设计中。
+项目以适配不同机型的屏幕尺寸、方向和输入设备为目标。
+
+目前实机验证设备为 **AYN Thor**，已验证范围主要是 **Steam Game Mode**。
+其他 ArmadaOS 双屏设备尚未验证，不能据此认为当前版本已经通用；设备识别、屏幕参数、触摸映射及硬件监控仍需逐机型确认。
+Desktop Mode 支持仍为实验状态，默认关闭。
 
 ## 源码与版本管理
 
-本项目以 Git 独立管理，项目名为 `thor-virtual-input`；GitHub 主仓库为
-[`sa1utyeggs/thor-virtual-input`](https://github.com/sa1utyeggs/thor-virtual-input)，默认分支为 `main`，远端名为 `origin`。
-本地目录暂时保留 `thor-panel-prototype`，以兼容现有工作路径。
+本项目以 Git 独立管理，项目名为 `armada-dual-screen-input`；GitHub 主仓库为
+[`sa1utyeggs/armada-dual-screen-input`](https://github.com/sa1utyeggs/armada-dual-screen-input)，默认分支为 `main`，远端名为 `origin`。
+原项目名为 `thor-virtual-input`。本地目录暂时保留 `thor-panel-prototype`，以兼容现有工作路径。
+已有 `thor-panel` 安装目录、配置路径和用户服务名暂时保留，后续通过兼容迁移处理；更名不修改掌机运行配置。
 
 `vendor/ratatoskr/` 是固定版本的第三方代码快照，来源、提交及本地修改记录见
 [`UPSTREAM`](vendor/ratatoskr/UPSTREAM)，许可证和致谢保留在该目录内。
@@ -15,7 +23,7 @@
 
 同屏镜像触摸模式（含该模式下的双指滚轮）目前处于方案阶段，尚未实现；现有触控板模式的双指滚动已包含在当前源码中。初始化 Git 不改变掌机已安装版本或运行设置。
 
-## 设备与当前状态
+## AYN Thor 实测环境与当前状态
 
 设备：AYN Thor 16GB / 512GB，Armada OS `20261010.c3d178c`。
 
