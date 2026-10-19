@@ -1,0 +1,36 @@
+# Python caches and local tooling
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+
+# Generated packages and device-specific runtime dependencies
+build/
+dist/
+*.egg-info/
+runtime/
+
+# Local configuration, credentials, diagnostics and backups
+.env
+.env.*
+!.env.example
+config.json
+*.log
+*.sock
+*.pid
+*.pem
+*.key
+outputs/
+backups/
+*.bak
+
+# Editor and operating-system metadata
+.DS_Store
+.idea/
+.vscode/
+*~

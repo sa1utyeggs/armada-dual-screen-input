@@ -1,0 +1,6 @@
+https://github.com/venatrix-ritz/Ratatoskr
+24471899b5923b73f0ecb7ae67aba54ad7b6d73e
+MIT; see LICENSE and CREDITS.md. Local adapter is outside vendor/.
+Local engine.py patches (2026-10-19): tap jitter tolerance, 350 ms tap window,
+distance-based pointer start, fresh subpixel state, and report-rate-independent gain.
+GTK source-event intervals optionally drive velocity; lifetime timing stays monotonic.

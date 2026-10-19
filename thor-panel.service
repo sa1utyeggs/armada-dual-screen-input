@@ -1,0 +1,14 @@
+[Unit]
+Description=Thor lower-screen input panel (experimental)
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 "%h/.local/share/thor-panel/supervisor.py" --run
+Environment=XDG_RUNTIME_DIR=%t
+Restart=on-failure
+RestartSec=10
+RestartPreventExitStatus=78
+TimeoutStopSec=8
+
+[Install]
+WantedBy=default.target
