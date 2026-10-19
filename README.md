@@ -21,7 +21,21 @@ Desktop Mode 支持仍为实验状态，默认关闭。
 仓库包含源码、测试、图标、桌面入口和用户服务模板。Python 缓存、设备运行库、个人配置、日志及备份由 `.gitignore` 排除。
 进入源码目录后，在 Mac 上可执行 `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -v`；依赖 Linux GTK 的集成检查会跳过，完整验证仍需 Thor 实机。
 
-同屏镜像触摸模式（含该模式下的双指滚轮）目前处于方案阶段，尚未实现；现有触控板模式的双指滚动已包含在当前源码中。初始化 Git 不改变掌机已安装版本或运行设置。
+同屏镜像触摸模式（含该模式下的双指滚轮）正在开发，镜像显示和上屏输入尚未接入；现有触控板模式的双指滚动已包含在当前源码中。开发分支不改变掌机已安装版本或运行设置。
+
+## 同屏触摸开发进度
+
+功能分支：`feature/mirrored-touch`。已加入与设备分辨率无关的坐标映射、单指/双指手势状态机和只读 Gamescope 捕获接口探测。
+这些模块尚未接入实际镜像显示和上屏输入，面板中暂未增加可用入口。
+约定、实机探测结果和后续验收见[同屏触摸与双指滚轮方案](docs/mirrored-touch.md)。
+
+在已登录的 ArmadaOS 图形用户环境中，可执行只读探测（不需要 sudo，不捕获画面或发送输入）：
+
+```bash
+python3 -B gamescope_probe.py --display gamescope-primary
+```
+
+`node_advertised` 仅表示服务器通告了节点，不代表画面或输入已可用。
 
 ## AYN Thor 实测环境与当前状态
 
