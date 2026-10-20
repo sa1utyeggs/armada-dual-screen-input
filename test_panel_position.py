@@ -101,6 +101,15 @@ class PanelPositionTests(unittest.TestCase):
         self.assertIs(self.p.sender,old)
         self.assertTrue(self.p.gesture.held)
 
+    def test_new_aim_after_first_finger_lifts_does_not_require_orphan_end(self):
+        self.arm()
+        for phase,tid,x,y in [('begin',1,300,300),('begin',2,600,600),
+                              ('end',1,0,0),('begin',3,300,300),('move',3,424,300)]:
+            self.p.touch(phase,tid,self.now,x,y)
+        self.assertTrue(self.p.armed)
+        self.assertAlmostEqual(self.p.gesture.point[0],.6)
+        self.assertEqual([e.kind for e in self.p.sender.events],['down','up'])
+
     def test_manual_pause_stays_paused_and_stop_removes_marker(self):
         self.arm()
         self.p.toggle();self.tick(3)

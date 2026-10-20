@@ -46,7 +46,7 @@ def run(fd, display, server_pid):
     size = root_size()
     if not all(1 <= n <= 8192 for n in size):
         raise RuntimeError('invalid upper output geometry')
-    state = {'point': (.5, .5), 'pressed': False, 'ready': False}
+    state = {'point': (.5, .5), 'pressed': False, 'ready': False, 'updates': 0, 'draws': 0}
 
     def send(message):
         try:
@@ -104,6 +104,7 @@ def run(fd, display, server_pid):
         focus.api.xcb_flush(focus.connection)
 
     def draw(widget, cr):
+        state['draws'] += 1
         cr.set_operator(cairo.OPERATOR_SOURCE)
         cr.set_source_rgba(0, 0, 0, 0)
         cr.paint()
@@ -141,6 +142,7 @@ def run(fd, display, server_pid):
                         or type(pressed) is not bool):
                     raise ValueError('invalid marker update')
                 latest = (x, y, pressed)
+                state['updates'] += 1
         except (OSError, ValueError, TypeError):
             loop.quit()
             return False
@@ -157,7 +159,7 @@ def run(fd, display, server_pid):
         try:
             if root_size() != size:
                 raise RuntimeError('upper output geometry changed')
-            send({'alive': True})
+            send({'alive': True, 'updates': state['updates'], 'draws': state['draws']})
             return True
         except Exception:
             loop.quit()

@@ -1,7 +1,8 @@
 """Relative aiming with one finger, one native contact gated by a second.
 
 No mouse hover, wheel conversion, inertia, image capture, or delayed chord.
-Finger roles never swap while either member of the current group is down.
+Existing fingers are never promoted to another role. A new begin may re-aim
+after the old aim ended; a fresh second begin is still needed to touch.
 """
 from __future__ import annotations
 
@@ -35,7 +36,11 @@ class PositionGesture:
         if not math.isfinite(now) or tid in self.contacts:
             raise ValueError('invalid or duplicate contact')
         self.contacts[tid] = (x, y)
-        if self.blocked or len(self.contacts) > 2:
+        if self.blocked:
+            # The aim finger ended first. Orphan contacts must never be
+            # promoted, but a NEW begin may start a fresh, input-free aim.
+            # This also avoids deadlock if an orphan's END was not delivered.
+            self.aim, self.confirm, self.blocked = tid, None, False
             return ()
         if self.aim is None:
             self.aim = tid

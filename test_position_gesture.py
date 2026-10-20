@@ -38,17 +38,47 @@ class PositionGestureTests(unittest.TestCase):
         self.assertEqual({e.contact_id for e in events}, {0})
         self.assertAlmostEqual(events[-1].position[0], .6)
 
-    def test_aim_lifting_first_releases_and_blocks_role_promotion(self):
+    def test_aim_lifting_first_releases_without_promoting_orphan_confirm(self):
         self.g.begin(1, 300, 300, 1)
         self.g.begin(2, 1000, 1000, 2)
         self.assertEqual(self.g.end(1, 3)[0].kind, 'up')
         self.assertEqual(self.g.move(2, 900, 900, 4), ())
         self.assertEqual(self.g.begin(3, 400, 400, 5), ())
         self.assertEqual(self.g.point, (.5, .5))
+        self.assertEqual(self.g.aim, 3)
+        self.assertIsNone(self.g.confirm)
         self.g.end(2, 6)
-        self.assertTrue(self.g.blocked)
+        self.assertFalse(self.g.blocked)
         self.g.end(3, 7)
         self.assertFalse(self.g.blocked)
+
+    def test_missing_orphan_end_does_not_block_new_aim_or_reuse_old_confirmation(self):
+        self.g.begin(1,300,300,1)
+        self.g.begin(2,600,600,2)
+        self.assertEqual(self.g.end(1,3)[0].kind,'up')
+        # No END for contact 2. A brand-new finger may position, without input.
+        self.assertEqual(self.g.begin(3,300,300,4),())
+        self.assertEqual(self.g.move(3,424,300,5),())
+        self.assertAlmostEqual(self.g.point[0],.6)
+        self.assertFalse(self.g.held)
+        self.assertEqual(self.g.move(2,900,900,6),())
+        # Only another NEW begin can confirm; the old end cannot release it.
+        self.assertEqual(self.g.begin(4,1000,1000,7)[0].kind,'down')
+        self.assertEqual(self.g.end(2,8),())
+        self.assertTrue(self.g.held)
+        self.assertEqual(self.g.move(3,548,300,9)[0].kind,'move')
+        self.assertEqual(self.g.end(4,10)[0].kind,'up')
+
+    def test_multiple_orphans_never_become_the_new_aim_or_confirm(self):
+        self.g.begin(1,300,300,1)
+        self.g.begin(2,600,600,2)
+        self.g.begin(3,900,900,3)
+        self.g.end(1,4)
+        self.assertEqual(self.g.begin(4,400,400,5),())
+        self.assertEqual(self.g.move(4,524,400,6),())
+        self.assertEqual(self.g.move(2,700,700,7),())
+        self.assertEqual(self.g.move(3,800,800,8),())
+        self.assertFalse(self.g.held)
 
     def test_third_finger_does_not_move_or_release_owned_contact(self):
         self.g.begin(1, 300, 300, 1)

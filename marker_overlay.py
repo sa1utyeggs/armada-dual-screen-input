@@ -26,6 +26,7 @@ class MarkerOverlay:
         self.checked_at = 0.
         self.size = None
         self.error = None
+        self.worker_updates = self.worker_draws = 0
         self.pending = (.5, .5, False)
         self.sent = None
         self._reaper = None
@@ -70,6 +71,11 @@ class MarkerOverlay:
                     if not all(type(n) is int and 1 <= n <= 8192 for n in (width, height)):
                         raise ValueError('invalid marker geometry')
                     self.size, self.ready = (width, height), True
+                if state.get('alive'):
+                    values = (state.get('updates', 0), state.get('draws', 0))
+                    if not all(type(n) is int and 0 <= n < 2**63 for n in values):
+                        raise ValueError('invalid marker counters')
+                    self.worker_updates, self.worker_draws = values
                 self.checked_at = time.monotonic()
             if self.ready and self.pending != self.sent:
                 try:
