@@ -1,8 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=虚拟键鼠
-Comment=手动打开 Thor 下屏面板；桌面模式点击后等待进入游戏模式
-Exec=/usr/bin/systemctl --user restart thor-panel.service
-Icon=thor-virtual-input
-Terminal=false
-Categories=Utility;Accessibility;
