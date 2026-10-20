@@ -25,7 +25,8 @@
 
 英文 US 与简体中文全拼面板已实现。当前 Thor 的系统 libxkbcommon、
 libpinyin/词库已验证，专用上屏 GTK 窗口中的 Unicode、候选选择、独立
-worker 与隐藏时取消检查通过。中文用户交互验收待进行。
+worker 与隐藏时取消检查通过。用户确认候选显示正常，中英文均能输入；
+首版键帽偏小，已恢复原键帽大小并增加放大入口，大小体验待复测。
 
 Game Mode 的文字提交使用隔离的 Gamescope 私有协议适配器，不能视为
 通用 Wayland API；Desktop Mode 中文暂不启用。Steam、Chrome、原生游戏

@@ -92,6 +92,29 @@ class PanelLanguageTests(unittest.TestCase):
         self.assertEqual(self.app.languages.language, "en_US")
         self.assertNotIn("keyboard_language", json.loads(self.config.read_text()))
 
+    def test_split_preserves_original_key_bounds_and_moves_strip_into_trackpad(self):
+        self.app.mode = "split"
+        self.app.update_mode_bounds()
+        original = fixture.KeyboardLayout(0, 500, 1240, 580)
+        self.assertEqual(self.app.kb_layout.y, original.y)
+        self.assertEqual(self.app.kb_layout.height, original.height)
+        self.assertEqual(self.app.kb_layout.rows[0][0].h, original.rows[0][0].h)
+        self.assertEqual(self.app._language_top() + 112, self.app.kb_layout.y)
+
+    def test_enlarged_keyboard_and_return_button_release_input_and_keep_language(self):
+        self.app.mode = "split"
+        self.app.update_mode_bounds()
+        original = self.app.kb_layout.rows[0][0].h
+        with patch.object(self.app, "save_config", return_value=True):
+            self.app._language_down(1120, self.app._language_top() + 25)
+            self.assertEqual(self.app.mode, "keyboard")
+            self.assertGreater(self.app.kb_layout.rows[0][0].h, original)
+            self.assertEqual(self.app.languages.language, "en_US")
+            self.app._language_down(1120, self.app._language_top() + 25)
+            self.assertEqual(self.app.mode, "split")
+            self.assertEqual(self.app.kb_layout.rows[0][0].h, original)
+        self.assertFalse(self.bridge.held_keys)
+
 
 if __name__ == "__main__":
     unittest.main()

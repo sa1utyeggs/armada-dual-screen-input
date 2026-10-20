@@ -714,19 +714,25 @@ class PanelApp(upstream.ThorApp):
                                 upstream.STATUS_RIBBON_H, SCREEN_WIDTH)
 
     def _draw_trackpad_surface(self, cr, y, h) -> None:
+        if self.mode == "split" and getattr(self, "languages", None) is not None:
+            h -= keyboard_language_view.HEIGHT
         steam_style.draw_trackpad(self, cr, y, h, SCREEN_WIDTH)
 
     def _draw_keyboard(self, cr) -> None:
         if getattr(self, "languages", None) is not None:
-            keyboard_language_view.draw(cr, self.languages, self._language_top())
+            keyboard_language_view.draw(cr, self.languages, self._language_top(),
+                                        expanded=self.mode == "keyboard")
         steam_keys.draw_keyboard(self, cr)
 
     def _language_top(self):
-        return upstream.SPLIT_Y if self.mode == "split" else upstream.HEADER_HEIGHT
+        # Put the new strip in the trackpad's old bottom area, never shrink
+        # the accepted split keyboard to make room for an input method.
+        return (upstream.SPLIT_Y - keyboard_language_view.HEIGHT
+                if self.mode == "split" else upstream.HEADER_HEIGHT)
 
     def update_mode_bounds(self):
         super().update_mode_bounds()
-        if getattr(self, "languages", None) is not None and self.mode in ("keyboard", "split"):
+        if getattr(self, "languages", None) is not None and self.mode == "keyboard":
             top = self._language_top() + keyboard_language_view.HEIGHT
             self.kb_layout.update_bounds(0, top, SCREEN_WIDTH, SCREEN_HEIGHT - top)
 
@@ -750,6 +756,8 @@ class PanelApp(upstream.ThorApp):
         elif action == "cancel":
             self._clear_panel_contacts()
             self.languages.reset()
+        elif action == "size":
+            self.set_mode("split" if self.mode == "keyboard" else "keyboard", restart_hint=False)
         self.drawing_area.queue_draw()
 
     def _handle_settings_touch(self, *_) -> None:

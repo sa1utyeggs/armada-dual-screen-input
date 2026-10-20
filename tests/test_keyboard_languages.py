@@ -107,6 +107,7 @@ class KeyboardLanguageTests(unittest.TestCase):
         self.assertEqual(hit(100, top + 25, top), ("language", None))
         self.assertEqual(hit(200, top + 75, top), ("candidate", 1))
         self.assertEqual(hit(1170, top + 75, top), ("page", 1))
+        self.assertEqual(hit(1170, top + 25, top), ("size", None))
         self.assertEqual(hit(100, top + HEIGHT, top), (None, None))
 
 

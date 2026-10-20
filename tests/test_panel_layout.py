@@ -114,7 +114,7 @@ class CompactPanelLayoutTests(unittest.TestCase):
         self.assertEqual(self.app.kb_layout.height, 580)
         self.assertEqual(self.app.kb_layout.rows[0][0].y, 510)
 
-    def test_old_config_modes_load_as_keys_mouse_without_rewriting_config(self):
+    def test_saved_modes_load_and_removed_pages_fall_back_without_rewriting_config(self):
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / "config.json"
             with patch.object(self.panel.upstream, "CONFIG_PATH", str(config)):
@@ -126,14 +126,15 @@ class CompactPanelLayoutTests(unittest.TestCase):
                         config.write_bytes(before)
                         self.app.load_config()
                         self.assertEqual(self.app.mode,
-                                         {"trackpad": "trackpad", "position": "position"}.get(old_mode, "split"))
+                                         {"trackpad": "trackpad", "position": "position",
+                                          "keyboard": "keyboard"}.get(old_mode, "split"))
                         self.assertEqual(self.app.scroll_scale, 0.25)
                         self.assertEqual(self.app.keyboard_cfg["keyboard_repeat_interval_ms"], 60)
                         self.assertEqual(config.read_bytes(), before)
 
     def test_legacy_mode_calls_normalize_and_guard_tracks_visible_keyboard(self):
         for requested, expected, suppress in (("mirror", "split", True),
-                                               ("keyboard", "split", True),
+                                               ("keyboard", "keyboard", True),
                                                ("settings", "split", True),
                                                ("trackpad", "trackpad", False),
                                                ("split", "split", True)):

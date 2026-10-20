@@ -5,12 +5,12 @@ from armada_dual_screen_input.panel_modes import normalize_mode
 
 class SavedModeCompatibilityTests(unittest.TestCase):
     def test_removed_mirror_and_legacy_pages_fall_back_to_keys_mouse(self):
-        for mode in ('mirror', 'keyboard', 'settings'):
+        for mode in ('mirror', 'settings'):
             with self.subTest(mode=mode):
                 self.assertEqual(normalize_mode(mode), 'split')
 
     def test_kept_modes_remain_selectable(self):
-        for mode in ('split', 'trackpad', 'position'):
+        for mode in ('split', 'keyboard', 'trackpad', 'position'):
             with self.subTest(mode=mode):
                 self.assertEqual(normalize_mode(mode), mode)
 
