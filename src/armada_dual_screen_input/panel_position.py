@@ -19,7 +19,7 @@ class PanelPosition:
 
     def __init__(self, *, runtime=None, resolve=None, focus_factory=FocusWatcher,
                  marker_factory=MarkerOverlay, native_factory=NativeTouchInput,
-                 clock=time.monotonic):
+                 clock=time.monotonic, sensitivity=2.0):
         self.runtime = Path(runtime or os.environ.get('XDG_RUNTIME_DIR', '/nonexistent'))
         self.resolve = resolve or (lambda: GamescopeTarget.resolve(self.runtime))
         self.focus_factory, self.marker_factory = focus_factory, marker_factory
@@ -29,7 +29,7 @@ class PanelPosition:
         self.message = '定位触摸尚未打开'
         self.last_error = None
         self.revision = 0
-        self.gesture = PositionGesture(self.pad, sensitivity=2.0)
+        self.gesture = PositionGesture(self.pad, sensitivity=sensitivity)
         self._candidate = self._candidate_since = self._clear_since = None
         self._pending_until = self._retry_after = 0.
         self._retired = []

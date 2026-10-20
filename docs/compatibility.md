@@ -21,4 +21,14 @@
 - Steam 键盘联动依赖客户端内部接口；不可用时保留原生键盘，切页/收起/退出后恢复。Steam 更新可能需要重新验证。
 - 中文字体使用系统 Pango/Noto CJK，未打包个人配置或字体缓存。
 
+## 设置页实机验收（2026-10-20）
+
+测试版本为 PR #4 的应用提交 `5e127ed`，在上述 Thor / Armada / Game Mode 环境通过用户目录离线包升级。检查确认 72 个文件与清单一致、依赖可用，安装前后配置字节一致，开机自启保持禁用，并保留旧版作为回退入口。
+
+- 用户确认鼠标、定位触摸和键盘选项均可调整、保存，界面显示正常。
+- 重开虚拟键鼠后，检查确认配置文件字节不变；用户确认界面数值保留，鼠标移动、定位触摸和英文键盘操作正常。按用户选择保留其调整后的数值。
+- 检查确认面板正常运行且无异常自动重启，Steam、Gamescope 和官方下屏会话进程保持原样。
+
+这是单台 Thor 的短时交互验收；其他设备、Desktop Mode、长期与休眠恢复仍未由本轮验证。恢复默认、放弃编辑与保存失败保护由隔离检查覆盖，本轮未要求用户逐项复测。
+
 完整历史证据见源码仓库的 [定位触摸记录](https://github.com/sa1utyeggs/armada-dual-screen-input/blob/main/docs/position-touch.md)、[驱动研究](https://github.com/sa1utyeggs/armada-dual-screen-input/blob/main/docs/thor-ft5452-contact-lifecycle.md)和[历史汇总](https://github.com/sa1utyeggs/armada-dual-screen-input/blob/main/docs/history.md)。短时用户验收不等同于长期稳定性验证。
