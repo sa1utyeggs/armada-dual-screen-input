@@ -51,11 +51,13 @@ from .toolkit_touch import ToolkitTouch
 from . import steam_style
 from . import steam_keys
 from .keyboard_pulses import KeyboardPulses
+from .keyboard_languages import KeyboardLanguages
+from . import keyboard_language_view
 from .scroll_output import ScaledScroll, read_scroll_scale
 from .steam_keyboard_guard import SteamKeyboardGuard, keyboard_guard_wanted
 from .panel_modes import SUPPORTED_MODES, normalize_mode
 from .panel_position import PanelPosition
-from .input_settings import read_settings, write_settings, SettingsDraft, NUMBERS
+from .input_settings import read_settings, write_settings, SettingsDraft, NUMBERS, CHOICES
 from . import settings_view
 
 # Isolate our settings/socket names from a separately installed Ratatoskr.
@@ -80,6 +82,8 @@ class PanelApp(upstream.ThorApp):
         self.keyboard_guard = None
         self.position = None
         self.preferences = None
+        self.languages = None
+        self._language_consumed = set()
         self._last_input_mode = "split"
         self._position_draw_state = None
         self._discarding_contacts = False
@@ -99,11 +103,14 @@ class PanelApp(upstream.ThorApp):
         # Keep the GTK thread free while a key's 20 ms pulse is held. All
         # keyboard repeat/release work stays on this same event-loop thread.
         self.key_pulses = KeyboardPulses(
-            send_key=self.bridge.key,
+            send_key=self._send_key_pulse,
             schedule=GLib.timeout_add,
             cancel=GLib.source_remove,
         )
         self.bridge.tap_key = self.key_pulses.tap
+        self.raw_key_pulses = KeyboardPulses(
+            send_key=self.bridge.key, schedule=GLib.timeout_add, cancel=GLib.source_remove,
+        )
         # Compositor shutdown/window closure should be retried. Only the
         # explicit Close action returns success and ends the supervisor.
         self.exit_code = 75
@@ -140,6 +147,12 @@ class PanelApp(upstream.ThorApp):
         self.window.connect("map", self._on_map)
         if self.session_mode == "game":
             self.keyboard_guard = SteamKeyboardGuard()
+        self.languages = KeyboardLanguages(
+            self.input_cfg["keyboard_language"], mode=self.session_mode,
+            runtime=os.environ["XDG_RUNTIME_DIR"], changed=self.drawing_area.queue_draw,
+            dispatch=GLib.idle_add, forward_key=self.raw_key_pulses.tap,
+        )
+        self.update_mode_bounds()
         Gdk.Display.get_default().connect("monitor-removed", self._on_monitor_removed)
         Gdk.Display.get_default().get_default_screen().connect("monitors-changed", self._on_monitors_changed)
 
@@ -211,6 +224,8 @@ class PanelApp(upstream.ThorApp):
         self.scroll_output.rest_x = self.scroll_output.rest_y = 0.
         if self.position is not None:
             self.position.gesture.sensitivity = values["position_sensitivity"]
+        if getattr(self, "languages", None) is not None and self.languages.language != values["keyboard_language"]:
+            self.languages.set_language(values["keyboard_language"])
         draft.mark_saved()
 
     def _setup_indicator(self) -> None:
@@ -286,6 +301,24 @@ class PanelApp(upstream.ThorApp):
             self.keyboard_guard.update(keyboard_guard_wanted(
                 self.session_mode, self.mode, self.collapsed, self.window.get_mapped(),
             ))
+        if getattr(self, "languages", None) is not None:
+            self.languages.sync(self.mode in ("keyboard", "split") and not self.collapsed
+                                and self.window.get_mapped())
+
+    def _send_key_pulse(self, code, down):
+        consumed = self._language_consumed
+        if not down and code in consumed:
+            consumed.discard(code)
+            return
+        languages = getattr(self, "languages", None)
+        if down and languages is not None and languages.key(
+            code, shift=self.mods.active("shift") and not self.mods.locked("shift"),
+            caps=self.mods.locked("shift"),
+            shortcut=any(self.mods.active(key) for key in ("ctrl", "alt", "super")),
+        ):
+            consumed.add(code)
+            return
+        self.bridge.key(code, down)
 
     def _keep_contacts_alive(self) -> bool:
         if self._cleaned:
@@ -340,12 +373,17 @@ class PanelApp(upstream.ThorApp):
         if hasattr(self, "key_pulses"):
             # The character must go up before consuming its one-shot modifier.
             self.key_pulses.release()
+        if hasattr(self, "raw_key_pulses"):
+            self.raw_key_pulses.release()
         super()._end_key_press()
 
     def _send_keys(self, events) -> None:
         events = list(events)
         if events and hasattr(self, "key_pulses"):
             self.key_pulses.flush_pending()
+        if (getattr(self, "languages", None) is not None
+                and any(down and code in (29, 56, 125) for code, down in events)):
+            self.languages.reset()
         super()._send_keys(events)
 
     def _reset_input(self) -> None:
@@ -360,6 +398,8 @@ class PanelApp(upstream.ThorApp):
         self.active_key_press = self.active_key_tid = None
         if getattr(self, "preferences", None) is not None:
             self.preferences.drag = None
+        if getattr(self, "languages", None) is not None:
+            self.languages.reset()
 
     def _cancel_contact(self, tid: int, now: float) -> None:
         # A compositor cancel must not turn into a click on lift.
@@ -373,6 +413,8 @@ class PanelApp(upstream.ThorApp):
         self._physical_sequences.clear()
         if getattr(self, "keyboard_guard", None) is not None:
             self.keyboard_guard.update(False)
+        if getattr(self, "languages", None) is not None:
+            self.languages.sync(False)
         if hasattr(self, "touch"):
             with self.input_lock:
                 self.touch.release_all()
@@ -452,6 +494,8 @@ class PanelApp(upstream.ThorApp):
 
     def _handle_timed_touch_move(self, tid, x, y, now, motion_interval) -> None:
         owner = self._touch_owner.get(tid)
+        if owner == "languagebar":
+            return
         if owner == "preferences" or self.mode == "preferences":
             self._handle_touch_move(tid, x, y, now)
             return
@@ -468,6 +512,12 @@ class PanelApp(upstream.ThorApp):
             self._handle_touch_move(tid, x, y, now)
 
     def _handle_touch_down(self, tid, x, y, now) -> None:
+        if (getattr(self, "languages", None) is not None and not self.ui_hidden
+                and self.mode in ("keyboard", "split")
+                and self._language_top() <= y < self._language_top() + keyboard_language_view.HEIGHT):
+            self._touch_owner[tid] = "languagebar"
+            self._language_down(x, y)
+            return
         # Status is display-only. The vendor ribbon opens its old controls page.
         if not self.ui_hidden and upstream.HEADER_BUTTONS_H <= y < upstream.HEADER_HEIGHT:
             self.last_event_time = time.time()
@@ -486,6 +536,8 @@ class PanelApp(upstream.ThorApp):
 
     def _handle_touch_move(self, tid, x, y, now) -> None:
         owner = self._touch_owner.get(tid)
+        if owner == "languagebar":
+            return
         if owner == "preferences" or self.mode == "preferences":
             draft = getattr(self, "preferences", None)
             if owner == "preferences" and draft and draft.drag and draft.drag[0] == tid:
@@ -499,6 +551,9 @@ class PanelApp(upstream.ThorApp):
         super()._handle_touch_move(tid, x, y, now)
 
     def _handle_touch_up(self, tid, now) -> None:
+        if self._touch_owner.get(tid) == "languagebar":
+            self._touch_owner.pop(tid, None)
+            return
         if self.mode == "preferences" or self._touch_owner.get(tid) == "preferences":
             self._touch_owner.pop(tid, None)
             draft = getattr(self, "preferences", None)
@@ -577,6 +632,9 @@ class PanelApp(upstream.ThorApp):
             draft.slide(key, x)
         elif action == "toggle":
             draft.change(key, not draft.values[key])
+        elif action == "choice":
+            choices = list(CHOICES[key])
+            draft.change(key, choices[(choices.index(draft.values[key]) + 1) % len(choices)])
         elif action == "defaults":
             draft.reset_section()
         elif action == "discard":
@@ -659,7 +717,40 @@ class PanelApp(upstream.ThorApp):
         steam_style.draw_trackpad(self, cr, y, h, SCREEN_WIDTH)
 
     def _draw_keyboard(self, cr) -> None:
+        if getattr(self, "languages", None) is not None:
+            keyboard_language_view.draw(cr, self.languages, self._language_top())
         steam_keys.draw_keyboard(self, cr)
+
+    def _language_top(self):
+        return upstream.SPLIT_Y if self.mode == "split" else upstream.HEADER_HEIGHT
+
+    def update_mode_bounds(self):
+        super().update_mode_bounds()
+        if getattr(self, "languages", None) is not None and self.mode in ("keyboard", "split"):
+            top = self._language_top() + keyboard_language_view.HEIGHT
+            self.kb_layout.update_bounds(0, top, SCREEN_WIDTH, SCREEN_HEIGHT - top)
+
+    def _language_down(self, x, y):
+        action, value = keyboard_language_view.hit(x, y, self._language_top())
+        if action == "language":
+            language = "zh_CN" if self.languages.language == "en_US" else "en_US"
+            try:
+                write_settings(upstream.CONFIG_PATH, {"keyboard_language": language})
+            except (OSError, ValueError, TypeError):
+                self.languages.message = "语言保存失败，原设置保留"
+                self.drawing_area.queue_draw()
+                return
+            self._clear_panel_contacts()
+            self.input_cfg["keyboard_language"] = language
+            self.languages.set_language(language)
+        elif action == "candidate":
+            self.languages.choose(self.languages.page * 6 + value)
+        elif action == "page":
+            self.languages.turn_page(value)
+        elif action == "cancel":
+            self._clear_panel_contacts()
+            self.languages.reset()
+        self.drawing_area.queue_draw()
 
     def _handle_settings_touch(self, *_) -> None:
         pass  # Monitoring is read-only; Armada keeps hardware controls.
@@ -725,6 +816,8 @@ class PanelApp(upstream.ThorApp):
         if self._cleaned:
             return
         self._stop_position()
+        if getattr(self, "languages", None) is not None:
+            self.languages.close()
         if getattr(self, "keyboard_guard", None) is not None:
             self.keyboard_guard.stop()
         try:
@@ -734,6 +827,8 @@ class PanelApp(upstream.ThorApp):
         finally:
             if hasattr(self, "key_pulses"):
                 self.key_pulses.close()
+            if hasattr(self, "raw_key_pulses"):
+                self.raw_key_pulses.close()
             # The parent cleanup only closes this app's resources; our raw
             # fd stays -1, dim mirror never started, and IPC never bound.
             super().cleanup()

@@ -9,6 +9,7 @@ from pathlib import Path
 import tempfile
 
 from .scroll_output import read_scroll_scale
+from .keyboard_languages import LANGUAGES, read_language
 
 
 @dataclass(frozen=True)
@@ -53,11 +54,13 @@ NUMBERS = {
     )
 }
 BOOLEANS = {"tap_to_click": True, "glide": True, "keyboard_repeat_enabled": True}
-DEFAULTS = {**{key: spec.default for key, spec in NUMBERS.items()}, **BOOLEANS}
+CHOICES = {"keyboard_language": LANGUAGES}
+DEFAULTS = {**{key: spec.default for key, spec in NUMBERS.items()}, **BOOLEANS,
+            "keyboard_language": "en_US"}
 SECTIONS = {
     "mouse": ("sensitivity", "scroll_speed", "scroll_scale", "tap_to_click", "glide", "friction"),
     "position": ("position_sensitivity",),
-    "keyboard": ("keyboard_repeat_enabled", "keyboard_repeat_delay_ms",
+    "keyboard": ("keyboard_language", "keyboard_repeat_enabled", "keyboard_repeat_delay_ms",
                  "keyboard_repeat_interval_ms", "keyboard_caps_window_ms"),
 }
 
@@ -70,6 +73,7 @@ def read_settings(config):
     values["scroll_scale"] = read_scroll_scale(config.get("scroll_scale", 1.))
     values.update({key: config[key] if isinstance(config.get(key), bool) else default
                    for key, default in BOOLEANS.items()})
+    values["keyboard_language"] = read_language(config)
     return values
 
 
@@ -115,7 +119,11 @@ class SettingsDraft:
         return self.values != self.saved
 
     def change(self, key, value):
-        self.values[key] = NUMBERS[key].read(value) if key in NUMBERS else bool(value)
+        if key in CHOICES:
+            value = value if isinstance(value, str) and value in CHOICES[key] else DEFAULTS[key]
+        else:
+            value = NUMBERS[key].read(value) if key in NUMBERS else bool(value)
+        self.values[key] = value
         self.error = False
         self.message = "有未保存的修改" if self.dirty else "设置未改变"
 
@@ -135,8 +143,7 @@ class SettingsDraft:
         self.message, self.error = "已放弃未保存的修改", False
 
     def rows(self):
-        offset = 1 if self.section == "keyboard" else 0
-        return [(key, 300 + (index + offset) * 98)
+        return [(key, 300 + index * 98)
                 for index, key in enumerate(SECTIONS[self.section])]
 
     def hit(self, x, y):
@@ -150,6 +157,8 @@ class SettingsDraft:
         for key, top in self.rows():
             if not top <= y <= top + 88:
                 continue
+            if key in CHOICES:
+                return ("choice", key) if 790 <= x <= 1192 else (None, None)
             if key in BOOLEANS:
                 return ("toggle", key) if 900 <= x <= 1192 else (None, None)
             if top + 20 <= y <= top + 80:
