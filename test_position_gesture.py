@@ -1,0 +1,78 @@
+import unittest
+
+from mirror_geometry import Rect
+from position_gesture import PositionGesture
+
+
+class PositionGestureTests(unittest.TestCase):
+    def setUp(self):
+        self.g = PositionGesture(Rect(0, 124, 1240, 956))
+
+    def test_aiming_emits_no_app_input_and_retouch_does_not_jump(self):
+        self.assertEqual(self.g.begin(1, 600, 600, 1), ())
+        self.assertEqual(self.g.move(1, 724, 695.6, 2), ())
+        self.assertAlmostEqual(self.g.point[0], .6)
+        self.assertAlmostEqual(self.g.point[1], .6)
+        self.assertEqual(self.g.end(1, 3), ())
+        self.assertEqual(self.g.begin(2, 10, 130, 4), ())
+        self.assertAlmostEqual(self.g.point[0], .6)
+
+    def test_confirm_anywhere_targets_marker_and_its_motion_is_ignored(self):
+        self.g.begin(1, 20, 200, 1)
+        event, = self.g.begin(2, 1200, 1050, 2)
+        self.assertEqual((event.kind, event.position), ('down', (.5, .5)))
+        self.assertEqual(self.g.move(2, 10, 200, 3), ())
+        self.assertEqual(self.g.point, (.5, .5))
+        event, = self.g.end(2, 4)
+        self.assertEqual(event.kind, 'up')
+        self.assertEqual(self.g.move(1, 30, 200, 5), ())
+        self.assertFalse(self.g.held)
+        self.assertEqual(self.g.begin(3, 300, 200, 6)[0].kind, 'down')
+
+    def test_held_confirm_and_aim_motion_produce_one_native_drag(self):
+        events = list(self.g.begin(1, 300, 300, 1))
+        events += self.g.begin(2, 1000, 1000, 2)
+        events += self.g.move(1, 424, 300, 3)
+        events += self.g.end(2, 4)
+        self.assertEqual([e.kind for e in events], ['down', 'move', 'up'])
+        self.assertEqual({e.contact_id for e in events}, {0})
+        self.assertAlmostEqual(events[-1].position[0], .6)
+
+    def test_aim_lifting_first_releases_and_blocks_role_promotion(self):
+        self.g.begin(1, 300, 300, 1)
+        self.g.begin(2, 1000, 1000, 2)
+        self.assertEqual(self.g.end(1, 3)[0].kind, 'up')
+        self.assertEqual(self.g.move(2, 900, 900, 4), ())
+        self.assertEqual(self.g.begin(3, 400, 400, 5), ())
+        self.assertEqual(self.g.point, (.5, .5))
+        self.g.end(2, 6)
+        self.assertTrue(self.g.blocked)
+        self.g.end(3, 7)
+        self.assertFalse(self.g.blocked)
+
+    def test_third_finger_does_not_move_or_release_owned_contact(self):
+        self.g.begin(1, 300, 300, 1)
+        self.g.begin(2, 600, 600, 2)
+        self.assertEqual(self.g.begin(3, 900, 900, 3), ())
+        self.assertEqual(self.g.move(3, 200, 200, 4), ())
+        self.assertEqual(self.g.end(3, 5), ())
+        self.assertTrue(self.g.held)
+
+    def test_edges_are_clamped_and_reverse_motion_recovers_immediately(self):
+        self.g.begin(1, 0, 124, 1)
+        self.g.move(1, 5000, 5000, 2)
+        self.assertEqual(self.g.point, (1., 1.))
+        self.g.move(1, 4876, 4904.4, 3)
+        self.assertAlmostEqual(self.g.point[0], .9)
+        self.assertAlmostEqual(self.g.point[1], .9)
+
+    def test_cancel_and_center_release_without_late_lift_click(self):
+        self.g.begin(1, 300, 300, 1)
+        self.g.begin(2, 600, 600, 2)
+        self.assertEqual(self.g.center(3)[0].kind, 'cancel')
+        self.assertEqual(self.g.end(2, 4), ())
+        self.assertEqual(self.g.point, (.5, .5))
+        self.assertFalse(self.g.held)
+
+
+if __name__ == '__main__': unittest.main()

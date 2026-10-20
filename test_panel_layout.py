@@ -32,6 +32,7 @@ class CompactPanelLayoutTests(unittest.TestCase):
         self.app.keyboard_guard = Mock()
         self.app.mirror = Mock(active=False, input_mode='native', armed=False,
                                enable_label='启用触摸')
+        self.app.position = Mock(active=False, armed=False, enable_label='启用触摸')
         self.app.touch = SimpleNamespace(release_all=Mock())
         self.app.gesture.touch_down = Mock()
         self.app.gesture.touch_move = Mock()
@@ -50,10 +51,10 @@ class CompactPanelLayoutTests(unittest.TestCase):
         patch.object(self.panel.Gtk, "Window",
                      side_effect=AssertionError("No GTK windows in tests")).start()
 
-    def test_header_exposes_three_modes_and_has_no_overlapping_buttons(self):
+    def test_header_exposes_four_modes_and_has_no_overlapping_buttons(self):
         buttons = self.panel.upstream.HEADER_BUTTONS
         names = [name for name, _, _ in buttons]
-        self.assertEqual(names[:3], ["trackpad", "split", "mirror"])
+        self.assertEqual(names[:4], ["trackpad", "split", "mirror", "position"])
         self.assertTrue({"keyboard", "settings", "hud"}.isdisjoint(names))
         self.assertEqual(len(names), len(set(names)))
         for (_, x, width), (_, next_x, _) in zip(buttons, buttons[1:]):
@@ -65,9 +66,9 @@ class CompactPanelLayoutTests(unittest.TestCase):
             self.assertLessEqual(x + width, self.panel.SCREEN_WIDTH)
         self.assertEqual(self.app._header_button_look("split")[0], "键鼠")
 
-    def test_header_mode_buttons_route_to_the_three_visible_modes(self):
+    def test_header_mode_buttons_route_to_the_four_visible_modes(self):
         with patch.object(self.app, "set_mode") as select:
-            for mode in ("trackpad", "split", "mirror"):
+            for mode in ("trackpad", "split", "mirror", "position"):
                 _, x, width = next(button for button in self.panel.upstream.HEADER_BUTTONS
                                    if button[0] == mode)
                 self.app._handle_header_touch(1, x + width / 2, 30, True)
@@ -75,7 +76,7 @@ class CompactPanelLayoutTests(unittest.TestCase):
         self.assertFalse(self.bridge.events)
 
     def test_status_strip_is_inert_through_move_and_lift_in_both_modes(self):
-        for mode in ("trackpad", "split", "mirror"):
+        for mode in ("trackpad", "split", "mirror", "position"):
             for y in (80.0, 102.0, 123.999):
                 with self.subTest(mode=mode, y=y), patch.object(self.app, "set_mode") as select:
                     self.app.mode = mode
@@ -233,6 +234,7 @@ class CompactPanelLayoutTests(unittest.TestCase):
         sequence = object()
         event = SimpleNamespace(get_event_sequence=lambda: sequence,
                                 get_time=lambda: 100, x=300, y=20,
+                                get_pointer_emulated=lambda:False,
                                 type=self.panel.Gdk.EventType.TOUCH_BEGIN)
         self.app._on_touch(None, event)
         self.app._clear_panel_contacts()
@@ -245,11 +247,81 @@ class CompactPanelLayoutTests(unittest.TestCase):
         self.app.collapsed = True
         sequence = object()
         event = SimpleNamespace(get_event_sequence=lambda: sequence,
+                                get_pointer_emulated=lambda:True,
                                 type=self.panel.Gdk.EventType.TOUCH_BEGIN)
         with patch.object(self.app, '_set_collapsed') as expand:
             self.app._on_touch(None, event)
         expand.assert_called_once_with(False)
         self.assertEqual(self.app._physical_sequences, {sequence})
+
+    def test_position_contacts_only_reach_capture_free_controller(self):
+        self.app.mode = 'position'
+        self.app._handle_touch_down(21, 620, 600, 1.)
+        self.app._handle_touch_move(21, 640, 600, 1.1)
+        self.app._handle_timed_touch_move(21, 660, 600, 1.2, .01)
+        self.app._handle_touch_up(21, 1.3)
+        self.assertEqual([c.args[0] for c in self.app.position.touch.call_args_list],
+                         ['begin', 'move', 'move', 'end'])
+        self.app.mirror.touch.assert_not_called()
+        self.app.gesture.touch_down.assert_not_called()
+        self.assertFalse(self.bridge.events)
+
+    def test_position_header_and_unknown_contact_cannot_touch_upper(self):
+        self.app.mode = 'position'
+        self.app._touch_owner[2] = 'header'
+        for tid in (2, 99):
+            self.app._handle_touch_move(tid, 400, 600, 1.)
+            self.app._handle_touch_up(tid, 2.)
+        self.app.position.touch.assert_not_called()
+
+    def test_position_entry_stops_capture_and_exit_removes_marker(self):
+        self.app.set_mode('position')
+        self.app.mirror.stop.assert_called_once()
+        self.app.mirror.start.assert_not_called()
+        self.app.position.start.assert_called_once()
+        self.app.keyboard_guard.update.assert_called_with(False)
+        self.app.position.stop.reset_mock()
+        self.app.set_mode('split')
+        self.app.position.stop.assert_called_once()
+        self.app.keyboard_guard.update.assert_called_with(True)
+
+    def test_position_controls_do_not_emit_mouse_buttons(self):
+        self.app.mode = 'position'
+        for key in ('left', 'right', 'pen'):
+            _, x, width = next(b for b in self.panel.upstream.HEADER_BUTTONS if b[0] == key)
+            self.app._handle_header_touch(1, x+width/2, 30, True)
+        self.app.position.toggle.assert_called_once()
+        self.app.position.center.assert_called_once()
+        self.app.position.pause.assert_called_once()
+        self.assertFalse(self.bridge.events)
+
+    def test_position_collapse_unmap_release_and_expand_waits_for_new_group(self):
+        self.app.mode = 'position'
+        with patch.object(self.app, '_apply_anchors'):
+            self.app._set_collapsed(True)
+            self.app.position.stop.assert_called_once()
+            self.app.position.start.assert_not_called()
+            self.app._set_collapsed(False)
+        self.app.position.start.assert_called_once()
+        self.app.position.toggle.assert_not_called()
+        self.app.position.stop.reset_mock()
+        self.app._on_unmap()
+        self.app.position.stop.assert_called_once()
+
+    def test_position_draw_has_no_image_or_capture_path(self):
+        self.app.mode = 'position'
+        widget = SimpleNamespace(get_allocation=lambda:SimpleNamespace(width=689,height=542))
+        with patch.object(self.app, '_draw_ui'), patch.object(self.app, '_draw_position') as draw, \
+             patch.object(self.app, '_draw_mirror') as mirror:
+            self.app.on_draw(widget, Mock())
+            draw.assert_called_once()
+            mirror.assert_not_called()
+
+    def test_position_is_not_opened_on_desktop(self):
+        self.app.session_mode = 'desktop'
+        self.app.set_mode('position')
+        self.assertEqual(self.app.mode, 'split')
+        self.app.position.start.assert_not_called()
 
 
 if __name__ == "__main__":

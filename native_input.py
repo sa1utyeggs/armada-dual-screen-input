@@ -17,21 +17,29 @@ from ei_input import InputUnavailable
 from native_touch import VirtualTouchProbe
 
 
-def input_owners(node: Path) -> set[int]:
+def input_owners(node: Path, *, proc_root='/proc') -> set[int]:
+    """Check every process, without allocating a Path for every descriptor.
+
+    This retains the full owner-set check, interval, and expiry. Only directory
+    iteration changes; no event node is opened or input data read.
+    """
     result = set()
-    for process in Path('/proc').iterdir():
-        if not process.name.isdigit():
-            continue
-        try:
-            for fd in (process / 'fd').iterdir():
-                try:
-                    if os.readlink(fd) == str(node):
-                        result.add(int(process.name))
-                        break
-                except OSError:
-                    pass
-        except OSError:
-            pass
+    wanted = os.fspath(node)
+    with os.scandir(proc_root) as processes:
+        for process in processes:
+            if not process.name.isdigit():
+                continue
+            try:
+                with os.scandir(process.path+'/fd') as descriptors:
+                    for fd in descriptors:
+                        try:
+                            if os.readlink(fd.path) == wanted:
+                                result.add(int(process.name))
+                                break
+                        except OSError:
+                            pass
+            except OSError:
+                pass
     return result
 
 
