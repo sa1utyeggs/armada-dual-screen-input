@@ -234,6 +234,7 @@ class CompactPanelLayoutTests(unittest.TestCase):
         sequence = object()
         event = SimpleNamespace(get_event_sequence=lambda: sequence,
                                 get_time=lambda: 100, x=300, y=20,
+                                touch=SimpleNamespace(emulating_pointer=False),
                                 get_pointer_emulated=lambda:False,
                                 type=self.panel.Gdk.EventType.TOUCH_BEGIN)
         self.app._on_touch(None, event)
@@ -247,6 +248,7 @@ class CompactPanelLayoutTests(unittest.TestCase):
         self.app.collapsed = True
         sequence = object()
         event = SimpleNamespace(get_event_sequence=lambda: sequence,
+                                touch=SimpleNamespace(emulating_pointer=True),
                                 get_pointer_emulated=lambda:True,
                                 type=self.panel.Gdk.EventType.TOUCH_BEGIN)
         with patch.object(self.app, '_set_collapsed') as expand:

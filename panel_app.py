@@ -392,7 +392,7 @@ class PanelApp(upstream.ThorApp):
             return True
         sequence = event.get_event_sequence()
         initial = (sequence is not None and event.type == Gdk.EventType.TOUCH_BEGIN
-                   and event.get_pointer_emulated())
+                   and event.touch.emulating_pointer)
         if sequence is not None:
             if event.type == Gdk.EventType.TOUCH_BEGIN:
                 if initial:
@@ -407,9 +407,14 @@ class PanelApp(upstream.ThorApp):
         with self.input_lock:
             if event.type == Gdk.EventType.TOUCH_BEGIN:
                 self.burn_in.record_touch()
-                # On Wayland GTK marks only the first touch of an empty seat
-                # as pointer-emulating. A new group invalidates any old
-                # application sequences whose END/CANCEL was not delivered.
+                # Read EventTouch's public first-contact field. GTK can copy
+                # an event without retaining get_pointer_emulated()'s private
+                # flag; on this device that method was false for every BEGIN
+                # even while touch.emulating_pointer correctly marked firsts.
+                # Only the trusted empty-seat boundary may clear old contacts.
+                if initial and self.mode == "position" and self.touch.active:
+                    self.position.touch('cancel', 0, time.monotonic())
+                    self._clear_panel_contacts()
                 recover = not initial and self._stalled_trackpad_begin(sequence, event.x, event.y)
                 self.touch.begin(sequence, event.x, event.y,
                                  source_ms=event.get_time(),

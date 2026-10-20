@@ -45,9 +45,39 @@ class PanelTouchRecoveryTests(unittest.TestCase):
             type=getattr(self.panel.Gdk.EventType, "TOUCH_" + kind), x=x, y=y,
             get_event_sequence=lambda: sequence,
             get_time=lambda: self.scheduler.now,
-            get_pointer_emulated=lambda: initial,
+            touch=SimpleNamespace(emulating_pointer=initial),
+            # Real GTK events on Thor retained the public touch field while
+            # this private event flag was false, including the first finger.
+            get_pointer_emulated=lambda: False,
         )
         self.assertTrue(self.app._on_touch(None, event))
+
+    def test_position_new_group_releases_old_touch_without_disarming_or_jumping(self):
+        from panel_position import PanelPosition
+        self.app.mode = "position"
+        p = self.app.position = PanelPosition()
+        p.active = p.armed = p.auto_requested = True
+        p._focus_current = lambda: True
+        events = []
+        p.sender = SimpleNamespace(send=events.append)
+        p.marker = Mock()
+        self.event("BEGIN", "aim", initial=True)
+        self.event("BEGIN", "confirm", x=900)
+        self.event("UPDATE", "aim", x=424)
+        point = p.gesture.point
+        self.assertTrue(p.gesture.held)
+        # Missing old ENDs in the adapter, but GTK now reports an empty-seat
+        # first contact. It releases the old native touch, never a new click.
+        self.event("BEGIN", "fresh", x=100, initial=True)
+        self.assertTrue(p.armed)
+        self.assertEqual(p.gesture.point, point)
+        self.assertFalse(p.gesture.held)
+        self.assertEqual(len(self.app.touch.active), 1)
+        self.assertEqual([e.kind for e in events], ["down", "move", "cancel"])
+        self.event("END", "confirm")  # late old lift cannot affect the new aim
+        self.event("BEGIN", "fresh-confirm", x=1000)
+        self.assertTrue(p.gesture.held)
+        self.assertEqual(events[-1].kind, "down")
 
     def test_new_wayland_group_recovers_pointer_after_a_missing_end(self):
         self.event("BEGIN", "one", initial=True)
