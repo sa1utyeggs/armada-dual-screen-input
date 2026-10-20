@@ -80,8 +80,16 @@ python3 -B tools/build_release.py
 
 已有 Thor 用户交互验收包括键鼠基础操作、定位触摸与拖动、右侧 Steam 菜单后的圆环自动恢复，以及正常切换恢复速度优化。
 《杀戮尖塔2》时间线的间歇重连仍待定位，长期、休眠恢复和其他机型的稳定性尚未完成验证。
-Thor 的物理触点残留另见 [Armada Issue #757](https://github.com/armada-os/armada/issues/757#issuecomment-6284200266)；安装本应用不等于修复该驱动问题。
 历史测试数量和当时的限制保留在 [历史记录](https://github.com/sa1utyeggs/armada-dual-screen-input/blob/main/docs/history.md)、[定位触摸记录](https://github.com/sa1utyeggs/armada-dual-screen-input/blob/main/docs/position-touch.md)中，不代表当前所有环境都已验证。
+
+### AYN Thor 下屏触摸驱动问题
+
+在 Armada `20261010.c3d178c` / Linux `7.2.6` 的 Thor 下屏 FT5452 上，曾复现第二指落下漏识别、抬起后圆环仍为橙色；全部抬手后，物理输入设备仍报告接触。该现象发生在应用接收事件之前，调节应用灵敏度不能修复残留触点。
+
+独立驱动模块已完成一次 **90 秒实机测试及自动回退**：用户确认第二指抬起立即释放、拖动正常，触点记录恢复为零，上屏保持原厂驱动。两指同时落下、长期游戏及休眠恢复仍待专项验证；其他设备和系统构建未验证。
+
+这是可选实验，**应用安装器与发布包均不包含或启用驱动补丁**。已测试方案不替换启动内核、不配置开机加载，可手动回退或重启恢复原厂驱动；系统更新后须重新核对内核指纹，不应沿用不匹配的模块。
+参见 [诊断、补丁及验证记录](docs/thor-ft5452-contact-lifecycle.md)、[独立模块操作与回退](extras/thor-touch-driver/README.md)和 [Armada Issue #757](https://github.com/armada-os/armada/issues/757#issuecomment-6284200266)。
 
 ## 许可证
 
