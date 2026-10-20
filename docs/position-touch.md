@@ -128,7 +128,7 @@ Steam 键盘联动的 15 项 JavaScript 检查通过。三种模式的顶部按�
 真实触摸仍须另一根新落下的手指确认。新增回归覆盖单个 / 多个残留接触、新定位无触摸输出及旧抬起不释放新确认。
 这定位了程序状态机的阻塞条件。用户随后确认单指移动、重新落指、两指拖动和分别抬指均正常；同时落下仍偶尔不识别，另反馈圆环漂移及偶发抬起后保持橙色。
 
-### 同时落指、残留触点：仍未解决的底层问题
+### 同时落指、残留触点：早期底层诊断
 
 分发前后的有界诊断中，收到的 BEGIN / END 均进入应用回调；当两个 BEGIN 均到达时，包括源时间相同的两个 BEGIN，确认均能按下。
 部分尝试在 GTK 分发前便只有一个 BEGIN；两指分开约 3–5 厘米后仍能复现。不能把这些漏事件全部归为应用双指判定失败。
@@ -150,6 +150,8 @@ Armada 该版本的下屏设备树启用了 `no-regmap-bulk-read`。对应补丁
 后续已找到另一个 Thor Linux 项目针对漏 UP、旧槽残留的直接内核补丁，并准备了仅匹配下屏 FT5452 的 Armada 候选。它与当前源码无模糊匹配通过；内核构建在完成前已按用户要求停止，未上机。
 诊断及候选 diff 已提交 [ArmadaOS Issue #757](https://github.com/armada-os/armada/issues/757)，等待上游评估，不将候选视为已验证修复。
 详细来源、证据、适用性及试验边界见[触点生命周期与内核候选](thor-ft5452-contact-lifecycle.md)。这比先前对逐字节读取的怀疑更直接，不应据此继续猜测调整应用灵敏度。
+
+后续改用独立驱动模块，在不替换启动内核的条件下完成 90 秒实机测试及自动回退。用户确认第二指抬起立即释放、拖动正常，物理接触状态恢复为零；两指同时落下、长期与休眠恢复仍待验证。上述未部署描述保留的是早期阶段，最新结果及可选模块回退方式见[后续独立模块记录](thor-ft5452-contact-lifecycle.md#后续独立模块路线)。应用安装不包含此驱动实验。
 
 参考：[EventTouch 的公开字段](https://docs.gtk.org/gdk3/struct.EventTouch.html)、[Armada 的读取兼容补丁](https://github.com/armada-os/armada/blob/c3d178c/packages/kernel/patches/0029-Input-edt-ft5x06-add-no_regmap_bulk_read-option.patch)、[该版本 Thor 设备树](https://github.com/armada-os/armada/blob/c3d178c/packages/kernel/dts/qcs8550-ayn-thor.dts)、[上游 edt-ft5x06 实现](https://github.com/torvalds/linux/blob/master/drivers/input/touchscreen/edt-ft5x06.c)。
 

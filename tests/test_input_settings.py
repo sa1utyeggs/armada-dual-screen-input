@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import patch
 
 from armada_dual_screen_input.input_settings import (
-    DEFAULTS, NUMBERS, SECTIONS, SettingsDraft, read_settings, write_settings,
+    DEFAULTS, NUMBERS, CHOICES, SECTIONS, SettingsDraft, read_settings, write_settings,
 )
 
 
@@ -75,7 +75,7 @@ class InputSettingsTests(unittest.TestCase):
             for key, top in draft.rows():
                 self.assertGreaterEqual(top, 300)
                 self.assertLess(top + 88, 934)
-                expected = "slider" if key in NUMBERS else "toggle"
+                expected = "slider" if key in NUMBERS else "choice" if key in CHOICES else "toggle"
                 self.assertEqual(draft.hit(800 if key in NUMBERS else 1000, top + 50),
                                  (expected, key))
             self.assertEqual(draft.hit(1100, 1020), ("save", None))

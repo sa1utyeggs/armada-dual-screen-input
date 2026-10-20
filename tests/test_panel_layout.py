@@ -114,7 +114,7 @@ class CompactPanelLayoutTests(unittest.TestCase):
         self.assertEqual(self.app.kb_layout.height, 580)
         self.assertEqual(self.app.kb_layout.rows[0][0].y, 510)
 
-    def test_old_config_modes_load_as_keys_mouse_without_rewriting_config(self):
+    def test_saved_modes_load_and_removed_pages_fall_back_without_rewriting_config(self):
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / "config.json"
             with patch.object(self.panel.upstream, "CONFIG_PATH", str(config)):

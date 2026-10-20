@@ -1,6 +1,6 @@
 """Focus-free settings surface using the same logical hit rectangles as input."""
 from . import steam_style as s
-from .input_settings import BOOLEANS, NUMBERS, SECTIONS
+from .input_settings import BOOLEANS, CHOICES, NUMBERS, SECTIONS
 
 TITLES = {"mouse": "鼠标", "position": "定位触摸", "keyboard": "键盘"}
 TOGGLES = {
@@ -18,15 +18,16 @@ def draw(cr, draft):
     for index, section in enumerate(SECTIONS):
         s.button(cr, 24 + index * 204, 220, 192, 60,
                  TITLES[section], draft.section == section, tab=True)
-    if draft.section == "keyboard":
-        s.rounded(cr, 24, 300, 1192, 88, 8, s.SURFACE)
-        cr.set_source_rgb(*s.FG)
-        s.label(cr, "输入方式", 44, 318, 26)
-        s.label(cr, "英文 QWERTY", 790, 330, 27)
-        cr.set_source_rgb(*s.MUTED)
-        s.label(cr, "当前直接发送英文按键；中文输入法后续加入", 44, 357, 21)
     for key, top in draft.rows():
         s.rounded(cr, 24, top, 1192, 88, 8, s.SURFACE)
+        if key in CHOICES:
+            cr.set_source_rgb(*s.FG)
+            s.label(cr, "键盘语言", 44, top + 12, 26)
+            cr.set_source_rgb(*s.MUTED)
+            s.label(cr, "点击切换 · 中文拼音目前用于 Game Mode", 44, top + 55, 21, max_width=700)
+            s.button(cr, 790, top + 12, 402, 64,
+                     CHOICES[key][draft.values[key]], True)
+            continue
         spec = NUMBERS.get(key)
         title, note = (spec.label, spec.note) if spec else TOGGLES[key]
         cr.set_source_rgb(*s.FG)
