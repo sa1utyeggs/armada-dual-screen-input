@@ -1,5 +1,5 @@
 """Supported pages and compatibility for saved modes removed from the UI."""
-SUPPORTED_MODES = ("trackpad", "split", "position")
+SUPPORTED_MODES = ("trackpad", "split", "position", "preferences")
 LEGACY_MODES = ("keyboard", "settings", "mirror")
 
 

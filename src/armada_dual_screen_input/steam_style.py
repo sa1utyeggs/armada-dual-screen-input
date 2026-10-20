@@ -79,7 +79,7 @@ def draw_header(app, cr, buttons, y, h, width):
     for key, x, w in buttons:
         text, active, _ = app._header_button_look(key)
         button(cr, x, y, w, h, text, active and key != "close",
-               tab=key in ("trackpad", "split", "position"),
+               tab=key in ("trackpad", "split", "position", "preferences"),
                danger=key == "close")
     line(cr, 0, 79.5, width, 79.5)
 

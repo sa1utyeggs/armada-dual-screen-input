@@ -55,15 +55,17 @@ from .scroll_output import ScaledScroll, read_scroll_scale
 from .steam_keyboard_guard import SteamKeyboardGuard, keyboard_guard_wanted
 from .panel_modes import SUPPORTED_MODES, normalize_mode
 from .panel_position import PanelPosition
+from .input_settings import read_settings, write_settings, SettingsDraft, NUMBERS
+from . import settings_view
 
 # Isolate our settings/socket names from a separately installed Ratatoskr.
 upstream.CONFIG_PATH = str(Path(os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config"))) / "thor-panel/config.json")
 upstream.SOCKET_PATH = str(Path(os.environ["XDG_RUNTIME_DIR"]) / "thor-panel-unused.sock")
 # A single shared table for rendering and hit tests; keyboard bounds stay fixed.
 upstream.HEADER_BUTTONS = (
-    ("trackpad", 12, 150), ("split", 174, 130), ("position", 316, 180),
-    ("left", 508, 150), ("right", 670, 150), ("pen", 832, 190),
-    ("hide", 1034, 82), ("close", 1128, 100),
+    ("trackpad", 12, 140), ("split", 164, 100), ("position", 276, 168),
+    ("preferences", 456, 104), ("left", 572, 100), ("right", 684, 100),
+    ("pen", 796, 180), ("hide", 988, 104), ("close", 1104, 124),
 )
 # Reclaim one status row for the trackpad; keep the keyboard bounds unchanged.
 upstream.STATUS_RIBBON_H = 44.0
@@ -77,6 +79,8 @@ class PanelApp(upstream.ThorApp):
         self.collapsed = False
         self.keyboard_guard = None
         self.position = None
+        self.preferences = None
+        self._last_input_mode = "split"
         self._position_draw_state = None
         self._discarding_contacts = False
         # Unlike ToolkitTouch, this set survives logical-contact resets when
@@ -84,7 +88,7 @@ class PanelApp(upstream.ThorApp):
         self._physical_sequences = set()
         self.main_loop = None
         super().__init__()
-        self.position = PanelPosition()
+        self.position = PanelPosition(sensitivity=self.input_cfg["position_sensitivity"])
         self._position_revision = self.position.revision
         self.scroll_output = ScaledScroll(self.bridge.emit_scroll, self.scroll_scale)
         self.bridge.emit_scroll = self.scroll_output.scroll
@@ -142,17 +146,24 @@ class PanelApp(upstream.ThorApp):
     def load_config(self) -> None:
         self.mode = "split"
         self.scroll_scale = 1.0
+        cfg = {}
         try:
-            cfg = json.loads(Path(upstream.CONFIG_PATH).read_text(encoding="utf-8"))
-            if isinstance(cfg, dict):
-                self.scroll_scale = read_scroll_scale(cfg.get("scroll_scale", 1.0))
-                saved_mode = normalize_mode(cfg.get("mode"))
-                if saved_mode is not None:
-                    self.mode = saved_mode
-                self.gesture.set_settings(**cfg)
-                upstream.keyboard_settings.apply(self.keyboard_cfg, cfg)
+            loaded = json.loads(Path(upstream.CONFIG_PATH).read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                cfg = loaded
         except (OSError, ValueError, TypeError):
             pass
+        self.input_cfg = read_settings(cfg)
+        self.scroll_scale = read_scroll_scale(self.input_cfg["scroll_scale"])
+        saved_mode = normalize_mode(cfg.get("mode"))
+        if saved_mode is not None and saved_mode != "preferences":
+            self.mode = saved_mode
+        self._last_input_mode = self.mode
+        try:
+            self.gesture.set_settings(**{**cfg, **self.input_cfg})
+        except (ValueError, TypeError, OverflowError):
+            self.gesture.set_settings(**self.input_cfg)
+        upstream.keyboard_settings.apply(self.keyboard_cfg, self.input_cfg)
         # Keep this app free of system-wide pointer and dimming overrides.
         self.pen_mode = "off"
         self.gesture.set_settings(stylus_mode=False)
@@ -161,6 +172,46 @@ class PanelApp(upstream.ThorApp):
         # disables Ratatoskr's painted veil; it does not change OS power rules.
         self.burn_in.idle_floor = 1.0
         self.gleipnir_cfg["gleipnir_ribbon"] = False
+
+    def _current_settings(self):
+        return read_settings({**getattr(self, "input_cfg", {}),
+                              **self.gesture.get_settings(),
+                              **self.keyboard_cfg, "scroll_scale": self.scroll_scale})
+
+    def save_config(self) -> bool:
+        try:
+            write_settings(upstream.CONFIG_PATH, {
+                "mode": self._last_input_mode if self.mode == "preferences" else self.mode,
+                "debug_hud": self.show_debug_hud, "pen_mode": self.pen_mode,
+                **self.gesture.get_settings(), **self.mirror_cfg,
+                **self.keyboard_cfg, **self.gleipnir_cfg,
+                **getattr(self, "input_cfg", {}), "scroll_scale": self.scroll_scale,
+            })
+            return True
+        except (OSError, ValueError, TypeError):
+            print("[settings] Could not save configuration; existing file retained", flush=True)
+            return False
+
+    def _save_preferences(self):
+        draft = self.preferences
+        if draft is None:
+            return
+        values = read_settings(draft.values)
+        try:
+            # Persist before applying. Failure must not claim a saved change.
+            write_settings(upstream.CONFIG_PATH, values)
+        except (OSError, ValueError, TypeError):
+            draft.message, draft.error = "保存失败；请检查用户配置文件和目录权限", True
+            return
+        self.input_cfg = values
+        self.gesture.set_settings(**values)
+        upstream.keyboard_settings.apply(self.keyboard_cfg, values)
+        self.scroll_scale = values["scroll_scale"]
+        self.scroll_output.scale = self.scroll_scale
+        self.scroll_output.rest_x = self.scroll_output.rest_y = 0.
+        if self.position is not None:
+            self.position.gesture.sensitivity = values["position_sensitivity"]
+        draft.mark_saved()
 
     def _setup_indicator(self) -> None:
         # Upstream tray actions start/stop official services; they do not apply.
@@ -274,6 +325,8 @@ class PanelApp(upstream.ThorApp):
         return self._owner_at(lx, ly) == "trackpad" and self.touch.quiet_for() >= 3.0
 
     def _start_key_repeat(self, key) -> None:
+        if not getattr(self, "input_cfg", {}).get("keyboard_repeat_enabled", True):
+            return
         self.key_pulses.begin_repeat(
             key.code, self.keyboard_cfg["keyboard_repeat_delay_ms"],
             self.keyboard_cfg["keyboard_repeat_interval_ms"],
@@ -305,6 +358,8 @@ class PanelApp(upstream.ThorApp):
         self._touch_owner.clear()
         self._slider_drag = None
         self.active_key_press = self.active_key_tid = None
+        if getattr(self, "preferences", None) is not None:
+            self.preferences.drag = None
 
     def _cancel_contact(self, tid: int, now: float) -> None:
         # A compositor cancel must not turn into a click on lift.
@@ -397,6 +452,9 @@ class PanelApp(upstream.ThorApp):
 
     def _handle_timed_touch_move(self, tid, x, y, now, motion_interval) -> None:
         owner = self._touch_owner.get(tid)
+        if owner == "preferences" or self.mode == "preferences":
+            self._handle_touch_move(tid, x, y, now)
+            return
         if self.mode == "position" or owner == "position":
             if owner == "position" and self.position is not None:
                 self.position.touch('move', tid, now, x, y, motion_interval=motion_interval)
@@ -415,6 +473,10 @@ class PanelApp(upstream.ThorApp):
             self.last_event_time = time.time()
             self._touch_owner[tid] = "status"
             return
+        if self.mode == "preferences" and y >= upstream.HEADER_HEIGHT:
+            self._touch_owner[tid] = "preferences"
+            self._preferences_down(tid, x, y)
+            return
         if self.mode == "position" and y >= upstream.HEADER_HEIGHT:
             self._touch_owner[tid] = "position"
             if self.position is not None:
@@ -424,6 +486,12 @@ class PanelApp(upstream.ThorApp):
 
     def _handle_touch_move(self, tid, x, y, now) -> None:
         owner = self._touch_owner.get(tid)
+        if owner == "preferences" or self.mode == "preferences":
+            draft = getattr(self, "preferences", None)
+            if owner == "preferences" and draft and draft.drag and draft.drag[0] == tid:
+                draft.slide(draft.drag[1], x)
+                self.drawing_area.queue_draw()
+            return
         if self.mode == "position" or owner == "position":
             if owner == "position" and self.position is not None:
                 self.position.touch('move', tid, now, x, y)
@@ -431,6 +499,12 @@ class PanelApp(upstream.ThorApp):
         super()._handle_touch_move(tid, x, y, now)
 
     def _handle_touch_up(self, tid, now) -> None:
+        if self.mode == "preferences" or self._touch_owner.get(tid) == "preferences":
+            self._touch_owner.pop(tid, None)
+            draft = getattr(self, "preferences", None)
+            if draft and draft.drag and draft.drag[0] == tid:
+                draft.drag = None
+            return
         if self.mode == "position" or self._touch_owner.get(tid) == "position":
             if self._touch_owner.pop(tid, None) == "position" and self.position is not None:
                 self.position.touch('end', tid, now)
@@ -463,11 +537,19 @@ class PanelApp(upstream.ThorApp):
             return
         if mode == "position" and self.session_mode != "game":
             return
+        if mode == "preferences" and self.mode == "preferences":
+            return
+        previous_mode = self.mode
         self._stop_position()
         if hasattr(self, "touch"):
             self.touch.release_all()
             self._reset_input()
-        if mode == "position":
+        if mode == "preferences":
+            self._last_input_mode = previous_mode
+            self.preferences = SettingsDraft(self._current_settings())
+            self.mode = mode
+            self.drawing_area.queue_draw()
+        elif mode == "position":
             self.mode = mode
             self.save_config()
             if self._position_visible() and self.position is not None:
@@ -475,7 +557,33 @@ class PanelApp(upstream.ThorApp):
             self.drawing_area.queue_draw()
         else:
             super().set_mode(mode, restart_hint)
+        if mode != "preferences":
+            self.preferences = None
+            self._last_input_mode = mode
         self._sync_keyboard_guard()
+
+    def _preferences_down(self, tid, x, y):
+        draft = self.preferences
+        if draft is None or draft.drag is not None:
+            return
+        action, key = draft.hit(x, y)
+        if action == "section":
+            draft.section = key
+        elif action in ("minus", "plus"):
+            spec = NUMBERS[key]
+            draft.change(key, draft.values[key] + spec.step * (1 if action == "plus" else -1))
+        elif action == "slider":
+            draft.drag = tid, key
+            draft.slide(key, x)
+        elif action == "toggle":
+            draft.change(key, not draft.values[key])
+        elif action == "defaults":
+            draft.reset_section()
+        elif action == "discard":
+            draft.discard()
+        elif action == "save":
+            self._save_preferences()
+        self.drawing_area.queue_draw()
 
     def _handle_header_touch(self, tid, x, y, down) -> None:
         key = next((k for k, bx, bw in upstream.HEADER_BUTTONS if bx <= x <= bx + bw), None)
@@ -487,7 +595,7 @@ class PanelApp(upstream.ThorApp):
             self.request_quit()
         elif key == "hide":
             self._set_collapsed(True)
-        elif key == "position":
+        elif key in ("position", "preferences"):
             self.set_mode(key, restart_hint=False)
         elif self.mode == "position" and key in ("left", "right", "pen"):
             self._clear_panel_contacts()
@@ -507,6 +615,8 @@ class PanelApp(upstream.ThorApp):
             super()._handle_header_touch(tid, x, y, down)
 
     def _header_button_look(self, key):
+        if key == "preferences":
+            return "设置", self.mode == "preferences", upstream.theme.BTN_ACCENT_DEFAULT
         if key == "position":
             return "定位触摸", self.mode == "position", upstream.theme.BTN_ACCENT_DEFAULT
         if self.mode == "position" and key in ("left", "right", "pen"):
@@ -565,6 +675,14 @@ class PanelApp(upstream.ThorApp):
         allocation = widget.get_allocation()
         if self.collapsed:
             self._draw_collapsed(cr, allocation.width, allocation.height)
+            return True
+        if self.mode == "preferences":
+            cr.save()
+            cr.scale(allocation.width / SCREEN_WIDTH, allocation.height / SCREEN_HEIGHT)
+            self._draw_ui(cr)
+            if self.preferences is not None:
+                settings_view.draw(cr, self.preferences)
+            cr.restore()
             return True
         if self.mode == "position":
             cr.save()
