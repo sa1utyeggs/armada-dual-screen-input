@@ -105,6 +105,9 @@ Armada 该版本的下屏设备树启用了 `no-regmap-bulk-read`。对应补丁
 
 下一轮应将物理触摸上报作为独立变量验证，再决定是否需要系统补丁。尚未部署内核 / 设备树试验，不能宣称双指漏识别、漂移和偶发未释放已彻底修好。
 
+后续已找到另一个 Thor Linux 项目针对漏 UP、旧槽残留的直接内核补丁，并准备了仅匹配下屏 FT5452 的 Armada 候选。它与当前源码无模糊匹配通过，但未编译、未上机。
+详细来源、证据、适用性及试验边界见[触点生命周期与内核候选](thor-ft5452-contact-lifecycle.md)。这比先前对逐字节读取的怀疑更直接，不应据此继续猜测调整应用灵敏度。
+
 参考：[EventTouch 的公开字段](https://docs.gtk.org/gdk3/struct.EventTouch.html)、[Armada 的读取兼容补丁](https://github.com/armada-os/armada/blob/c3d178c/packages/kernel/patches/0029-Input-edt-ft5x06-add-no_regmap_bulk_read-option.patch)、[该版本 Thor 设备树](https://github.com/armada-os/armada/blob/c3d178c/packages/kernel/dts/qcs8550-ayn-thor.dts)、[上游 edt-ft5x06 实现](https://github.com/torvalds/linux/blob/master/drivers/input/touchscreen/edt-ft5x06.c)。
 
 ### 单指移动同样出现突跳：应用侧保护及本轮验收

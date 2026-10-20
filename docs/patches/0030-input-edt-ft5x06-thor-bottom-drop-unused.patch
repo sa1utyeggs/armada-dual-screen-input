@@ -1,0 +1,51 @@
+From: hashtagbasit
+Subject: input: edt-ft5x06: release contacts omitted by Thor bottom frames
+
+Based on https://github.com/hashtagbasit/SteamOS-ARM-Port/blob/e54dac93afccf76e5fefe998399b6c1b1a23f3a1/external-and-mods/kernel-sm8550/patches/0030-input-edt-ft5x06-thor-release-contacts-a-frame-leaves-out.patch
+Adapted against Armada c3d178c + Linux 7.2.6, restricted to the Thor lower
+FT5452; the original board-wide quirk also covered its upper FT5426.
+Candidate only: not kernel-compiled, booted, or validated on Armada.
+
+---
+--- a/drivers/input/touchscreen/edt-ft5x06.c
++++ b/drivers/input/touchscreen/edt-ft5x06.c
+@@ -25,6 +25,7 @@
+ #include <linux/irq.h>
+ #include <linux/kernel.h>
+ #include <linux/module.h>
++#include <linux/of.h>
+ #include <linux/property.h>
+ #include <linux/ratelimit.h>
+ #include <linux/regmap.h>
+@@ -147,6 +148,7 @@
+ 	unsigned int crc_errors;
+ 	unsigned int header_errors;
+ 	bool no_regmap_bulk_read;
++	bool drop_unused;
+ };
+ 
+ struct edt_i2c_chip_data {
+@@ -377,6 +379,9 @@
+ 					       x, y, true);
+ 	}
+ 
++	/* Release contacts omitted from a complete FT5452 frame. */
++	if (tsdata->drop_unused)
++		input_mt_sync_frame(tsdata->input);
+ 	input_mt_report_pointer_emulation(tsdata->input, true);
+ 	input_sync(tsdata->input);
+ 
+@@ -1344,8 +1349,12 @@
+ 
+ 	touchscreen_parse_properties(input, true, &tsdata->prop);
+ 
++	/* Keep this quirk on Thor's lower FT5452; leave the upper FT5426 alone. */
++	tsdata->drop_unused = of_machine_is_compatible("ayn,thor") &&
++		of_device_is_compatible(client->dev.of_node, "focaltech,ft5452");
+ 	error = input_mt_init_slots(input, tsdata->max_support_points,
+-				    INPUT_MT_DIRECT);
++				    INPUT_MT_DIRECT |
++				    (tsdata->drop_unused ? INPUT_MT_DROP_UNUSED : 0));
+ 	if (error) {
+ 		dev_err(&client->dev, "Unable to init MT slots.\n");
+ 		return error;
