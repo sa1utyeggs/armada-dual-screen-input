@@ -65,13 +65,17 @@ class PanelPositionTests(unittest.TestCase):
         self.arm()
         sender=self.p.sender
         self.p.touch('begin',1,self.now,300,300)
-        self.p.touch('move',1,self.now,400,300)
+        self.p.touch('move',1,self.now,424,395.6)
         self.assertEqual(sender.events,[])
+        self.assertAlmostEqual(self.p.gesture.point[0],.7)
+        self.assertAlmostEqual(self.p.gesture.point[1],.7)
         self.p.touch('begin',2,self.now,1000,1000)
-        self.p.touch('move',1,self.now,500,300)
+        self.p.touch('move',1,self.now,548,491.2)
         self.p.touch('end',2,self.now)
         self.assertEqual([e.kind for e in sender.events],['down','move','up'])
         self.assertEqual(sender.events[-1].position,self.p.gesture.point)
+        self.assertAlmostEqual(sender.events[-1].position[0],.9)
+        self.assertAlmostEqual(sender.events[-1].position[1],.9)
 
     def test_target_change_or_expired_marker_releases_and_requires_new_contacts(self):
         self.arm()
@@ -107,7 +111,7 @@ class PanelPositionTests(unittest.TestCase):
                               ('end',1,0,0),('begin',3,300,300),('move',3,424,300)]:
             self.p.touch(phase,tid,self.now,x,y)
         self.assertTrue(self.p.armed)
-        self.assertAlmostEqual(self.p.gesture.point[0],.6)
+        self.assertAlmostEqual(self.p.gesture.point[0],.7)
         self.assertEqual([e.kind for e in self.p.sender.events],['down','up'])
 
     def test_manual_pause_stays_paused_and_stop_removes_marker(self):

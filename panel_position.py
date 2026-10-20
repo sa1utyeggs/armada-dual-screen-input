@@ -29,7 +29,7 @@ class PanelPosition:
         self.message = '定位触摸尚未打开'
         self.last_error = None
         self.revision = 0
-        self.gesture = PositionGesture(self.pad)
+        self.gesture = PositionGesture(self.pad, sensitivity=2.0)
         self._candidate = self._candidate_since = self._clear_since = None
         self._pending_until = self._retry_after = 0.
         self._retired = []
