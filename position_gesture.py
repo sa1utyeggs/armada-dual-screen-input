@@ -9,6 +9,7 @@ from __future__ import annotations
 import math
 
 from mirrored_touch import TouchIntent
+from position_motion import PositionMotion
 
 
 class PositionGesture:
@@ -24,6 +25,7 @@ class PositionGesture:
         self.contacts = {}
         self.aim = self.confirm = None
         self.held = self.blocked = False
+        self.motion = PositionMotion(min(pad.width, pad.height))
 
     @staticmethod
     def _point(x, y):
@@ -41,15 +43,17 @@ class PositionGesture:
             # promoted, but a NEW begin may start a fresh, input-free aim.
             # This also avoids deadlock if an orphan's END was not delivered.
             self.aim, self.confirm, self.blocked = tid, None, False
+            self.motion.reset((x, y))
             return ()
         if self.aim is None:
             self.aim = tid
+            self.motion.reset((x, y))
         elif self.confirm is None and not self.held:
             self.confirm, self.held = tid, True
             return (TouchIntent('down', self.point, contact_id=self.CONTACT),)
         return ()
 
-    def move(self, tid, x, y, now):
+    def move(self, tid, x, y, now, *, motion_interval=None):
         self._point(x, y)
         if not math.isfinite(now):
             raise ValueError('invalid time')
@@ -59,9 +63,12 @@ class PositionGesture:
         self.contacts[tid] = (x, y)
         if self.blocked or tid != self.aim:
             return ()
+        delta = self.motion.delta((x, y), motion_interval)
+        if delta is None:
+            return ()
         self.point = self._point(
-            self.point[0] + (x-previous[0])/self.pad.width*self.sensitivity,
-            self.point[1] + (y-previous[1])/self.pad.height*self.sensitivity)
+            self.point[0] + delta[0]/self.pad.width*self.sensitivity,
+            self.point[1] + delta[1]/self.pad.height*self.sensitivity)
         if self.held:
             return (TouchIntent('move', self.point, contact_id=self.CONTACT),)
         return ()
@@ -79,6 +86,7 @@ class PositionGesture:
                 self.held = False
             if tid == self.aim:
                 self.aim = None
+                self.motion.reset()
                 # Do not promote the confirm finger (or a third finger).
                 self.blocked = bool(self.contacts)
             if tid == self.confirm:
@@ -96,6 +104,7 @@ class PositionGesture:
         self.contacts.clear()
         self.aim = self.confirm = None
         self.held = self.blocked = False
+        self.motion.reset()
         return events
 
     def center(self, now):

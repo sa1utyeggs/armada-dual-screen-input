@@ -264,6 +264,8 @@ class CompactPanelLayoutTests(unittest.TestCase):
         self.app._handle_touch_up(21, 1.3)
         self.assertEqual([c.args[0] for c in self.app.position.touch.call_args_list],
                          ['begin', 'move', 'move', 'end'])
+        self.assertEqual(self.app.position.touch.call_args_list[2].kwargs,
+                         {'motion_interval': .01})
         self.app.mirror.touch.assert_not_called()
         self.app.gesture.touch_down.assert_not_called()
         self.assertFalse(self.bridge.events)

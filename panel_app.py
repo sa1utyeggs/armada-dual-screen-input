@@ -439,7 +439,11 @@ class PanelApp(upstream.ThorApp):
 
     def _handle_timed_touch_move(self, tid, x, y, now, motion_interval) -> None:
         owner = self._touch_owner.get(tid)
-        if self.mode in ("mirror", "position") or owner in ("mirror", "position"):
+        if self.mode == "position" or owner == "position":
+            if owner == "position" and self.position is not None:
+                self.position.touch('move', tid, now, x, y, motion_interval=motion_interval)
+            return
+        if self.mode == "mirror" or owner == "mirror":
             self._handle_touch_move(tid, x, y, now)
             return
         if owner == "trackpad" or (owner is None and self.mode != "settings"):

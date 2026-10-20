@@ -120,14 +120,14 @@ class PanelPosition:
         self._retry_after = now+1.5
         self.message = '上屏目标或定位标识变化；抬手后自动恢复' if self.auto_requested else '定位触摸已暂停'
 
-    def touch(self, phase, tid, now, x=0, y=0):
+    def touch(self, phase, tid, now, x=0, y=0, *, motion_interval=None):
         if not self.active or not self.armed:
             return
         try:
             if not self._focus_current():
                 raise InputUnavailable('position target or marker expired')
             events = (self.gesture.begin(tid, x, y, now) if phase == 'begin' else
-                      self.gesture.move(tid, x, y, now) if phase == 'move' else
+                      self.gesture.move(tid, x, y, now, motion_interval=motion_interval) if phase == 'move' else
                       self.gesture.end(tid, now) if phase == 'end' else
                       self.gesture.cancel(now))
             for event in events:

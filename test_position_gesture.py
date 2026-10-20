@@ -104,5 +104,33 @@ class PositionGestureTests(unittest.TestCase):
         self.assertEqual(self.g.point, (.5, .5))
         self.assertFalse(self.g.held)
 
+    def test_single_finger_jump_is_quarantined_without_creating_touch(self):
+        self.g.begin(1, 300, 300, 1)
+        for x, interval in ((835, .293), (836, .016)):
+            self.assertEqual(self.g.move(1, x, 300, 2, motion_interval=interval), ())
+            self.assertEqual(self.g.point, (.5, .5))
+        self.g.move(1, 840, 300, 3, motion_interval=.016)
+        self.assertAlmostEqual(self.g.point[0], .5+4/1240)
+        self.assertFalse(self.g.held)
+
+    def test_spike_during_native_hold_keeps_the_same_contact_and_releases_normally(self):
+        self.g.begin(1, 300, 300, 1)
+        down, = self.g.begin(2, 1000, 1000, 2)
+        self.assertEqual(self.g.move(1, 835, 300, 3, motion_interval=.016), ())
+        self.assertEqual(self.g.move(1, 302, 300, 4, motion_interval=.016), ())
+        self.assertTrue(self.g.held)
+        moved, = self.g.move(1, 310, 300, 5, motion_interval=.016)
+        up, = self.g.end(2, 6)
+        self.assertEqual([down.kind, moved.kind, up.kind], ['down', 'move', 'up'])
+        self.assertEqual({down.contact_id, moved.contact_id, up.contact_id}, {0})
+
+    def test_lift_during_quarantine_cannot_affect_the_next_aim(self):
+        self.g.begin(1, 300, 300, 1)
+        self.g.move(1, 835, 300, 2, motion_interval=.016)
+        self.g.end(1, 3)
+        self.g.begin(2, 100, 100, 4)
+        self.g.move(2, 110, 100, 5, motion_interval=.016)
+        self.assertAlmostEqual(self.g.point[0], .5+10/1240)
+
 
 if __name__ == '__main__': unittest.main()
