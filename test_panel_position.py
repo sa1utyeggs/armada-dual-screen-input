@@ -2,7 +2,7 @@ from dataclasses import replace
 from types import SimpleNamespace
 import unittest
 
-from ei_input import InputUnavailable
+from gamescope_target import InputUnavailable
 from gamescope_focus import FocusSnapshot, FocusState
 from panel_position import PanelPosition
 

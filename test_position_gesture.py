@@ -1,6 +1,6 @@
 import unittest
 
-from mirror_geometry import Rect
+from input_geometry import Rect
 from position_gesture import PositionGesture
 
 

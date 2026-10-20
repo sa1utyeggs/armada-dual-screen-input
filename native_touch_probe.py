@@ -166,7 +166,7 @@ def upper_test(args, folder: Path, child) -> dict:
     actions = [('down', 1, .5, .5), ('move', 1, .25, .3), ('move', 1, .75, .7), ('up', 1),
                ('down', 2, .3, .5), ('down', 3, .7, .5),
                ('move', 2, .3, .4), ('move', 3, .7, .4), ('up', 2), ('up', 3)]
-    if args.preview_backend:
+    if args.native_backend:
         actions = [('down', 1, .5, .5), ('move', 1, .25, .3), ('move', 1, .75, .7), ('up', 1),
                    ('down', 2, .3, .5), ('down', 3, .7, .5),
                    ('move', 2, .3, .4), ('move', 3, .7, .4), ('up', 2), ('close',)]
@@ -185,8 +185,8 @@ def upper_test(args, folder: Path, child) -> dict:
                         raise RuntimeError('own windows did not become ready; no input sent')
                     return True
                 expected = current
-                if args.preview_backend:
-                    from ei_input import GamescopeTarget
+                if args.native_backend:
+                    from gamescope_target import GamescopeTarget
                     from native_input import NativeTouchInput
                     sender = NativeTouchInput(GamescopeTarget.resolve(Path(os.environ['XDG_RUNTIME_DIR'])),
                                               expected, focus_check=lambda: focus.snapshot() == expected)
@@ -198,12 +198,12 @@ def upper_test(args, folder: Path, child) -> dict:
             if time.monotonic() - ready_at < 1:
                 return True  # udev/libinput hotplug; no contact events yet
             if sent < len(actions):
-                if args.preview_backend:
-                    from mirrored_touch import TouchIntent
+                if args.native_backend:
+                    from touch_intent import TouchIntent
                     sender.poll()
                     if not sender.ready:
                         if time.monotonic() - started > 4.5:
-                            raise RuntimeError('preview backend did not become ready')
+                            raise RuntimeError('native backend did not become ready')
                         return True
                     action = actions[sent]
                     if action[0] == 'close':
@@ -259,8 +259,8 @@ def main() -> int:
                         help='explicit virtual-device transform; do not copy physical panel rotation')
     parser.add_argument('--gtk-runtime-root', type=Path)
     parser.add_argument('--report', type=Path)
-    parser.add_argument('--preview-backend', action='store_true',
-                        help='verify the preview sender, including close with a contact held')
+    parser.add_argument('--native-backend', '--preview-backend', dest='native_backend', action='store_true',
+                        help='verify the native sender, including close with a contact held')
     parser.add_argument('--observe-bottom', type=Path, help=argparse.SUPPRESS)
     args = parser.parse_args()
     if os.getuid() == 0 or not sys.platform.startswith('linux'):
@@ -269,8 +269,8 @@ def main() -> int:
         return observe_bottom(args.observe_bottom)
     if args.rotation is None:
         parser.error('select an explicit virtual-device rotation for the bounded test')
-    if args.preview_backend and args.rotation != 'normal':
-        parser.error('preview backend currently requires the verified normal transform')
+    if args.native_backend and args.rotation != 'normal':
+        parser.error('native backend currently requires the verified normal transform')
     target = detect_target_session(game_only=True)
     if target is None:
         parser.error('verified Game Mode bottom session required')

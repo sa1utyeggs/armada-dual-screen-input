@@ -5,13 +5,9 @@ import threading
 import unittest
 from unittest.mock import patch
 
-from ei_input import InputUnavailable
+from gamescope_target import InputUnavailable
 from gamescope_focus import FocusSnapshot, FocusState
-from mirror_capture import CapturedFrame
-from mirror_geometry import Rect
-from mirror_session import MirrorSession
-from mirrored_touch import TouchIntent
-from native_gesture import NativeMirroredTouch
+from touch_intent import TouchIntent
 from native_input import NativeTouchInput, TouchRouteWatch
 
 
@@ -129,38 +125,9 @@ class NativeInputTests(unittest.TestCase):
         self.assertTrue(self.sender.route.stopped)
         self.assertIn('disappeared', self.sender.close_error)
 
-    def session(self):
-        session = MirrorSession(self.sender, gesture_factory=NativeMirroredTouch)
-        frame = CapturedFrame(1, 100, 100, 400, bytearray(40000), 10)
-        session.update(frame, Rect(0, 0, 100, 100), 10, live=True)
-        self.assertTrue(session.arm(10))
-        return session
 
-    def test_mirror_single_finger_drag_delivers_native_contact_sequence(self):
-        session = self.session()
-        session.touch('begin', 1, 10.01, 40, 50)
-        session.tick(10.08)
-        session.touch('move', 1, 10.1, 60, 50)
-        session.touch('end', 1, 10.12)
-        self.assertEqual(self.sender.touch.events, ['down', 'move', 'up'])
 
-    def test_mirror_two_fingers_remain_native_contacts(self):
-        session = self.session()
-        session.touch('begin', 1, 10.01, 40, 50)
-        session.touch('begin', 2, 10.02, 60, 50)
-        session.touch('move', 1, 10.03, 40, 10)
-        session.touch('end', 1, 10.04)
-        self.assertEqual(self.sender.touch.events, ['down', 'down', 'move', 'up'])
-        self.assertEqual(self.sender.active_contacts, {2})
 
-    def test_frame_loss_lifts_active_contact_without_replaying_it(self):
-        session = self.session()
-        session.touch('begin', 1, 10.01, 40, 50)
-        session.tick(10.08)
-        session.update(None, Rect(0, 0, 100, 100), 10.1, live=False)
-        session.touch('end', 1, 10.12)
-        self.assertEqual(self.sender.touch.events, ['down', 'up'])
-        self.assertFalse(session.armed)
 
     def test_route_checks_expire_and_stop_immediately(self):
         route = object.__new__(TouchRouteWatch)
@@ -171,3 +138,15 @@ class NativeInputTests(unittest.TestCase):
         self.assertFalse(route.current(10.8))
         route.stop()
         self.assertFalse(route.current(10.1))
+
+    def test_two_native_contacts_are_released_independently(self):
+        self.sender.send(TouchIntent('down', (.4, .5), contact_id=1))
+        self.sender.send(TouchIntent('down', (.6, .5), contact_id=2))
+        self.sender.send(TouchIntent('move', (.4, .1), contact_id=1))
+        self.sender.send(TouchIntent('up', (.4, .1), contact_id=1))
+        self.assertEqual(self.sender.touch.events, ['down', 'down', 'move', 'up'])
+        self.assertEqual(self.sender.active_contacts, {2})
+        self.sender.send(TouchIntent('cancel', (.5, .5)))
+        self.assertEqual(self.sender.touch.events, ['down', 'down', 'move', 'up', 'up'])
+        self.assertFalse(self.sender.held)
+        self.assertFalse(self.sender.active_contacts)

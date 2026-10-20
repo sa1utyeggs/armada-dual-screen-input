@@ -53,7 +53,7 @@ import steam_keys
 from keyboard_pulses import KeyboardPulses
 from scroll_output import ScaledScroll, read_scroll_scale
 from steam_keyboard_guard import SteamKeyboardGuard, keyboard_guard_wanted
-from panel_mirror import PanelMirror
+from panel_modes import SUPPORTED_MODES, normalize_mode
 from panel_position import PanelPosition
 
 # Isolate our settings/socket names from a separately installed Ratatoskr.
@@ -61,9 +61,9 @@ upstream.CONFIG_PATH = str(Path(os.environ.get("XDG_CONFIG_HOME", str(Path.home(
 upstream.SOCKET_PATH = str(Path(os.environ["XDG_RUNTIME_DIR"]) / "thor-panel-unused.sock")
 # A single shared table for rendering and hit tests; keyboard bounds stay fixed.
 upstream.HEADER_BUTTONS = (
-    ("trackpad", 12, 125), ("split", 145, 100), ("mirror", 253, 150),
-    ("position", 411, 150), ("left", 573, 150), ("right", 731, 132),
-    ("pen", 871, 180), ("hide", 1059, 72), ("close", 1139, 89),
+    ("trackpad", 12, 150), ("split", 174, 130), ("position", 316, 180),
+    ("left", 508, 150), ("right", 670, 150), ("pen", 832, 190),
+    ("hide", 1034, 82), ("close", 1128, 100),
 )
 # Reclaim one status row for the trackpad; keep the keyboard bounds unchanged.
 upstream.STATUS_RIBBON_H = 44.0
@@ -76,20 +76,15 @@ class PanelApp(upstream.ThorApp):
         self.monitor = monitor
         self.collapsed = False
         self.keyboard_guard = None
-        self.mirror = None
         self.position = None
         self._position_draw_state = None
-        self._mirror_discarding = False
+        self._discarding_contacts = False
         # Unlike ToolkitTouch, this set survives logical-contact resets when
         # selecting a tab/control. Never mistake the selecting finger for up.
         self._physical_sequences = set()
-        self._mirror_surface = self._mirror_surface_frame = None
-        self._mirror_draw_state = None
         self.main_loop = None
         super().__init__()
-        self.mirror = PanelMirror()
         self.position = PanelPosition()
-        self._mirror_revision = self.mirror.revision
         self._position_revision = self.position.revision
         self.scroll_output = ScaledScroll(self.bridge.emit_scroll, self.scroll_scale)
         self.bridge.emit_scroll = self.scroll_output.scroll
@@ -151,8 +146,9 @@ class PanelApp(upstream.ThorApp):
             cfg = json.loads(Path(upstream.CONFIG_PATH).read_text(encoding="utf-8"))
             if isinstance(cfg, dict):
                 self.scroll_scale = read_scroll_scale(cfg.get("scroll_scale", 1.0))
-                if cfg.get("mode") in ("trackpad", "split", "mirror", "position"):
-                    self.mode = cfg["mode"]
+                saved_mode = normalize_mode(cfg.get("mode"))
+                if saved_mode is not None:
+                    self.mode = saved_mode
                 self.gesture.set_settings(**cfg)
                 upstream.keyboard_settings.apply(self.keyboard_cfg, cfg)
         except (OSError, ValueError, TypeError):
@@ -186,12 +182,7 @@ class PanelApp(upstream.ThorApp):
         self.window.show_all()
         GLib.timeout_add(250, self._keep_contacts_alive)
         GLib.timeout_add_seconds(1, self._on_stats_tick)
-        GLib.timeout_add(16, self._on_mirror_tick)
         GLib.timeout_add(16, self._on_position_tick)
-
-    def _mirror_visible(self) -> bool:
-        return (self.session_mode == "game" and self.mode == "mirror"
-                and not self.collapsed and self.window.get_mapped())
 
     def _position_visible(self) -> bool:
         return (self.session_mode == "game" and self.mode == "position"
@@ -220,42 +211,17 @@ class PanelApp(upstream.ThorApp):
 
     def _on_map(self, *_) -> None:
         self._sync_keyboard_guard()
-        if self._mirror_visible() and self.mirror is not None:
-            self.mirror.start()
         if self._position_visible() and self.position is not None:
             self.position.start()
 
     def _clear_panel_contacts(self) -> None:
         # Dropping pre-arm fingers must not cancel the newly armed backend.
-        self._mirror_discarding = True
+        self._discarding_contacts = True
         try:
             self.touch.release_all()
             self._reset_input()
         finally:
-            self._mirror_discarding = False
-
-    def _stop_mirror(self) -> None:
-        if getattr(self, "mirror", None) is not None:
-            self.mirror.stop()
-        self._mirror_surface = self._mirror_surface_frame = None
-        self._mirror_draw_state = None
-
-    def _on_mirror_tick(self) -> bool:
-        if self._cleaned:
-            return False
-        if not self._mirror_visible() or self.mirror is None:
-            return True
-        self.mirror.tick(contacts_down=bool(self._physical_sequences))
-        if self._mirror_revision != self.mirror.revision:
-            self._clear_panel_contacts()
-            self._mirror_revision = self.mirror.revision
-        frame = self.mirror.frame
-        state = (frame.sequence if frame else None, self.mirror.armed,
-                 bool(self.mirror.pending_until), self.mirror.message, self.mirror.input_mode)
-        if state != self._mirror_draw_state:
-            self._mirror_draw_state = state
-            self.drawing_area.queue_draw()
-        return True
+            self._discarding_contacts = False
 
     def _on_stats_tick(self) -> bool:
         if self._cleaned:
@@ -342,16 +308,12 @@ class PanelApp(upstream.ThorApp):
 
     def _cancel_contact(self, tid: int, now: float) -> None:
         # A compositor cancel must not turn into a click on lift.
-        if (getattr(self, "mirror", None) is not None
-                and not getattr(self, "_mirror_discarding", False)):
-            self.mirror.pause(manual=False)
         if (getattr(self, "position", None) is not None
-                and not getattr(self, "_mirror_discarding", False)):
+                and not getattr(self, "_discarding_contacts", False)):
             self.position.pause(manual=False)
         self._reset_input()
 
     def _on_unmap(self, *_) -> None:
-        self._stop_mirror()
         self._stop_position()
         self._physical_sequences.clear()
         if getattr(self, "keyboard_guard", None) is not None:
@@ -382,8 +344,6 @@ class PanelApp(upstream.ThorApp):
         if allocation.width > 0 and allocation.height > 0:
             with self.input_lock:
                 if self.touch.set_viewport(allocation.width, allocation.height):
-                    if self.mirror is not None:
-                        self.mirror.pause('窗口尺寸已变化；就绪并抬手后自动恢复', manual=False)
                     if self.position is not None:
                         self.position.pause(manual=False)
 
@@ -429,8 +389,6 @@ class PanelApp(upstream.ThorApp):
                 self.touch.end(sequence)
             elif event.type == Gdk.EventType.TOUCH_CANCEL:
                 self.touch.release_all()
-                if self.mirror is not None:
-                    self.mirror.pause(manual=False)
                 if self.position is not None:
                     self.position.pause(manual=False)
                 self._reset_input()
@@ -442,9 +400,6 @@ class PanelApp(upstream.ThorApp):
         if self.mode == "position" or owner == "position":
             if owner == "position" and self.position is not None:
                 self.position.touch('move', tid, now, x, y, motion_interval=motion_interval)
-            return
-        if self.mode == "mirror" or owner == "mirror":
-            self._handle_touch_move(tid, x, y, now)
             return
         if owner == "trackpad" or (owner is None and self.mode != "settings"):
             self.last_event_time = time.time()
@@ -460,11 +415,6 @@ class PanelApp(upstream.ThorApp):
             self.last_event_time = time.time()
             self._touch_owner[tid] = "status"
             return
-        if self.mode == "mirror" and y >= upstream.HEADER_HEIGHT:
-            self._touch_owner[tid] = "mirror"
-            if self.mirror is not None:
-                self.mirror.touch('begin', tid, now, x, y)
-            return
         if self.mode == "position" and y >= upstream.HEADER_HEIGHT:
             self._touch_owner[tid] = "position"
             if self.position is not None:
@@ -478,20 +428,12 @@ class PanelApp(upstream.ThorApp):
             if owner == "position" and self.position is not None:
                 self.position.touch('move', tid, now, x, y)
             return
-        if self.mode == "mirror" or owner == "mirror":
-            if owner == "mirror" and self.mirror is not None:
-                self.mirror.touch('move', tid, now, x, y)
-            return
         super()._handle_touch_move(tid, x, y, now)
 
     def _handle_touch_up(self, tid, now) -> None:
         if self.mode == "position" or self._touch_owner.get(tid) == "position":
             if self._touch_owner.pop(tid, None) == "position" and self.position is not None:
                 self.position.touch('end', tid, now)
-            return
-        if self.mode == "mirror" or self._touch_owner.get(tid) == "mirror":
-            if self._touch_owner.pop(tid, None) == "mirror" and self.mirror is not None:
-                self.mirror.touch('end', tid, now)
             return
         super()._handle_touch_up(tid, now)
 
@@ -503,7 +445,6 @@ class PanelApp(upstream.ThorApp):
         self.window.resize(1, 1)
 
     def _set_collapsed(self, collapsed: bool) -> None:
-        self._stop_mirror()
         self._stop_position()
         with self.input_lock:
             self.touch.release_all()
@@ -511,30 +452,24 @@ class PanelApp(upstream.ThorApp):
             self.collapsed = collapsed
         self._apply_anchors()
         self._sync_keyboard_guard()
-        if self._mirror_visible() and self.mirror is not None:
-            self.mirror.start()
         if self._position_visible() and self.position is not None:
             self.position.start()
         self.drawing_area.queue_draw()
 
     def set_mode(self, mode: str, restart_hint: bool = True) -> None:
         # Old settings or callers may still name a removed page.
-        if mode in ("keyboard", "settings"):
-            mode = "split"
-        elif mode not in ("trackpad", "split", "mirror", "position"):
+        mode = normalize_mode(mode)
+        if mode not in SUPPORTED_MODES:
             return
-        if mode in ("mirror", "position") and self.session_mode != "game":
+        if mode == "position" and self.session_mode != "game":
             return
-        self._stop_mirror()
         self._stop_position()
         if hasattr(self, "touch"):
             self.touch.release_all()
             self._reset_input()
-        if mode in ("mirror", "position"):
+        if mode == "position":
             self.mode = mode
             self.save_config()
-            if self._mirror_visible() and self.mirror is not None:
-                self.mirror.start()
             if self._position_visible() and self.position is not None:
                 self.position.start()
             self.drawing_area.queue_draw()
@@ -552,7 +487,7 @@ class PanelApp(upstream.ThorApp):
             self.request_quit()
         elif key == "hide":
             self._set_collapsed(True)
-        elif key in ("mirror", "position"):
+        elif key == "position":
             self.set_mode(key, restart_hint=False)
         elif self.mode == "position" and key in ("left", "right", "pen"):
             self._clear_panel_contacts()
@@ -563,16 +498,6 @@ class PanelApp(upstream.ThorApp):
                     self.position.center()
                 else:
                     self.position.pause()
-            self.drawing_area.queue_draw()
-        elif self.mode == "mirror" and key in ("left", "right", "pen"):
-            self._clear_panel_contacts()
-            if self.mirror is not None:
-                if key == "left":
-                    self.mirror.toggle()
-                elif key == "right":
-                    self.mirror.set_input_mode('mouse' if self.mirror.input_mode == 'native' else 'native')
-                else:
-                    self.mirror.pause()
             self.drawing_area.queue_draw()
         elif key == "pen":
             self.touch.release_all()
@@ -589,14 +514,6 @@ class PanelApp(upstream.ThorApp):
             label = {"left": position.enable_label if position else "启用触摸",
                      "right": "定位居中", "pen": "释放触点"}[key]
             return label, bool(key == "left" and position and position.armed), upstream.theme.BTN_ACCENT_DEFAULT
-        if key == "mirror":
-            return "同屏触摸", self.mode == "mirror", upstream.theme.BTN_ACCENT_DEFAULT
-        if self.mode == "mirror" and key in ("left", "right", "pen"):
-            mirror = getattr(self, "mirror", None)
-            label = {"left": mirror.enable_label if mirror else "启用触摸",
-                     "right": "原生触摸" if mirror is None or mirror.input_mode == 'native' else "鼠标兼容",
-                     "pen": "释放触点"}[key]
-            return label, bool(key == "left" and mirror and mirror.armed), upstream.theme.BTN_ACCENT_DEFAULT
         if key == "close":
             return "关闭", True, (0.40, 0.10, 0.12)
         if key == "pen":
@@ -659,12 +576,6 @@ class PanelApp(upstream.ThorApp):
         cr.save()
         cr.scale(allocation.width / SCREEN_WIDTH, allocation.height / SCREEN_HEIGHT)
         try:
-            if self.mode == "mirror":
-                # Absolute touch and its displayed image must share the same
-                # geometry; skip the vendor's orbital UI-only micro-shift.
-                self._draw_ui(cr)
-                self._draw_mirror(cr)
-                return True
             return super().on_draw(widget, cr)
         finally:
             cr.restore()
@@ -689,40 +600,9 @@ class PanelApp(upstream.ThorApp):
         steam_style.label(cr, '整个下方区域均可操作 · 不传输上屏画面',
                           620, 940, 25, centered=True, max_width=1120)
 
-    def _draw_mirror(self, cr) -> None:
-        import cairo
-        mirror = self.mirror
-        if mirror is None:
-            return
-        viewport = mirror.viewport
-        steam_style.rounded(cr, viewport.x, viewport.y, viewport.width, viewport.height,
-                            8, (0.025, 0.035, 0.045), steam_style.BORDER)
-        frame, transform = mirror.frame, mirror.session.transform
-        if frame is not None and transform is not None:
-            if self._mirror_surface_frame is not frame:
-                self._mirror_surface = cairo.ImageSurface.create_for_data(
-                    frame.data, cairo.FORMAT_RGB24, frame.width, frame.height, frame.stride)
-                self._mirror_surface_frame = frame
-            image = transform.image
-            cr.save()
-            cr.rectangle(image.x, image.y, image.width, image.height)
-            cr.clip()
-            cr.translate(image.x, image.y)
-            cr.scale(image.width / frame.width, image.height / frame.height)
-            cr.set_source_surface(self._mirror_surface, 0, 0)
-            cr.get_source().set_filter(cairo.FILTER_BILINEAR)
-            cr.paint()
-            cr.restore()
-        cr.set_source_rgb(*(steam_style.GOOD if mirror.armed else steam_style.MUTED))
-        steam_style.label(cr, mirror.message, 20, 145, 25, max_width=1200)
-        cr.set_source_rgb(*steam_style.MUTED)
-        steam_style.label(cr, mirror.hint, SCREEN_WIDTH / 2, 1045, 23,
-                          centered=True, max_width=1200)
-
     def cleanup(self) -> None:
         if self._cleaned:
             return
-        self._stop_mirror()
         self._stop_position()
         if getattr(self, "keyboard_guard", None) is not None:
             self.keyboard_guard.stop()
@@ -741,8 +621,7 @@ class PanelApp(upstream.ThorApp):
         self.request_quit()
 
     def request_quit(self, signum: int = 0) -> bool:
-        # Own the loop explicitly: capture libraries may also use GLib and
-        # must not affect which nested Gtk.main() level receives a quit.
+        # Quit this panel's explicit loop without affecting another GTK loop.
         if getattr(self, "main_loop", None) is not None:
             self.main_loop.quit()
         return False
@@ -778,8 +657,6 @@ def main() -> int:
         return app.exit_code
     finally:
         app.cleanup()
-        if app.mirror is not None:
-            app.mirror.wait()
         if app.position is not None:
             app.position.wait()
 

@@ -13,7 +13,7 @@ import stat
 import threading
 import time
 
-from ei_input import InputUnavailable
+from gamescope_target import InputUnavailable
 from native_touch import VirtualTouchProbe
 
 

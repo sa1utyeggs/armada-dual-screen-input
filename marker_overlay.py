@@ -15,7 +15,7 @@ import sys
 import threading
 import time
 
-from ei_input import InputUnavailable
+from gamescope_target import InputUnavailable
 
 
 class MarkerOverlay:

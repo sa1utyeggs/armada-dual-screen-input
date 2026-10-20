@@ -1,13 +1,13 @@
 # 原生触摸路由验证
 
-日期：2026-10-19。范围：AYN Thor、ArmadaOS `20261010.c3d178c`、Steam Game Mode。
+历史验证日期：2026-10-19；接入状态更新：2026-10-20。范围：AYN Thor、ArmadaOS `20261010.c3d178c`、Steam Game Mode。
 
 ## 结论
 
 **已验证临时虚拟触摸屏能将真正的触摸事件送到上屏专用测试窗口，下屏没有收到这些事件。**
 后续已接入独立镜像界面，用户确认 Steam 单指滑动 / 点按，以及《杀戮尖塔2》选牌 / 拖牌 / 菜单正常。
 原生模式按用户要求不模拟双指滚轮、不设置双指判定延迟，直接传递最多两个独立触点。
-现有虚拟键鼠应用、Steam 设置、物理触屏、udev 规则、官方下屏服务和自启动规则均未改动。
+上述内容为初次路由验证的历史结果。2026-10-20 已按用户要求移除镜像功能，原生路由仍供[定位触摸](position-touch.md)使用；没有改动 Steam 设置、物理触屏、udev 规则、官方下屏服务和自启动规则。
 
 ## 为什么可以这样路由
 
@@ -58,10 +58,11 @@ XWayland / GTK 内部可能另有触摸到指针的兼容事件；本次原生�
 
 ## 开发检查入口
 
-`native_touch.py`：无 I/O 的接触编码，以及探测 / 实验预览共用的 libevdev 临时设备。
+`native_touch.py`：无 I/O 的接触编码，以及探测 / 定位触摸共用的 libevdev 临时设备。
 `native_touch_probe.py`：有时间上限的双窗口路由检查。
 `test_native_touch.py`：编码、双指槽、释放、路由检查失败和写入失败清理测试。
-`native_input.py`、`native_gesture.py`：已接入镜像的原生后端、后台路由检查及即时接触序列。
+`native_input.py`：定位触摸使用的原生发送后端及后台路由检查。
+`gamescope_target.py`、`touch_intent.py`：独立的目标身份检查与输入意图，不依赖捕获源。
 
 本轮 9 项原生触摸单元测试在 Mac 和 Thor 通过；Thor 连同此前镜像相关测试共 85 项通过。
 实机 GUI 路由验证单独执行，不能用单元测试结果替代。
@@ -83,14 +84,11 @@ python3 -B native_touch_probe.py --x-display :0 --rotation normal \
 
 ## 当前接入与待验证
 
-- 已接入下屏真实 GDK 接触序列，复用镜像黑边、缩放及目标检查，并提供原生 / 鼠标模式选择。
-- Steam 单指滑动和《杀戮尖塔2》交互已获得用户确认；其他游戏和原生多点手势效果待验证。
-- 原生模式不模拟双指滚轮；鼠标兼容模式保留原双指滚轮逻辑。
-- **当前临时后端的异常释放是抬起，不是真正的 touch cancel**；可能提交已开始的应用动作。
-  还需验证切换窗口、失焦、断流、进程退出、休眠和设备移除时的取消语义，不能直接视为生产后端。
-- 当前以同一上屏全屏窗口为前提；裁切、不同宽高比、其他输出及其他设备尚未验证。
-- 已整合到原面板的“同屏触摸”标签，复用原手动入口，代码与私有插件位于用户持久目录；没有新增自启动。
-  通用安装器仍待完善。本轮隔离测试的设备与窗口均已回收；日常使用仅在启用时创建临时设备，离页 / 收起 / 关闭即销毁。
+- 当前日常入口为原面板的“定位触摸”：第一指相对定位，第二指确认，最多向上屏保持一个原生触点；不传输画面。
+- 目标稳定并抬手后按需创建临时触屏；暂停、离页、收起或关闭时释放并销毁。沿用原手动入口，不新增自启动。
+- 镜像页、独立预览、镜像专用鼠标后端和相应捕获运行库设置已移除。旧版本测试结果保留为路由来源，不代表这些功能仍受支持。
+- **异常释放当前表现为抬起，不是真正的 touch cancel**；可能提交已经开始的应用动作。其他游戏、休眠与长期共存仍需验证。
+- 下屏漏落指 / 漏抬指仍作为独立问题追踪，见 [ArmadaOS Issue #757](https://github.com/armada-os/armada/issues/757)。
 
 ## 参考
 
@@ -99,4 +97,4 @@ python3 -B native_touch_probe.py --x-display :0 --rotation normal \
 - [libevdev uinput](https://www.freedesktop.org/software/libevdev/doc/latest/group__uinput.html)
 - [Armada DRM lease 触摸转发补丁](https://github.com/armada-os/armada/blob/c3d178c/packages/gamescope/patches/0013-feat-drm-run-a-compositor-from-the-leased-output.patch)
 - [Armada 下屏触摸隔离补丁](https://github.com/armada-os/armada/blob/c3d178c/packages/gamescope/patches/0014-wlserver-always-swallow-ignored-touch-device.patch)
-- [同屏触摸原型](mirrored-touch.md)
+- [当前定位触摸](position-touch.md)

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import math
 
-from mirrored_touch import TouchIntent
+from touch_intent import TouchIntent
 from position_motion import PositionMotion
 
 

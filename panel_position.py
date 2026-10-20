@@ -5,10 +5,10 @@ import os
 from pathlib import Path
 import time
 
-from ei_input import GamescopeTarget, InputUnavailable
+from gamescope_target import GamescopeTarget, InputUnavailable
 from gamescope_focus import FocusWatcher
 from marker_overlay import MarkerOverlay
-from mirror_geometry import Rect
+from input_geometry import Rect
 from native_input import NativeTouchInput
 from position_gesture import PositionGesture
 

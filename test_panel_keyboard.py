@@ -64,7 +64,7 @@ class PanelKeyboardTests(unittest.TestCase):
         self.app.ui_hidden = False
         self.app._cleaned = False
         self.app._physical_sequences = set()
-        self.app.mirror = self.app.position = None
+        self.app.position = None
         self.app._touch_owner = {}
         self.app._slider_drag = None
         self.app.held_ui_button = None

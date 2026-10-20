@@ -13,7 +13,7 @@ import re
 import threading
 import time
 
-from ei_input import InputUnavailable, same_user_peer_pid
+from gamescope_target import InputUnavailable, same_user_peer_pid
 
 
 @dataclass(frozen=True)

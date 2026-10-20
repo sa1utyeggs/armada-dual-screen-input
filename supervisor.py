@@ -29,12 +29,6 @@ def portable_environment(env: dict[str, str]) -> dict[str, str]:
     if (PORTABLE_LIB / "libgtk-layer-shell.so.0").exists():
         env["LD_LIBRARY_PATH"] = str(PORTABLE_LIB)
         env["GI_TYPELIB_PATH"] = str(PORTABLE_LIB / "girepository-1.0")
-    plugin = PORTABLE_LIB / "gstreamer-1.0"
-    if (plugin / "libgstpipewire.so").is_file():
-        env["GST_PLUGIN_PATH"] = str(plugin)
-        cache = Path(env.get("XDG_CACHE_HOME", str(Path.home() / ".cache"))) / "thor-panel"
-        cache.mkdir(parents=True, exist_ok=True)
-        env["GST_REGISTRY"] = str(cache / "gstreamer-registry.bin")
     return env
 
 
