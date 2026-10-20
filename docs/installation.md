@@ -3,6 +3,35 @@
 当前为预览版，实机验证以 AYN Thor / Armada `20261010.c3d178c` / Linux 7.2.6 / Steam Game Mode 为准。
 其他机型和系统版本见 [兼容范围](compatibility.md)。安装器以普通用户运行，**不要加 sudo**。
 
+## 一键在线安装（推荐）
+
+在 Armada 桌面终端执行：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/sa1utyeggs/armada-dual-screen-input/main/get.sh | bash
+```
+
+也可以从 GitHub 下载项目根目录的 `get.sh`，然后执行 `bash get.sh`。
+这一个脚本自动解析 `main` 当前提交，下载该提交的源码压缩包，检查源码路径和安装器，再执行现有安装流程。
+不需要 Git、SSH 密钥、手动创建目录或解压；临时下载完成后会自动清理。
+基础系统依赖与下面的源码安装相同，固定的 gtk-layer-shell 私有依赖仍从 Fedora 官方地址下载并校验 SHA-256。
+整个过程以普通用户运行，**不要加 sudo**，不启用开机自启动，也不安装或加载实验驱动。
+
+下载脚本后，可选用指定标签/提交，或只查看安装计划：
+
+```bash
+bash get.sh --ref v0.1.0
+bash get.sh --dry-run
+```
+
+标签示例须替换成仓库中实际存在的标签。在线入口的 `--dry-run` 会下载到临时目录，但不安装、不修改服务；
+本地 `install.sh --dry-run` 则连下载也不执行。在线升级时再次运行同一条命令，原配置与安装器管理规则保持不变。
+
+匿名命令需要仓库和 `get.sh` 已公开且位于 `main`。
+如果维护私有副本，可在环境中提供已有的只读 `GH_TOKEN` / `GITHUB_TOKEN`；下载器不会把它写入磁盘或传给应用安装进程，
+跨主机重定向也不携带认证头。首次下载私有 `get.sh` 本身仍需已有的 GitHub 访问方式；该脚本不绕过仓库权限。
+安装脚本下载失败或源码检查失败时会停止，不会尝试降低系统权限限制。
+
 ## 使用离线发布包
 
 接收方拿到 `armada-dual-screen-input-0.1.0-preview.1-aarch64.tar.gz` 和 `SHA256SUMS` 后，在 Armada 桌面终端执行：

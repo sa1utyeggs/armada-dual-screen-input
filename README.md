@@ -6,7 +6,16 @@ ArmadaOS 双屏掌机的副屏键盘、触控板和定位触摸应用。看上�
 
 ## 安装
 
-推荐使用带私有运行库的离线发布包，接收方无需修改 Armada 的只读系统。拿到压缩包和同版 `SHA256SUMS` 后：
+在 **Armada 桌面终端**执行这一条命令即可自动下载、准备依赖并安装，不需要 Git、SSH 密钥或手工解包：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/sa1utyeggs/armada-dual-screen-input/main/get.sh | bash
+```
+
+也可以从 GitHub 下载 [`get.sh`](get.sh)，在下载目录执行 `bash get.sh`。
+安装使用普通用户，**不要 sudo**。默认添加“虚拟键鼠”应用和桌面入口，**不自动启动、不启用开机自启动**。
+
+没有网络时，可使用带私有运行库的离线发布包。拿到压缩包和同版 `SHA256SUMS` 后：
 
 ```bash
 sha256sum -c SHA256SUMS
@@ -16,8 +25,7 @@ bash install.sh
 ```
 
 有仓库访问权限时，也可克隆源码后运行 `bash install.sh`；源码入口会校验并准备固定的 Fedora gtk-layer-shell 私有依赖。
-安装使用普通用户，**不要 sudo**。默认添加“虚拟键鼠”应用和桌面入口，**不自动启动、不启用开机自启动**。
-仓库当前为私有时，匿名 GitHub 下载不可用；维护者可把离线包直接发给其他用户安装。
+在线入口要求仓库允许匿名下载；私有仓库可通过已有的只读 `GH_TOKEN` / `GITHUB_TOKEN` 访问，或直接分发离线包。
 
 [完整安装、升级、回退与卸载](docs/installation.md) · [兼容范围](docs/compatibility.md) · [使用说明](docs/usage.md)
 
