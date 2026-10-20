@@ -22,6 +22,7 @@ class PanelLanguageTests(unittest.TestCase):
     def setUp(self):
         fixture.PanelKeyboardTests.setUp(self)
         self.app.session_mode = "game"
+        self.app.mode = "split"
         self.app.collapsed = False
         self.app.preferences = None
         self.app.input_cfg = dict(DEFAULTS)
@@ -37,6 +38,7 @@ class PanelLanguageTests(unittest.TestCase):
         )
         self.addCleanup(self.app.languages.close)
         self.app.languages.sync(True)
+        self.app._install_language_key()
         self.app.touch = SimpleNamespace(release_all=Mock())
         self.app.window = SimpleNamespace(get_mapped=lambda: True)
         self.app.keyboard_guard = None
@@ -59,10 +61,11 @@ class PanelLanguageTests(unittest.TestCase):
     def test_language_switch_saves_only_owned_field_and_releases_held_modifier(self):
         self.down("Shift", 1)
         self.up(1)
-        self.app._handle_touch_down(2, 100, self.app._language_top() + 25, 1.)
+        self.down("中/EN", 2)
         self.assertEqual(self.app.languages.language, "zh_CN")
         self.assertFalse(self.bridge.held_keys)
         self.assertFalse(self.app.mods.active("shift"))
+        self.assertFalse(any(code == 125 for _, code, _ in self.bridge.events))
         self.assertEqual(json.loads(self.config.read_text()),
                          {"sensitivity": 1.5, "future": 42, "keyboard_language": "zh_CN"})
 
@@ -78,6 +81,9 @@ class PanelLanguageTests(unittest.TestCase):
 
     def test_language_strip_is_above_key_geometry_and_does_not_send_pointer_moves(self):
         self.assertGreater(self.app.kb_layout.y, self.app._language_top())
+        self.app.languages.language = "zh_CN"
+        self.app.languages.ready = True
+        self.app.languages.preedit = "ni"
         self.app._handle_touch_down(1, 500, self.app._language_top() + 30, 1.)
         self.assertEqual(self.app._touch_owner[1], "languagebar")
         with patch.object(self.app, "_handle_touch_move") as move:
@@ -88,7 +94,7 @@ class PanelLanguageTests(unittest.TestCase):
 
     def test_failed_language_save_retains_current_language_and_configuration(self):
         with patch.object(fixture.panel_app, "write_settings", side_effect=PermissionError):
-            self.app._language_down(100, self.app._language_top() + 25)
+            self.down("中/EN", 2)
         self.assertEqual(self.app.languages.language, "en_US")
         self.assertNotIn("keyboard_language", json.loads(self.config.read_text()))
 
@@ -99,21 +105,23 @@ class PanelLanguageTests(unittest.TestCase):
         self.assertEqual(self.app.kb_layout.y, original.y)
         self.assertEqual(self.app.kb_layout.height, original.height)
         self.assertEqual(self.app.kb_layout.rows[0][0].h, original.rows[0][0].h)
-        self.assertEqual(self.app._language_top() + 112, self.app.kb_layout.y)
+        self.assertEqual(self.app._language_top() + 88, self.app.kb_layout.y)
 
-    def test_enlarged_keyboard_and_return_button_release_input_and_keep_language(self):
+    def test_keys_mouse_header_does_not_enable_an_expanded_keyboard(self):
         self.app.mode = "split"
         self.app.update_mode_bounds()
-        original = self.app.kb_layout.rows[0][0].h
+        _, x, width = next(item for item in fixture.panel_app.upstream.HEADER_BUTTONS if item[0] == "split")
         with patch.object(self.app, "save_config", return_value=True):
-            self.app._language_down(1120, self.app._language_top() + 25)
-            self.assertEqual(self.app.mode, "keyboard")
-            self.assertGreater(self.app.kb_layout.rows[0][0].h, original)
-            self.assertEqual(self.app.languages.language, "en_US")
-            self.app._language_down(1120, self.app._language_top() + 25)
+            self.app._handle_header_touch(1, x + width / 2, 30, True)
             self.assertEqual(self.app.mode, "split")
-            self.assertEqual(self.app.kb_layout.rows[0][0].h, original)
+            self.assertEqual(self.app.kb_layout.y, 500)
         self.assertFalse(self.bridge.held_keys)
+
+    def test_idle_split_pad_keeps_its_full_original_surface(self):
+        self.app.mode = "split"
+        with patch.object(fixture.panel_app.steam_style, "draw_trackpad") as draw:
+            self.app._draw_trackpad_surface(None, 124, 376)
+            draw.assert_called_once_with(self.app, None, 124, 376, 1240)
 
 
 if __name__ == "__main__":

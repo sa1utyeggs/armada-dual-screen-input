@@ -152,6 +152,7 @@ class PanelApp(upstream.ThorApp):
             runtime=os.environ["XDG_RUNTIME_DIR"], changed=self.drawing_area.queue_draw,
             dispatch=GLib.idle_add, forward_key=self.raw_key_pulses.tap,
         )
+        self._install_language_key()
         self.update_mode_bounds()
         Gdk.Display.get_default().connect("monitor-removed", self._on_monitor_removed)
         Gdk.Display.get_default().get_default_screen().connect("monitors-changed", self._on_monitors_changed)
@@ -302,7 +303,7 @@ class PanelApp(upstream.ThorApp):
                 self.session_mode, self.mode, self.collapsed, self.window.get_mapped(),
             ))
         if getattr(self, "languages", None) is not None:
-            self.languages.sync(self.mode in ("keyboard", "split") and not self.collapsed
+            self.languages.sync(self.mode == "split" and not self.collapsed
                                 and self.window.get_mapped())
 
     def _send_key_pulse(self, code, down):
@@ -319,6 +320,21 @@ class PanelApp(upstream.ThorApp):
             consumed.add(code)
             return
         self.bridge.key(code, down)
+
+    def _install_language_key(self):
+        for row in self.kb_layout.rows:
+            for key in row:
+                if key.special == "super":
+                    key.label = key.shift_label = "中/EN"
+                    key.special = "language"
+                    key.is_modifier = key.is_letter = False
+
+    def _keyboard_down(self, tid, x, y):
+        key = self.kb_layout.hit_test(x, y)
+        if key is not None and key.special == "language":
+            self._change_keyboard_language()
+            return
+        super()._keyboard_down(tid, x, y)
 
     def _keep_contacts_alive(self) -> bool:
         if self._cleaned:
@@ -513,7 +529,8 @@ class PanelApp(upstream.ThorApp):
 
     def _handle_touch_down(self, tid, x, y, now) -> None:
         if (getattr(self, "languages", None) is not None and not self.ui_hidden
-                and self.mode in ("keyboard", "split")
+                and self.mode == "split"
+                and keyboard_language_view.visible(self.languages)
                 and self._language_top() <= y < self._language_top() + keyboard_language_view.HEIGHT):
             self._touch_owner[tid] = "languagebar"
             self._language_down(x, y)
@@ -714,50 +731,41 @@ class PanelApp(upstream.ThorApp):
                                 upstream.STATUS_RIBBON_H, SCREEN_WIDTH)
 
     def _draw_trackpad_surface(self, cr, y, h) -> None:
-        if self.mode == "split" and getattr(self, "languages", None) is not None:
-            h -= keyboard_language_view.HEIGHT
         steam_style.draw_trackpad(self, cr, y, h, SCREEN_WIDTH)
 
     def _draw_keyboard(self, cr) -> None:
         if getattr(self, "languages", None) is not None:
-            keyboard_language_view.draw(cr, self.languages, self._language_top(),
-                                        expanded=self.mode == "keyboard")
+            if keyboard_language_view.visible(self.languages):
+                keyboard_language_view.draw(cr, self.languages, self._language_top())
         steam_keys.draw_keyboard(self, cr)
 
     def _language_top(self):
-        # Put the new strip in the trackpad's old bottom area, never shrink
-        # the accepted split keyboard to make room for an input method.
-        return (upstream.SPLIT_Y - keyboard_language_view.HEIGHT
-                if self.mode == "split" else upstream.HEADER_HEIGHT)
-
-    def update_mode_bounds(self):
-        super().update_mode_bounds()
-        if getattr(self, "languages", None) is not None and self.mode == "keyboard":
-            top = self._language_top() + keyboard_language_view.HEIGHT
-            self.kb_layout.update_bounds(0, top, SCREEN_WIDTH, SCREEN_HEIGHT - top)
+        # The split overlay appears only while composing; idle pad/key bounds
+        # are exactly the same as before multilingual input was introduced.
+        return upstream.SPLIT_Y - keyboard_language_view.HEIGHT
 
     def _language_down(self, x, y):
         action, value = keyboard_language_view.hit(x, y, self._language_top())
-        if action == "language":
-            language = "zh_CN" if self.languages.language == "en_US" else "en_US"
-            try:
-                write_settings(upstream.CONFIG_PATH, {"keyboard_language": language})
-            except (OSError, ValueError, TypeError):
-                self.languages.message = "语言保存失败，原设置保留"
-                self.drawing_area.queue_draw()
-                return
-            self._clear_panel_contacts()
-            self.input_cfg["keyboard_language"] = language
-            self.languages.set_language(language)
-        elif action == "candidate":
+        if action == "candidate":
             self.languages.choose(self.languages.page * 6 + value)
         elif action == "page":
             self.languages.turn_page(value)
         elif action == "cancel":
             self._clear_panel_contacts()
             self.languages.reset()
-        elif action == "size":
-            self.set_mode("split" if self.mode == "keyboard" else "keyboard", restart_hint=False)
+        self.drawing_area.queue_draw()
+
+    def _change_keyboard_language(self):
+        language = "zh_CN" if self.languages.language == "en_US" else "en_US"
+        try:
+            write_settings(upstream.CONFIG_PATH, {"keyboard_language": language})
+        except (OSError, ValueError, TypeError):
+            self.languages.message = "语言保存失败，原设置保留"
+            self.drawing_area.queue_draw()
+            return
+        self._clear_panel_contacts()
+        self.input_cfg["keyboard_language"] = language
+        self.languages.set_language(language)
         self.drawing_area.queue_draw()
 
     def _handle_settings_touch(self, *_) -> None:

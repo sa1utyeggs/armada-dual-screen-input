@@ -1,7 +1,7 @@
 import unittest
 
 from armada_dual_screen_input.keyboard_languages import KeyboardLanguages, read_language
-from armada_dual_screen_input.keyboard_language_view import hit, HEIGHT
+from armada_dual_screen_input.keyboard_language_view import hit, visible, HEIGHT
 
 
 class FakeWorker:
@@ -104,11 +104,20 @@ class KeyboardLanguageTests(unittest.TestCase):
 
     def test_language_bar_hit_areas_are_separate_from_keys(self):
         top = 500
-        self.assertEqual(hit(100, top + 25, top), ("language", None))
+        self.assertEqual(hit(1170, top + 25, top), ("cancel", None))
         self.assertEqual(hit(200, top + 75, top), ("candidate", 1))
         self.assertEqual(hit(1170, top + 75, top), ("page", 1))
-        self.assertEqual(hit(1170, top + 25, top), ("size", None))
         self.assertEqual(hit(100, top + HEIGHT, top), (None, None))
+
+    def test_idle_language_does_not_take_any_trackpad_area(self):
+        self.state.sync(True)
+        self.assertFalse(visible(self.state))
+        self.ready()
+        self.assertFalse(visible(self.state))
+        self.state.preedit = "ni"
+        self.assertTrue(visible(self.state))
+        self.state.reset()
+        self.assertFalse(visible(self.state))
 
 
 if __name__ == "__main__":

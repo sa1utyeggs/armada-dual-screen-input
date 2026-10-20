@@ -1,6 +1,6 @@
 """Supported pages and compatibility for saved modes removed from the UI."""
-SUPPORTED_MODES = ("trackpad", "split", "keyboard", "position", "preferences")
-LEGACY_MODES = ("settings", "mirror")
+SUPPORTED_MODES = ("trackpad", "split", "position", "preferences")
+LEGACY_MODES = ("keyboard", "settings", "mirror")
 
 
 def normalize_mode(mode: object) -> str | None:

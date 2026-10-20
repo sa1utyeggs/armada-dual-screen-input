@@ -126,6 +126,8 @@ def draw_keyboard(app, cr) -> None:
         for key in row:
             pressed = app.active_key_press == key.code
             latched = _modifier_latched(layout, key, shift_on)
+            if key.special == "language":
+                latched = getattr(getattr(app, "languages", None), "language", "en_US") == "zh_CN"
             modifier = key.is_modifier or key.code in _MODIFIER_CODES
             fill = (style.KEY_PRESSED if pressed else style.KEY_LATCHED if latched
                     else style.KEY_MOD if modifier else style.KEY)
