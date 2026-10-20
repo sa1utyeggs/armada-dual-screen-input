@@ -1,0 +1,24 @@
+name: Checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    container: fedora:44
+    steps:
+      - name: Install isolated test dependencies
+        run: dnf -y install git gobject-introspection python3-gobject python3-cairo gtk3 gtk-layer-shell python3-websocket-client libevdev libxcb fontconfig google-noto-sans-fonts nodejs shadow-utils util-linux
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Run tests as an unprivileged user
+        run: |
+          useradd --create-home ads-test
+          runuser -u ads-test -- python3 -B tools/run_tests.py --with-node
+      - name: Check whitespace
+        run: git -c safe.directory="$GITHUB_WORKSPACE" -C "$GITHUB_WORKSPACE" diff --check

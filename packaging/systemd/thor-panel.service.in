@@ -1,0 +1,14 @@
+[Unit]
+Description=Armada dual-screen input panel (experimental)
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 -B @RUN@ --run
+Environment=XDG_RUNTIME_DIR=%t
+Restart=on-failure
+RestartSec=10
+RestartPreventExitStatus=78
+TimeoutStopSec=8
+
+[Install]
+WantedBy=default.target

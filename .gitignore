@@ -8,6 +8,7 @@ __pycache__/
 htmlcov/
 .venv/
 venv/
+.cache/
 
 # Generated packages and device-specific runtime dependencies
 build/

@@ -1,0 +1,10 @@
+{
+  "linux": "7.2.6",
+  "armada_commit": "c3d178c9e5cc7107aaa128b8c1f384a9c6bd8dfa",
+  "patched_reference_source_sha256": "2eac2e22ea5b54dc6d08a39e4432217bb37839c4064c16c788486f512ed2456b",
+  "module_source_sha256": "9fdb33c22b2241a13f3a5371e01989b54f39d3fd687865d676ea6cc7875bdaba",
+  "candidate_patch_sha256": "06dd81155ce805de77636769f7d19bda8ceac4270d1babc0060d2c85928916fd",
+  "module_name": "armada_thor_ft5452",
+  "experimental": true,
+  "loaded_on_device": false
+}

@@ -73,7 +73,7 @@ XWayland / GTK 内部可能另有触摸到指针的兼容事件；本次原生�
 在已确认 Steam 首页、无游戏运行的开发环境执行：
 
 ```bash
-python3 -B native_touch_probe.py --x-display :0 --rotation normal \
+PYTHONPATH=src python3 -B tools/native_touch_probe.py --x-display :0 --rotation normal \
   --gtk-runtime-root "$HOME/.local/share/thor-panel/runtime" \
   --report /tmp/native-touch-route.json
 ```

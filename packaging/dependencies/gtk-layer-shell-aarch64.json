@@ -1,0 +1,13 @@
+{
+  "name": "gtk-layer-shell-0.10.0-1.fc44.aarch64.rpm",
+  "url": "https://dl.fedoraproject.org/pub/fedora/linux/releases/44/Everything/aarch64/os/Packages/g/gtk-layer-shell-0.10.0-1.fc44.aarch64.rpm",
+  "sha256": "de2a27df40ae7cffd3b858f46f73744ec2f0b153a2870120f88cd0b40660fb92",
+  "source_url": "https://dl.fedoraproject.org/pub/fedora/linux/releases/44/Everything/source/tree/Packages/g/gtk-layer-shell-0.10.0-1.fc44.src.rpm",
+  "files": [
+    "usr/lib64/libgtk-layer-shell.so.0",
+    "usr/lib64/libgtk-layer-shell.so.0.10.0",
+    "usr/lib64/girepository-1.0/GtkLayerShell-0.1.typelib",
+    "usr/share/licenses/gtk-layer-shell/LICENSE_LGPL.txt",
+    "usr/share/licenses/gtk-layer-shell/LICENSE_MIT.txt"
+  ]
+}
