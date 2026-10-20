@@ -24,8 +24,7 @@ cd armada-dual-screen-input-0.1.0-preview.1-aarch64
 bash install.sh
 ```
 
-有仓库访问权限时，也可克隆源码后运行 `bash install.sh`；源码入口会校验并准备固定的 Fedora gtk-layer-shell 私有依赖。
-在线入口要求仓库允许匿名下载；私有仓库可通过已有的只读 `GH_TOKEN` / `GITHUB_TOKEN` 访问，或直接分发离线包。
+也可克隆源码后运行 `bash install.sh`；源码入口会校验并准备固定的 Fedora gtk-layer-shell 私有依赖。
 
 [完整安装、升级、回退与卸载](docs/installation.md) · [兼容范围](docs/compatibility.md) · [使用说明](docs/usage.md)
 
