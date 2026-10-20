@@ -58,6 +58,22 @@ class PanelPreferencesTests(unittest.TestCase):
         self.app.keyboard_guard.update.assert_called_with(False)
         self.assertFalse(self.config.exists())
 
+    def test_settings_header_never_sends_or_holds_game_mouse_buttons(self):
+        self.enter()
+        for key in ("left", "right"):
+            _, x, width = next(b for b in self.panel.upstream.HEADER_BUTTONS if b[0] == key)
+            self.app._handle_touch_down(10, x + width / 2, 30, 1.)
+            self.app._handle_touch_up(10, 1.1)
+        self.assertIsNone(self.app.held_ui_button)
+        self.assertFalse(self.bridge.events)
+
+    def test_header_settings_button_opens_the_preferences_page(self):
+        _, x, width = next(b for b in self.panel.upstream.HEADER_BUTTONS if b[0] == "preferences")
+        self.app._handle_touch_down(10, x + width / 2, 30, 1.)
+        self.app._handle_touch_up(10, 1.1)
+        self.assertEqual(self.app.mode, "preferences")
+        self.assertFalse(self.bridge.events)
+
     def test_setting_drag_has_one_owner_and_cannot_move_the_upper_pointer(self):
         self.enter()
         with patch.object(self.app.gesture, "touch_move") as move:

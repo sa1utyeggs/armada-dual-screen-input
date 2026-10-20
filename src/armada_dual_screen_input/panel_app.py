@@ -597,6 +597,9 @@ class PanelApp(upstream.ThorApp):
             self._set_collapsed(True)
         elif key in ("position", "preferences"):
             self.set_mode(key, restart_hint=False)
+        elif self.mode == "preferences" and key in ("left", "right"):
+            # Settings never send clicks into the game or hold a mouse button.
+            return
         elif self.mode == "position" and key in ("left", "right", "pen"):
             self._clear_panel_contacts()
             if self.position is not None:
