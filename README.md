@@ -22,22 +22,23 @@ Desktop Mode 支持仍为实验状态，默认关闭。
 进入源码目录后，在 Mac 上可执行 `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -v`；依赖 Linux GTK 的集成检查会跳过，完整验证仍需 Thor 实机。
 Steam 键盘抑制脚本另用 `node --test test_steam_keyboard_guard.js` 检查；测试使用模拟 Steam 对象，不连接或操作真实客户端。
 
-同屏触摸已在功能分支整合到原面板，默认使用原生触摸；鼠标兼容模式另提供双指滚轮。
+同屏触摸已整合到原面板，默认使用原生触摸；鼠标兼容模式另提供双指滚轮。
 原触控板的双指滚动和灵敏度设置保留。独立预览仍供开发验证，不要与正式面板的镜像页同时运行。
 
-## 定位触摸开发进度
+## 定位触摸
 
-`feature/position-touch` 基于最新 main 的触控板恢复修复，并合入镜像分支的现有输入后端。
+定位触摸来自 `feature/position-touch`，保留已有触控板恢复修复，并与同屏触摸共用原生输入后端。
 2026-10-20 增加第四个“定位触摸”页签：第一指相对移动上屏圆环，不向应用发送鼠标悬停或触摸；
 保持第一指接触，第二指在操作区任意位置按住，在圆环位置产生一个原生触点。
 第二指保持时移动第一指可拖动；第二指或第一指先抬起均释放触点，手指角色不会互换。
 此模式不启动 PipeWire / GStreamer 捕获；圆环通过独立的输入穿透覆盖层显示，不移动系统鼠标。
 专用窗口自动检查通过；用户确认基本定位及拖动恢复正常。Thor 曾出现单指坐标突跳，加入应用侧保护并通过 333 项检查后，用户确认「不再跳位，拖动也正常」。底层漏触点 / 偶发未释放仍是独立已知问题：只读诊断发现全部抬手后物理下屏仍残留按下状态，原因尚未解决。长时间游戏及系统性能覆盖层共存仍待验收。
 操作规则、实现与测试边界见[定位触摸](docs/position-touch.md)。
+物理下屏漏事件已提交 [ArmadaOS Issue #757](https://github.com/armada-os/armada/issues/757)，附诊断证据和仅针对 Thor 下屏的候选补丁。内核构建已按用户要求停止，未完成编译或实机验证；项目合并不会安装或启用该补丁。
 
-## 同屏触摸开发进度
+## 同屏触摸
 
-功能分支：`feature/mirrored-touch`，[草稿 PR #1](https://github.com/sa1utyeggs/armada-dual-screen-input/pull/1)。
+开发来源：`feature/mirrored-touch`，[原始 PR #1](https://github.com/sa1utyeggs/armada-dual-screen-input/pull/1)。
 2026-10-19 已接入 Gamescope PipeWire 画面、原生触屏与 EIS 鼠标兼容输入，并保留更新后的 main 深色样式和 Steam 键盘联动。
 用户已在独立预览中确认 Steam 单指滑动 / 点按、《杀戮尖塔2》选牌 / 拖牌 / 菜单正常。
 现在通过原“虚拟键鼠”入口进入第三个“同屏触摸”标签，不再需要另开预览；用户已确认集成版镜像、触摸和切回键鼠正常。
@@ -120,7 +121,7 @@ journalctl --user -u thor-panel.service -n 60 --no-pager
 
 ## 已验证与限制
 
-- 双指滚动后的残留触点恢复正在独立分支准备，尚未安装或实机复测；机制、验证范围和后续复测见[触点恢复说明](docs/trackpad-recovery.md)。
+- 双指滚动后的应用层触点恢复已于 2026-10-19 安装，用户短测确认单指移动、滚动后移动正常；不据此认定物理驱动的漏事件已解决。机制、验证范围和复测记录见[触点恢复说明](docs/trackpad-recovery.md)。
 - 系统 GTK3、Cairo 与正常用户 `/dev/uinput` 权限可用；GUI 通过原生 GTK 运行。
 - 原键鼠使用自己的 `/dev/uinput`；镜像原生触摸在页签就绪、目标稳定且所有手指抬起后按需建立临时触屏，暂停 / 离页即销毁。鼠标兼容使用 EIS。不读取 raw evdev，不独占物理触摸屏。
 - Game Mode 连接官方底层 KWin 的 `armada-plasma-bottom`，不是直接连接 bottom Gamescope。真实唯一输出为 `X11-0`，逻辑尺寸 `689×600`。

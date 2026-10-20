@@ -4,3 +4,5 @@
 *.service text eol=lf
 *.desktop text eol=lf
 *.svg text eol=lf
+# Unified-diff context prefixes and kernel tabs are part of patch attachments.
+docs/patches/*.patch -whitespace
