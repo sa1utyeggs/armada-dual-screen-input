@@ -21,4 +21,4 @@ jobs:
           useradd --create-home ads-test
           runuser -u ads-test -- python3 -B tools/run_tests.py --with-node
       - name: Check whitespace
-        run: git diff --check
+        run: git -c safe.directory="$GITHUB_WORKSPACE" -C "$GITHUB_WORKSPACE" diff --check
