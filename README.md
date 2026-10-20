@@ -15,7 +15,10 @@ curl -fsSL https://raw.githubusercontent.com/sa1utyeggs/armada-dual-screen-input
 也可以从 GitHub 下载 [`get.sh`](get.sh)，在下载目录执行 `bash get.sh`。
 安装使用普通用户，**不要 sudo**。默认添加“虚拟键鼠”应用和桌面入口，**不自动启动、不启用开机自启动**。
 
-没有网络时，可使用带私有运行库的离线发布包。拿到压缩包和同版 `SHA256SUMS` 后：
+离线安装包在 [GitHub Releases](https://github.com/sa1utyeggs/armada-dual-screen-input/releases) 中按版本发布。
+选择版本，在 **Assets** 中同时下载 `armada-dual-screen-input-<版本>-aarch64.tar.gz` 和 `SHA256SUMS`，再传到掌机。
+该安装包包含私有运行库；GitHub 自动生成的 **Source code** 压缩包只是源码，不能代替离线安装包。
+以下以 `v0.1.0-preview.1` 为例：
 
 ```bash
 sha256sum -c SHA256SUMS

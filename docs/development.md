@@ -63,7 +63,7 @@ SHA256SUMS
 
 1. 在 feature 分支完成检查和兼容性说明，提交并通过 PR 评审。
 2. 更新 `VERSION` 与 `CHANGELOG.md`，从干净的指定提交构建，保留来源和校验记录。
-3. 将 tar.gz 和同版 SHA256SUMS 一起放入 GitHub Release，或直接交给测试者；仓库私有时，Release 也不能匿名下载。
+3. 为该干净提交创建与 `VERSION` 对应的 `v<VERSION>` 标签；在 GitHub Releases 中选择该标签发布，将 tar.gz 和同次构建的 SHA256SUMS 一起上传到 Assets。`preview` 版本标记为 Pre-release。不要用 GitHub 自动生成的 Source code 压缩包替代安装包；仓库私有时，Release 也不能匿名下载。
 4. 在 AYN Thor 上验证全新安装、保留配置升级、版本回退和卸载，再扩大支持范围。隔离环境检查与实机验收分别记录。
 
 工作流仅测试或上传 Actions 构建产物，不会自动改变仓库可见性、创建公开 Release、连接掌机或安装驱动。
