@@ -32,6 +32,9 @@ class CompactPanelLayoutTests(unittest.TestCase):
         self.app.keyboard_guard = Mock()
         self.app.position = Mock(active=False, armed=False, enable_label='启用触摸')
         self.app.touch_mode = 'position'
+        self.app._touch_menu_open = False
+        self.app._position_revision = self.app.position.revision
+        self.app._position_draw_state = None
         self.app.touch = SimpleNamespace(release_all=Mock())
         self.app.gesture.touch_down = Mock()
         self.app.gesture.touch_move = Mock()
@@ -256,29 +259,34 @@ class CompactPanelLayoutTests(unittest.TestCase):
 
     def test_position_controls_do_not_emit_mouse_buttons(self):
         self.app.mode = 'position'
-        # Submodes are selected only in the secondary tab row.
+        selector = self.panel.touchscreen_selector
         for mode in ('direct', 'position'):
-            _, _, rect = next(t for t in self.panel.touchscreen_tabs.TABS if t[0] == mode)
+            self.app._handle_touch_down(9, selector.BUTTON.x+20, 30, 1.)
+            self.app._handle_touch_up(9, 1.1)
+            _, _, rect = next(t for t in selector.OPTIONS if t[0] == mode)
             self.app._handle_touch_down(10, rect.x+rect.width/2, rect.y+rect.height/2, 1.)
             self.app._handle_touch_move(10, 620, 600, 1.1)
             self.app._handle_timed_touch_move(10, 620, 700, 1.2, .01)
             self.app._handle_touch_up(10, 1.3)
-        for key in ('right', 'left', 'pen'):
+        for key in ('pen',):
             _, x, width = next(b for b in self.panel.upstream.HEADER_BUTTONS if b[0] == key)
             self.app._handle_header_touch(1, x+width/2, 30, True)
         self.assertEqual([c.args for c in self.app.position.set_touch_mode.call_args_list],
                          [('direct',), ('position',)])
         self.app.position.center.assert_called_once()
         self.app.position.toggle.assert_not_called()
-        self.app.position.pause.assert_not_called()
+        self.assertEqual(self.app.position.pause.call_count, 2)
+        self.app.position.pause.assert_called_with(manual=False)
         self.app.position.touch.assert_not_called()
         self.assertFalse(self.bridge.events)
 
     def test_direct_mode_has_no_pause_or_release_control_and_no_center_action(self):
         self.app.mode = 'position'
         self.app.touch_mode = 'direct'
-        with patch.object(self.panel.steam_style, 'draw_header') as draw:
+        with patch.object(self.panel.steam_style, 'draw_header') as draw, \
+                patch.object(self.panel.touchscreen_selector, 'draw_button') as selector:
             self.app._draw_header(Mock())
+        self.assertEqual(selector.call_args.args[1:], ('direct', False))
         self.assertTrue({'left', 'right', 'pen'}.isdisjoint(
             button[0] for button in draw.call_args.args[2]))
         _, x, width = next(b for b in self.panel.upstream.HEADER_BUTTONS if b[0] == 'pen')
@@ -287,23 +295,27 @@ class CompactPanelLayoutTests(unittest.TestCase):
         self.app.position.pause.assert_not_called()
         self.assertFalse(self.bridge.events)
 
-    def test_secondary_tabs_draw_selected_state_with_shared_hit_geometry(self):
-        tabs = self.panel.touchscreen_tabs
+    def test_dropdown_menu_draws_current_selection_with_shared_hit_geometry(self):
+        selector = self.panel.touchscreen_selector
         for selected in ('position', 'direct'):
             with patch.object(self.panel.steam_style, 'button') as draw:
-                tabs.draw(Mock(), selected)
+                selector.draw_menu(Mock(), selected)
             self.assertEqual(len(draw.call_args_list), 2)
-            for call, (mode, label, rect) in zip(draw.call_args_list, tabs.TABS):
+            for call, (mode, label, rect) in zip(draw.call_args_list, selector.OPTIONS):
                 self.assertEqual(call.args[1:],
                                  (rect.x, rect.y, rect.width, rect.height,
                                   label, mode == selected))
-                self.assertEqual(call.kwargs, {'tab': True})
+                self.assertEqual(call.kwargs, {})
 
-    def test_secondary_tab_gap_and_status_cannot_become_native_contacts(self):
+    def test_dropdown_outside_dismiss_does_not_send_touch_or_drag(self):
         self.app.mode = 'position'
-        for x, y in ((620, 160), (300, 124), (300, 220), (300, 239.999)):
+        selector = self.panel.touchscreen_selector
+        for x, y in ((620, 152), (300, 124), (300, 220), (620, 660)):
+            self.app._handle_touch_down(9, selector.BUTTON.x+20, 30, 1.)
+            self.app._handle_touch_up(9, 1.1)
             self.app._handle_touch_down(10, x, y, 1.)
-            self.assertEqual(self.app._touch_owner[10], 'touch_controls')
+            self.assertFalse(self.app._touch_menu_open)
+            self.assertEqual(self.app._touch_owner[10], 'touch_selector')
             self.app._handle_touch_move(10, 620, 700, 1.1)
             self.app._handle_timed_touch_move(10, 620, 700, 1.2, .01)
             self.app._handle_touch_up(10, 1.3)
@@ -311,15 +323,60 @@ class CompactPanelLayoutTests(unittest.TestCase):
         self.app.position.touch.assert_not_called()
         self.assertFalse(self.bridge.events)
 
-    def test_reselecting_current_secondary_tab_keeps_controller_and_config(self):
+    def test_reselecting_current_dropdown_option_preserves_submode_and_config(self):
         self.app.mode = 'position'
-        _, _, rect = self.panel.touchscreen_tabs.TABS[0]
+        selector = self.panel.touchscreen_selector
+        self.app._handle_touch_down(9, selector.BUTTON.x+20, 30, 1.)
+        self.app._handle_touch_up(9, 1.1)
+        _, _, rect = selector.OPTIONS[0]
         self.app._handle_touch_down(10, rect.x+20, rect.y+20, 1.)
-        self.assertEqual(self.app._touch_owner[10], 'touch_controls')
+        self.assertEqual(self.app._touch_owner[10], 'touch_selector')
         self.app._handle_touch_up(10, 1.1)
         self.app.position.set_touch_mode.assert_not_called()
         self.app.save_config.assert_not_called()
         self.app.position.touch.assert_not_called()
+
+    def test_open_menu_blocks_auto_rearm_after_all_fingers_lift(self):
+        self.app.mode = 'position'
+        self.app._physical_sequences.clear()
+        self.app._touch_menu_open = True
+        self.app._on_position_tick()
+        self.app.position.tick.assert_called_with(contacts_down=True)
+        self.app._touch_menu_open = False
+        self.app._on_position_tick()
+        self.app.position.tick.assert_called_with(contacts_down=False)
+
+        # Internal contact cleanup must not dismiss the visible dropdown.
+        self.app._touch_menu_open = True
+        self.app._discarding_contacts = True
+        self.app._cancel_contact(10, 1.)
+        self.assertTrue(self.app._touch_menu_open)
+        self.app._discarding_contacts = False
+        self.app._cancel_contact(10, 1.1)
+        self.assertFalse(self.app._touch_menu_open)
+
+    def test_closed_dropdown_restores_original_input_top_without_blank_control_row(self):
+        self.app.mode = 'position'
+        for y in (124, 160, 220, 239.999):
+            self.app._handle_touch_down(10, 300, y, 1.)
+            self.assertEqual(self.app._touch_owner[10], 'position')
+            self.app._handle_touch_up(10, 1.1)
+        self.assertEqual([c.args[0] for c in self.app.position.touch.call_args_list],
+                         ['begin', 'end']*4)
+
+    def test_leaving_touch_page_closes_dropdown_and_old_contact_stays_inert(self):
+        self.app.mode = 'position'
+        selector = self.panel.touchscreen_selector
+        self.app._handle_touch_down(10, selector.BUTTON.x+20, 30, 1.)
+        self.app.set_mode('split')
+        self.assertFalse(self.app._touch_menu_open)
+        self.app._touch_owner[10] = 'touch_selector'
+        self.app._handle_touch_move(10, 620, 700, 1.1)
+        self.app._handle_timed_touch_move(10, 620, 700, 1.2, .01)
+        self.app._handle_touch_up(10, 1.3)
+        self.app.gesture.touch_move.assert_not_called()
+        self.app.gesture.touch_up.assert_not_called()
+        self.assertFalse(self.bridge.events)
 
     def test_position_collapse_unmap_release_and_expand_waits_for_new_group(self):
         self.app.mode = 'position'

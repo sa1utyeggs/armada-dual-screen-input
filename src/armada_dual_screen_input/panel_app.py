@@ -57,7 +57,7 @@ from .scroll_output import ScaledScroll, read_scroll_scale
 from .steam_keyboard_guard import SteamKeyboardGuard, keyboard_guard_wanted
 from .panel_modes import SUPPORTED_MODES, normalize_mode
 from .panel_position import PanelPosition, TOUCH_MODES
-from . import touchscreen_tabs
+from . import touchscreen_selector
 from .input_settings import read_settings, write_settings, SettingsDraft, NUMBERS, CHOICES
 from . import settings_view
 
@@ -87,6 +87,7 @@ class PanelApp(upstream.ThorApp):
         self._language_consumed = set()
         self._last_input_mode = "split"
         self._position_draw_state = None
+        self._touch_menu_open = False
         self._discarding_contacts = False
         # Unlike ToolkitTouch, this set survives logical-contact resets when
         # selecting a tab/control. Never mistake the selecting finger for up.
@@ -94,7 +95,7 @@ class PanelApp(upstream.ThorApp):
         self.main_loop = None
         super().__init__()
         self.position = PanelPosition(sensitivity=self.input_cfg["position_sensitivity"],
-                                      touch_mode=self.touch_mode, pad=touchscreen_tabs.PAD)
+                                      touch_mode=self.touch_mode, pad=touchscreen_selector.PAD)
         self._position_revision = self.position.revision
         self.scroll_output = ScaledScroll(self.bridge.emit_scroll, self.scroll_scale)
         self.bridge.emit_scroll = self.scroll_output.scroll
@@ -260,6 +261,7 @@ class PanelApp(upstream.ThorApp):
                 and not self.collapsed and self.window.get_mapped())
 
     def _stop_position(self) -> None:
+        self._touch_menu_open = False
         if getattr(self, "position", None) is not None:
             self.position.stop()
         self._position_draw_state = None
@@ -269,7 +271,8 @@ class PanelApp(upstream.ThorApp):
             return False
         if not self._position_visible() or self.position is None:
             return True
-        self.position.tick(contacts_down=bool(self._physical_sequences))
+        self.position.tick(contacts_down=(bool(self._physical_sequences)
+                                         or getattr(self, '_touch_menu_open', False)))
         if self._position_revision != self.position.revision:
             self._clear_panel_contacts()
             self._position_revision = self.position.revision
@@ -426,6 +429,7 @@ class PanelApp(upstream.ThorApp):
         # A compositor cancel must not turn into a click on lift.
         if (getattr(self, "position", None) is not None
                 and not getattr(self, "_discarding_contacts", False)):
+            self._touch_menu_open = False
             self.position.pause(manual=False)
         self._reset_input()
 
@@ -506,6 +510,7 @@ class PanelApp(upstream.ThorApp):
             elif event.type == Gdk.EventType.TOUCH_END:
                 self.touch.end(sequence)
             elif event.type == Gdk.EventType.TOUCH_CANCEL:
+                self._touch_menu_open = False
                 self.touch.release_all()
                 if self.position is not None:
                     self.position.pause(manual=False)
@@ -515,7 +520,7 @@ class PanelApp(upstream.ThorApp):
 
     def _handle_timed_touch_move(self, tid, x, y, now, motion_interval) -> None:
         owner = self._touch_owner.get(tid)
-        if owner == "languagebar":
+        if owner in ("languagebar", "touch_selector"):
             return
         if owner == "preferences" or self.mode == "preferences":
             self._handle_touch_move(tid, x, y, now)
@@ -533,6 +538,8 @@ class PanelApp(upstream.ThorApp):
             self._handle_touch_move(tid, x, y, now)
 
     def _handle_touch_down(self, tid, x, y, now) -> None:
+        if self._touch_selector_down(tid, x, y):
+            return
         if (getattr(self, "languages", None) is not None and not self.ui_hidden
                 and self.mode == "split"
                 and keyboard_language_view.visible(self.languages)
@@ -550,12 +557,6 @@ class PanelApp(upstream.ThorApp):
             self._preferences_down(tid, x, y)
             return
         if self.mode == "position" and y >= upstream.HEADER_HEIGHT:
-            if y < touchscreen_tabs.CONTENT_TOP:
-                self._touch_owner[tid] = 'touch_controls'
-                selected = touchscreen_tabs.hit(x, y)
-                if selected is not None:
-                    self._set_touch_mode(selected)
-                return
             self._touch_owner[tid] = "position"
             if self.position is not None:
                 self.position.touch('begin', tid, now, x, y)
@@ -564,7 +565,7 @@ class PanelApp(upstream.ThorApp):
 
     def _handle_touch_move(self, tid, x, y, now) -> None:
         owner = self._touch_owner.get(tid)
-        if owner == "languagebar":
+        if owner in ("languagebar", "touch_selector"):
             return
         if owner == "preferences" or self.mode == "preferences":
             draft = getattr(self, "preferences", None)
@@ -579,7 +580,7 @@ class PanelApp(upstream.ThorApp):
         super()._handle_touch_move(tid, x, y, now)
 
     def _handle_touch_up(self, tid, now) -> None:
-        if self._touch_owner.get(tid) == "languagebar":
+        if self._touch_owner.get(tid) in ("languagebar", "touch_selector"):
             self._touch_owner.pop(tid, None)
             return
         if self.mode == "preferences" or self._touch_owner.get(tid) == "preferences":
@@ -672,6 +673,8 @@ class PanelApp(upstream.ThorApp):
         self.drawing_area.queue_draw()
 
     def _handle_header_touch(self, tid, x, y, down) -> None:
+        if self._touch_selector_down(tid, x, y):
+            return
         key = next((k for k, bx, bw in upstream.HEADER_BUTTONS if bx <= x <= bx + bw), None)
         if key == "close":
             with self.input_lock:
@@ -687,7 +690,7 @@ class PanelApp(upstream.ThorApp):
             # Settings never send clicks into the game or hold a mouse button.
             return
         elif self.mode == "position" and key in ("left", "right", "pen"):
-            # Submodes live in their own tab row, not the global mouse controls.
+            # Mouse controls are replaced by the dropdown in the touch page.
             if key == 'pen' and self.position is not None:
                 if getattr(self, 'touch_mode', 'position') == 'position':
                     self._clear_panel_contacts()
@@ -736,6 +739,9 @@ class PanelApp(upstream.ThorApp):
         steam_style.draw_header(self, cr, buttons,
                                 upstream.HEADER_BUTTON_Y, upstream.HEADER_BUTTON_H,
                                 SCREEN_WIDTH)
+        if self.mode == 'position':
+            touchscreen_selector.draw_button(cr, self.touch_mode,
+                                             getattr(self, '_touch_menu_open', False))
 
     def _draw_status_ribbon(self, cr) -> None:
         steam_style.draw_status(self, cr, upstream.HEADER_BUTTONS_H,
@@ -810,6 +816,8 @@ class PanelApp(upstream.ThorApp):
             cr.scale(allocation.width / SCREEN_WIDTH, allocation.height / SCREEN_HEIGHT)
             self._draw_ui(cr)
             self._draw_position(cr)
+            if getattr(self, '_touch_menu_open', False):
+                touchscreen_selector.draw_menu(cr, self.touch_mode)
             cr.restore()
             return True
         cr.save()
@@ -823,12 +831,12 @@ class PanelApp(upstream.ThorApp):
         position = self.position
         if position is None:
             return
-        touchscreen_tabs.draw(cr, position.touch_mode)
-        steam_style.rounded(cr, 20, touchscreen_tabs.CONTENT_TOP+8,
-                            1200, 1050-touchscreen_tabs.CONTENT_TOP-8, 12,
+        steam_style.rounded(cr, 20, 168, 1200, 882, 12,
                             steam_style.SURFACE, steam_style.BORDER)
         cr.set_source_rgb(*(steam_style.GOOD if position.armed else steam_style.MUTED))
-        steam_style.label(cr, position.message, 20, 220, 24, max_width=1200)
+        message = ('请选择触屏模式；收起后自动恢复' if getattr(self, '_touch_menu_open', False)
+                   else position.message)
+        steam_style.label(cr, message, 20, 150, 24, max_width=1200)
         if position.touch_mode == 'direct':
             cr.set_source_rgb(*steam_style.ACCENT)
             steam_style.label(cr, '直接触屏', 620, 370, 40, centered=True)
@@ -861,6 +869,26 @@ class PanelApp(upstream.ThorApp):
         cr.set_source_rgb(*steam_style.MUTED)
         steam_style.label(cr, '整个下方区域均可操作 · 不传输上屏画面',
                           620, 940, 25, centered=True, max_width=1120)
+
+    def _touch_selector_down(self, tid, x, y):
+        if self.mode != 'position':
+            return False
+        if getattr(self, '_touch_menu_open', False):
+            self._touch_menu_open = False
+            selected = touchscreen_selector.hit_option(x, y)
+            if selected is not None:
+                self._set_touch_mode(selected)
+        elif touchscreen_selector.BUTTON.contains(x, y):
+            # Release old native touches, but keep automatic enable requested.
+            # The open menu also blocks rearming after the selecting finger lifts.
+            self.position.pause(manual=False)
+            self._clear_panel_contacts()
+            self._touch_menu_open = True
+        else:
+            return False
+        self._touch_owner[tid] = 'touch_selector'
+        self.drawing_area.queue_draw()
+        return True
 
     def _set_touch_mode(self, mode):
         if mode not in TOUCH_MODES or mode == getattr(self, 'touch_mode', 'position'):

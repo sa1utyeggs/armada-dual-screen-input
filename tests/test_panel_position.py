@@ -5,7 +5,7 @@ import unittest
 from armada_dual_screen_input.gamescope_target import InputUnavailable
 from armada_dual_screen_input.gamescope_focus import FocusSnapshot, FocusState
 from armada_dual_screen_input.panel_position import PanelPosition
-from armada_dual_screen_input.touchscreen_tabs import PAD
+from armada_dual_screen_input.touchscreen_selector import PAD
 
 
 class Marker:
@@ -226,17 +226,17 @@ class PanelPositionTests(unittest.TestCase):
         self.p.touch('end', 2, self.now)
         self.assertEqual(self.p.marker.updates[-1], ())
 
-    def test_tab_row_is_excluded_from_both_gestures_and_absolute_mapping(self):
+    def test_header_is_excluded_but_dropdown_needs_no_extra_native_input_row(self):
         panel = PanelPosition(pad=PAD)
         self.addCleanup(panel.stop)
         self.assertEqual(panel.position_gesture.pad, PAD)
         self.assertEqual(panel.direct_gesture.pad, PAD)
         for mode in ('position', 'direct'):
             panel.set_touch_mode(mode)
-            self.assertEqual(panel.gesture.begin(1, 310, 160, self.now), ())
+            self.assertEqual(panel.gesture.begin(1, 310, 30, self.now), ())
             self.assertEqual(panel.gesture.move(1, 620, 660, self.now), ())
             panel.gesture.end(1, self.now)
-        down, = panel.direct_gesture.begin(2, 310, 450, self.now)
+        down, = panel.direct_gesture.begin(2, 310, 363, self.now)
         self.assertEqual(down.position, (.25, .25))
         move, = panel.direct_gesture.move(2, 1240, 1080, self.now)
         self.assertEqual(move.position, (1., 1.))
