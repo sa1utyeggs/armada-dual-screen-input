@@ -19,6 +19,7 @@ import sys
 import tempfile
 
 from release import APP, PackageError, digest, prepare, verify, version
+from desktop_cache import refresh_desktop
 
 ROOT = Path(__file__).resolve().parent.parent
 UNIT = 'thor-panel.service'  # Preserve existing shortcuts/configuration.
@@ -142,8 +143,16 @@ print(json.dumps(checks))
 
 
 class Installer:
-    def __init__(self, paths, *, runner=command):
+    def __init__(self, paths, *, runner=command, refresher=None):
         self.paths, self.runner = paths, runner
+        self.refresher = refresher or refresh_desktop
+
+    def refresh(self):
+        try:
+            return self.refresher(self.paths)
+        except Exception:
+            # Installation has already committed. Cache helpers cannot roll it back.
+            return {'warnings': ['桌面缓存刷新失败；已完成的操作不受影响']}
 
     def state(self):
         path = self.paths.state
@@ -288,7 +297,7 @@ class Installer:
                 if created: shutil.rmtree(target)
                 raise
             return {'installed': manifest['version'], 'root': str(root), 'autostart_changed': False,
-                    'started': active, 'configuration_changed': False}
+                    'started': active, 'configuration_changed': False, 'desktop_refresh': self.refresh()}
 
     def rollback(self):
         root = self.paths.root
@@ -300,20 +309,31 @@ class Installer:
             if not previous.resolve().is_relative_to(root / 'releases') or previous.resolve().name not in state['releases']:
                 raise PackageError('Previous release is not managed by this installer')
             manifest = verify(previous.resolve())
+            items = self.metadata(previous.resolve(), desktop=str(self.paths.external()['desktop']) in state['files'])
+            self.check_owned(items, state)
+            snapshots = {p: (p.read_bytes(), p.stat().st_mode & 0o777) if p.exists() else None for p in items}
             old_state = self.paths.state.read_bytes()
             active = self.runner(['is-active', '--quiet', UNIT], check=False).returncode == 0
             try:
                 if active: self.runner(['stop', UNIT])
                 link(current, older); link(previous, before)
+                for path, (data, mode) in items.items(): atomic(path, data, mode)
                 state.update(version=manifest['version'], current=current.resolve().name)
+                state['files'].update({str(p): digest(p) for p in items})
                 self.save_state(state)
+                self.runner(['daemon-reload'])
                 if active: self.runner(['start', UNIT])
             except BaseException:
                 link(current, before); link(previous, older)
+                for path, original in snapshots.items():
+                    if original is None: path.unlink(missing_ok=True)
+                    else: atomic(path, *original)
                 atomic(self.paths.state, old_state, 0o600)
+                self.runner(['daemon-reload'], check=False)
                 if active: self.runner(['start', UNIT], check=False)
                 raise
-            return {'rolled_back_to': manifest['version'], 'configuration_changed': False}
+            return {'rolled_back_to': manifest['version'], 'configuration_changed': False,
+                    'desktop_refresh': self.refresh()}
 
     def uninstall(self):
         leftovers = []
@@ -347,7 +367,8 @@ class Installer:
                 state['phase'] = 'uninstalled-with-leftovers'; self.save_state(state)
             else:
                 self.paths.state.unlink(missing_ok=True)
-        return {'uninstalled': True, 'configuration_and_logs_preserved': True, 'leftovers': leftovers}
+        return {'uninstalled': True, 'configuration_and_logs_preserved': True, 'leftovers': leftovers,
+                'desktop_refresh': self.refresh()}
 
 
 def main():
