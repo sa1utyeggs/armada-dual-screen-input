@@ -3,12 +3,14 @@ from pathlib import Path
 from types import SimpleNamespace
 import threading
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from armada_dual_screen_input.gamescope_target import InputUnavailable
 from armada_dual_screen_input.gamescope_focus import FocusSnapshot, FocusState
 from armada_dual_screen_input.touch_intent import TouchIntent
 from armada_dual_screen_input.native_input import NativeTouchInput, TouchRouteWatch
+from armada_dual_screen_input.native_touch import (VirtualTouchProbe, TouchSequence,
+    ABS_MT_ID, BTN_TOUCH, EV_ABS, EV_KEY, EV_SYN, SYN_REPORT)
 
 
 class Touch:
@@ -163,3 +165,99 @@ class NativeInputTests(unittest.TestCase):
             self.assertFalse(sender.active_contacts)
         finally:
             sender.close()
+
+    def test_one_full_guard_per_contact_and_no_readiness_reuse(self):
+        self.target.is_current = Mock(return_value=True)
+        self.sender.focus_check = Mock(return_value=True)
+        self.sender.route.current = Mock(return_value=True)
+        for kind in ('down', 'move', 'up'):
+            self.sender.send(TouchIntent(kind, (.4, .5)))
+        for check in (self.target.is_current, self.sender.focus_check,
+                      self.sender.route.current):
+            self.assertEqual(check.call_count, 3)
+        self.assertTrue(self.sender._became_ready)
+        self.assertFalse(self.sender.active_contacts)
+
+    def test_poll_checks_each_condition_once_and_ready_stays_fresh(self):
+        self.target.is_current = Mock(return_value=True)
+        self.sender.focus_check = Mock(return_value=True)
+        self.sender.route.current = Mock(return_value=True)
+        self.sender.poll()
+        for check in (self.target.is_current, self.sender.focus_check,
+                      self.sender.route.current):
+            self.assertEqual(check.call_count, 1)
+        self.sender.route.current.return_value = False
+        self.assertFalse(self.sender.ready)
+        with self.assertRaises(InputUnavailable):
+            self.sender.poll()
+
+    def test_target_focus_or_route_lost_after_poll_blocks_move_and_lifts(self):
+        for failure in ('target', 'focus', 'route'):
+            with self.subTest(failure=failure):
+                self.current = self.focused = self.sender.route.valid = True
+                self.sender.send(TouchIntent('down', (.4, .5)))
+                self.sender.poll()
+                self.current = failure != 'target'
+                self.focused = failure != 'focus'
+                self.sender.route.valid = failure != 'route'
+                count = len(self.sender.touch.events)
+                with self.assertRaises(InputUnavailable):
+                    self.sender.send(TouchIntent('move', (.6, .5)))
+                self.assertEqual(self.sender.touch.events[count:], ['up'])
+                self.assertFalse(self.sender.held)
+                self.assertFalse(self.sender.active_contacts)
+
+    def test_cancel_lifts_contacts_even_when_target_is_unavailable(self):
+        for tid in (1, 2):
+            self.sender.send(TouchIntent('down', (.4, .5), contact_id=tid))
+        self.current = self.focused = self.sender.route.valid = False
+        self.sender.send(TouchIntent('cancel', (.5, .5)))
+        self.assertEqual(self.sender.touch.events, ['down', 'down', 'up', 'up'])
+        self.assertFalse(self.sender.held)
+        self.assertFalse(self.sender.active_contacts)
+
+    def test_closed_sender_rejects_contacts_and_unknown_up_writes_nothing(self):
+        self.sender.send(TouchIntent('up', (.4, .5), contact_id=999))
+        self.assertEqual(self.sender.touch.events, [])
+        self.sender.close()
+        with self.assertRaises(InputUnavailable):
+            self.sender.send(TouchIntent('down', (.4, .5)))
+        self.assertEqual(self.sender.touch.events, [])
+
+    def real_encoder(self):
+        # Exercise the actual final guard and Type B encoding, replacing only
+        # the kernel write. Never construct a uinput device or load libevdev.
+        probe = object.__new__(VirtualTouchProbe)
+        probe.sequence = TouchSequence('normal', max_contacts=5)
+        probe.guard = self.sender._guard
+        probe.uinput = 1
+        writes = []
+        probe._write = lambda events: writes.extend(events)
+        probe.close = probe.release_all
+        self.sender.touch = probe
+        return writes
+
+    def test_real_encoder_keeps_five_independent_reports_and_one_guard_each(self):
+        writes = self.real_encoder()
+        for tid in range(5):
+            self.sender.send(TouchIntent('down', (.1+tid*.1, .3), contact_id=tid))
+        writes.clear()
+        self.target.is_current = Mock(return_value=True)
+        for tid in range(5):
+            self.sender.send(TouchIntent('move', (.1+tid*.1, .4), contact_id=tid))
+        self.assertEqual(self.target.is_current.call_count, 5)
+        self.assertEqual(sum(e == (EV_SYN, SYN_REPORT, 0) for e in writes), 5)
+        self.assertEqual(len(self.sender.touch.sequence.contacts), 5)
+
+    def test_real_encoder_final_guard_denies_late_change_and_releases_once(self):
+        writes = self.real_encoder()
+        self.sender.send(TouchIntent('down', (.4, .5)))
+        self.sender.poll()
+        writes.clear()
+        self.focused = False
+        with self.assertRaises(InputUnavailable):
+            self.sender.send(TouchIntent('move', (.6, .5)))
+        self.assertEqual(sum(e == (EV_ABS, ABS_MT_ID, -1) for e in writes), 1)
+        self.assertEqual(sum(e == (EV_KEY, BTN_TOUCH, 0) for e in writes), 1)
+        self.assertFalse(self.sender.touch.sequence.contacts)
+        self.assertFalse(self.sender.active_contacts)

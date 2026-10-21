@@ -121,15 +121,15 @@ class NativeTouchInput:
     def poll(self):
         if self._closed or not self.target.is_current() or not self.focus_check():
             raise InputUnavailable('native touch target or application touch policy changed')
-        if self._became_ready and not self.route.current(time.monotonic()):
+        route_ready = self.route is not None and self.route.current(time.monotonic())
+        if self._became_ready and not route_ready:
             raise InputUnavailable('virtual touchscreen route changed or check expired')
-        if self.ready:
+        if route_ready:
             self._became_ready = True
 
     def send(self, intent):
-        self.poll()
-        if not self.ready:
-            raise InputUnavailable('native touchscreen is not ready')
+        if self._closed:
+            raise InputUnavailable('native touchscreen is closed')
         try:
             if intent.kind == 'cancel':
                 self.release_all()
@@ -141,7 +141,11 @@ class NativeTouchInput:
                     raise ValueError('native contact is not held')
                 if intent.kind == 'up' and tid not in self.active_contacts:
                     return
+                # contact() invokes the full guard immediately before encoding
+                # and writing this event. Do not repeat poll()/ready checks here
+                # or reuse a previous readiness result across contact writes.
                 self.touch.contact(intent.kind, tid, *intent.position)
+                self._became_ready = True
                 if intent.kind == 'up':
                     self.active_contacts.discard(tid)
                 else:
@@ -151,7 +155,10 @@ class NativeTouchInput:
             else:
                 raise ValueError('unknown native touch intent')
         except RuntimeError as error:
-            raise InputUnavailable(str(error)) from error
+            try:
+                self.release_all()
+            finally:
+                raise InputUnavailable(str(error)) from error
 
     def release_all(self):
         try:
