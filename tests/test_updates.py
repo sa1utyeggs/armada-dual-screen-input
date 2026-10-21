@@ -7,6 +7,7 @@ import tarfile
 import tempfile
 import unittest
 from unittest.mock import Mock, patch
+from urllib.error import HTTPError
 
 from armada_dual_screen_input.updates import (
     API, APP, REPO, HTTPSRedirects, UpdateError, latest_release, newer,
@@ -59,6 +60,20 @@ class ReleaseTests(unittest.TestCase):
             return io.BytesIO(json.dumps(release_data()).encode())
         self.assertEqual(latest_release(opener=opener).tag, 'v0.2.0')
         self.assertEqual(opened, [API])
+
+    def test_rate_limits_and_other_http_failures_are_distinguished_without_retrying(self):
+        for code, headers, message in (
+                (403, {'X-RateLimit-Remaining': '0'}, '查询次数已达上限'),
+                (429, {}, '查询次数已达上限'),
+                (403, None, 'GitHub HTTP 403'),
+                (502, {}, 'GitHub HTTP 502')):
+            with self.subTest(code=code, headers=headers):
+                error = HTTPError(API, code, 'fixture failure', headers, None)
+                opener = Mock(side_effect=error)
+                with self.assertRaisesRegex(UpdateError, message) as caught:
+                    latest_release(opener=opener)
+                self.assertIs(caught.exception.__cause__, error)
+                opener.assert_called_once_with(API)
 
     def test_redirects_cannot_downgrade_or_leave_official_hosts(self):
         for url in ('http://github.com/asset', 'https://evil.example/file'):
