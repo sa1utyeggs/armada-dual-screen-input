@@ -2,7 +2,7 @@
 
 ArmadaOS 双屏掌机的副屏键盘、触控板和触屏应用。看上屏，在下屏操作；两种触屏模式均不需要镜像或持续传输画面。
 
-目前为预览版，**实机验证设备是 AYN Thor，主要支持 Steam Game Mode**。Desktop Mode 默认关闭，其他机型仍需适配和验证。
+当前正式版为 **v0.1.0**，**实机验证设备是 AYN Thor，主要支持 Steam Game Mode**。Desktop Mode 默认关闭，其他机型仍需适配和验证。
 
 ## 安装
 
@@ -19,12 +19,12 @@ curl -fsSL https://raw.githubusercontent.com/sa1utyeggs/armada-dual-screen-input
 维护者推送与 `VERSION` 对应的 `v版本号` tag 后，CI 会自动检查、构建并发布；详见[发布流程](docs/development.md#发布)。
 选择版本，在 **Assets** 中同时下载 `armada-dual-screen-input-<版本>-aarch64.tar.gz` 和 `SHA256SUMS`，再传到掌机。
 该安装包包含私有运行库；GitHub 自动生成的 **Source code** 压缩包只是源码，不能代替离线安装包。
-以下以 `v0.1.0-preview.2` 为例：
+以下以 `v0.1.0` 为例：
 
 ```bash
 sha256sum -c SHA256SUMS
-tar -xzf armada-dual-screen-input-0.1.0-preview.2-aarch64.tar.gz
-cd armada-dual-screen-input-0.1.0-preview.2-aarch64
+tar -xzf armada-dual-screen-input-0.1.0-aarch64.tar.gz
+cd armada-dual-screen-input-0.1.0-aarch64
 bash install.sh
 ```
 

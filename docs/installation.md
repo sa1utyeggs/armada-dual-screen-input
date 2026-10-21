@@ -1,6 +1,6 @@
 # 安装、升级与卸载
 
-当前为预览版，实机验证以 AYN Thor / Armada `20261010.c3d178c` / Linux 7.2.6 / Steam Game Mode 为准。
+当前正式版为 `v0.1.0`，实机验证以 AYN Thor / Armada `20261010.c3d178c` / Linux 7.2.6 / Steam Game Mode 为准。
 其他机型和系统版本见 [兼容范围](compatibility.md)。安装器以普通用户运行，**不要加 sudo**。
 
 ## 一键在线安装（推荐）
@@ -20,7 +20,7 @@ curl -fsSL https://raw.githubusercontent.com/sa1utyeggs/armada-dual-screen-input
 下载脚本后，可选用指定标签/提交，或只查看安装计划：
 
 ```bash
-bash get.sh --ref v0.1.0-preview.2
+bash get.sh --ref v0.1.0
 bash get.sh --dry-run
 ```
 
@@ -42,12 +42,12 @@ bash get.sh --dry-run
 GitHub 自动生成的 **Source code (zip)** / **Source code (tar.gz)** 不包含打包后的运行库，不能当作上述离线安装包使用。
 可以在另一台电脑下载这两个附件，再通过 LocalSend、USB 或其他方式传到掌机；安装时无需联网。
 
-接收方拿到 `armada-dual-screen-input-0.1.0-preview.2-aarch64.tar.gz` 和 `SHA256SUMS` 后，在 Armada 桌面终端执行：
+接收方拿到 `armada-dual-screen-input-0.1.0-aarch64.tar.gz` 和 `SHA256SUMS` 后，在 Armada 桌面终端执行：
 
 ```bash
 sha256sum -c SHA256SUMS
-tar -xzf armada-dual-screen-input-0.1.0-preview.2-aarch64.tar.gz
-cd armada-dual-screen-input-0.1.0-preview.2-aarch64
+tar -xzf armada-dual-screen-input-0.1.0-aarch64.tar.gz
+cd armada-dual-screen-input-0.1.0-aarch64
 bash install.sh
 ```
 
