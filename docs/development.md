@@ -35,6 +35,21 @@ python3 -B tools/run.py --run
 默认只发现 Game Mode。不要在 CI、用户游戏运行时自动执行 `native_touch_probe.py` 或 `position_input_smoke.py`；这些开发工具只针对自己的测试窗口，需要显式安排。
 开发工具的导入示例为 `PYTHONPATH=src python3 -B tools/position_input_smoke.py`，还需正确的 GTK 私有库/typelib 环境。
 
+键盘时序检查使用真实 GLib 时钟，默认只离屏绘制并记录模拟设备，不创建窗口或输入设备：
+
+```bash
+python3 -B tools/keyboard_latency_bench.py --output /tmp/keyboard-timing.json
+```
+
+在已安排交互测试、Steam 首页空闲时，可显式运行自己的上屏输入窗口：
+
+```bash
+python3 -B tools/keyboard_latency_bench.py --run-own-window-test --output /tmp/keyboard-native.json
+python3 -B tools/keyboard_ime_latency_bench.py --run-own-window-test --output /tmp/keyboard-ime.json
+```
+
+两个交互工具必须逐个运行。它们只使用固定测试文字，要求自己的窗口保持焦点，失焦即停止；不向游戏或 Steam 搜索框发送输入，不保存个人文字、不改变输入设置。检查包括每秒 5/10/15 次点按、长按字母/退格，以及拼音候选/空格提交。`passed` 代表内容/次序/释放正确，延迟数值供比较，不代表物理触摸到显示的全链路延迟，也不是长期无卡顿保证。详见 [测量边界与结果](keyboard-latency.md)。
+
 ## 构建离线包
 
 ```bash

@@ -5,11 +5,55 @@ devices, so labels can also be checked on an offscreen image surface.
 """
 from __future__ import annotations
 
+from collections import OrderedDict
+import threading
+
 import gi
 
 gi.require_version("Pango", "1.0")
 gi.require_version("PangoCairo", "1.0")
 from gi.repository import Pango, PangoCairo
+
+_MAX_LAYOUTS = 256
+_local = threading.local()
+
+
+def clear_layout_cache():
+    """Release this UI thread's bounded, in-memory text layouts."""
+    _local.layouts = OrderedDict()
+
+
+def _drawing_context(cr):
+    matrix = cr.get_matrix()
+    surface = cr.get_target()
+    options = surface.get_font_options()
+    options.merge(cr.get_font_options())
+    fontmap = PangoCairo.FontMap.get_default()
+    # Translation changes the draw location, not glyph sizing. Retaining it
+    # would defeat reuse during the panel's small orbital offset. The current
+    # Cairo target/transform is still applied with update_layout on every hit.
+    return (matrix.xx, matrix.yx, matrix.xy, matrix.yy,
+            surface.get_device_scale(), options.hash(),
+            fontmap.get_serial(), fontmap.get_resolution())
+
+
+def _cached_layout(cr, text, size, bold, max_width):
+    layouts = getattr(_local, 'layouts', None)
+    if layouts is None:
+        clear_layout_cache()
+        layouts = _local.layouts
+    key = (text, size, bold, max_width, _drawing_context(cr))
+    cached = layouts.pop(key, None)
+    if cached is None:
+        layout = make_layout(cr, text, size, bold=bold, max_width=max_width)
+        ink, _ = layout.get_pixel_extents()
+        cached = layout, ink
+    else:
+        PangoCairo.update_layout(cr, cached[0])
+    layouts[key] = cached
+    if len(layouts) > _MAX_LAYOUTS:
+        layouts.popitem(last=False)
+    return cached
 
 
 def make_layout(cr, text: str, size: float, *, bold: bool = False, max_width: float | None = None):
@@ -33,8 +77,7 @@ def make_layout(cr, text: str, size: float, *, bold: bool = False, max_width: fl
 def draw_text(cr, text: str, x: float, y: float, size: float, *, bold: bool = False,
               max_width: float | None = None, centered: bool = False):
     """Draw using the current source colour, aligning by the actual ink box."""
-    layout = make_layout(cr, text, size, bold=bold, max_width=max_width)
-    ink, _ = layout.get_pixel_extents()
+    layout, ink = _cached_layout(cr, text, size, bold, max_width)
     if centered:
         cr.move_to(x - ink.x - ink.width / 2.0, y - ink.y - ink.height / 2.0)
     else:
