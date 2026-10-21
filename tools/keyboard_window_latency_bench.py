@@ -21,6 +21,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--run-own-window-test',action='store_true',required=True)
     parser.add_argument('--output',type=Path)
+    parser.add_argument('--defer-status-during-typing',action='store_true')
     args=parser.parse_args()
     if sys.platform!='linux': parser.error('Linux GTK required')
     sys.path.insert(0,str(Path(__file__).resolve().parent.parent/'src'))
@@ -98,7 +99,9 @@ def main():
                 area.queue_draw(); return True
             loop.quit(); return False
         def status():
-            area.queue_draw(); return True
+            if args.defer_status_during_typing: app._queue_stats_draw()
+            else: area.queue_draw()
+            return True
         try:
             window.show_all()
             sources=[GLib.timeout_add(62,tick),GLib.timeout_add(5,heartbeat),
@@ -110,6 +113,7 @@ def main():
                 if GLib.MainContext.default().find_source_by_id(source): GLib.source_remove(source)
             window.destroy()
     result={'scope':'own-lower-wayland-window-no-input','error':state['error'],
+            'defer_status_during_typing':args.defer_status_during_typing,
             'cases':[{key:summary(value) if isinstance(value,list) else value for key,value in record.items()} for record in records]}
     result['passed']=not result['error'] and all(c['draw']['count']>=30 for c in result['cases'])
     encoded=json.dumps(result,indent=2)

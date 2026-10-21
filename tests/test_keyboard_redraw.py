@@ -41,6 +41,64 @@ class DamageTests(unittest.TestCase):
 
 @unittest.skipUnless(sys.platform=='linux','Linux Pango/Cairo required')
 class DamagePixels(unittest.TestCase):
+    def test_partial_status_repaint_matches_full_frame_after_values_change(self):
+        import cairo
+        from armada_dual_screen_input.panel_app import PanelApp
+        from keyboard_layout import KeyboardLayout
+        app=PanelApp.__new__(PanelApp)
+        app.mode='split'; app.kb_layout=KeyboardLayout(0,500,1240,580)
+        app.active_key_press=30; app.keyboard_redraw=KeyboardRedraw()
+        app.pen_mode='off'; app.touch_mode='position'; app.held_ui_button=None; app.languages=None
+        values={'bat_cap':100,'cpu_load':1,'cpu_temp':31}
+        app.stats=SimpleNamespace(get_stats=lambda:values)
+        surface=cairo.ImageSurface(cairo.FORMAT_ARGB32,1240,1080)
+        def paint(target,partial=False):
+            cr=cairo.Context(target)
+            if partial: cr.rectangle(-5,75,1250,54); cr.clip()
+            cr.set_source_rgb(0,0,0); cr.paint(); cr.translate(.4,1.2)
+            app._draw_ui(cr)
+        paint(surface)
+        values.update(bat_cap=9,cpu_load=100,cpu_temp=100,ram_used_gb=12.3)
+        paint(surface,True)
+        reference=cairo.ImageSurface(cairo.FORMAT_ARGB32,1240,1080)
+        paint(reference)
+        self.assertEqual(bytes(surface.get_data()),bytes(reference.get_data()))
+
+    def test_status_updates_during_typing_do_not_redraw_the_keyboard(self):
+        from unittest.mock import Mock, patch
+        from armada_dual_screen_input import panel_app as panel
+        app=panel.PanelApp.__new__(panel.PanelApp)
+        app.mode='split'; app.ui_hidden=app.collapsed=False
+        app.held_key=None; app._last_keyboard_activity=99.9
+        app.drawing_area=SimpleNamespace(queue_draw=Mock(),queue_draw_area=Mock(),
+            get_allocation=lambda:SimpleNamespace(width=1240,height=1080))
+        with patch.object(panel.time,'monotonic',return_value=100):
+            app._queue_stats_draw()
+        app.drawing_area.queue_draw.assert_not_called()
+        x,y,w,h=app.drawing_area.queue_draw_area.call_args.args
+        self.assertLessEqual(y+h,panel.upstream.HEADER_HEIGHT+6)
+        self.assertGreaterEqual(y,panel.upstream.HEADER_BUTTONS_H-6)
+        app.held_key=object(); app._last_keyboard_activity=0
+        with patch.object(panel.time,'monotonic',return_value=100):
+            app._queue_stats_draw()
+        self.assertEqual(app.drawing_area.queue_draw_area.call_count,2)
+
+    def test_quiet_keyboard_restores_full_status_and_orbital_repaint(self):
+        from unittest.mock import Mock, patch
+        from armada_dual_screen_input import panel_app as panel
+        app=panel.PanelApp.__new__(panel.PanelApp)
+        app.mode='split'; app.ui_hidden=app.collapsed=False
+        app.held_key=None; app._last_keyboard_activity=99.7
+        app.drawing_area=SimpleNamespace(queue_draw=Mock(),queue_draw_area=Mock())
+        with patch.object(panel.time,'monotonic',return_value=100):
+            app._queue_stats_draw()
+        app.drawing_area.queue_draw.assert_called_once()
+        app.mode='trackpad'; app._last_keyboard_activity=100
+        with patch.object(panel.time,'monotonic',return_value=100):
+            app._queue_stats_draw()
+        self.assertEqual(app.drawing_area.queue_draw.call_count,2)
+        app.drawing_area.queue_draw_area.assert_not_called()
+
     def test_candidate_overlay_partial_repaint_clears_back_to_trackpad(self):
         import cairo
         from armada_dual_screen_input.panel_app import PanelApp

@@ -304,8 +304,21 @@ class PanelApp(upstream.ThorApp):
         if self._cleaned:
             return False
         self._sync_keyboard_guard()
-        self.drawing_area.queue_draw()
+        self._queue_stats_draw()
         return True
+
+    def _queue_stats_draw(self):
+        recent = time.monotonic()-getattr(self, '_last_keyboard_activity', -float('inf')) < .25
+        typing = (self.mode == 'split' and not self.collapsed and not self.ui_hidden
+                  and (recent or getattr(self, 'held_key', None) is not None))
+        if not typing:
+            self.drawing_area.queue_draw()
+            return
+        # The monitor row changes once per second, not every keycap. Let a
+        # quiet status tick perform the full repaint/orbital update instead.
+        allocation = self.drawing_area.get_allocation()
+        rect = (-5,upstream.HEADER_BUTTONS_H-5,SCREEN_WIDTH+10,upstream.STATUS_RIBBON_H+10)
+        self.drawing_area.queue_draw_area(*widget_rect(rect,allocation.width,allocation.height))
 
     def _sync_keyboard_guard(self, *_) -> None:
         if getattr(self, "keyboard_guard", None) is not None:
@@ -348,6 +361,7 @@ class PanelApp(upstream.ThorApp):
 
     def _queue_keyboard_draw(self):
         """Invalidate only old/new keycaps when no label or modifier changed."""
+        self._last_keyboard_activity = time.monotonic()
         def invalidate():
             if self._cleaned:
                 return False
@@ -369,6 +383,7 @@ class PanelApp(upstream.ThorApp):
     def _queue_language_draw(self):
         if self._cleaned:
             return
+        self._last_keyboard_activity = time.monotonic()
         if self.mode != 'split' or self.collapsed or self.ui_hidden:
             self.drawing_area.queue_draw()
             return
