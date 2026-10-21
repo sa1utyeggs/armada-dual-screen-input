@@ -22,9 +22,10 @@ class PanelPosition:
 
     def __init__(self, *, runtime=None, resolve=None, focus_factory=FocusWatcher,
                  marker_factory=MarkerOverlay, native_factory=NativeTouchInput,
-                 clock=time.monotonic, sensitivity=2.0, touch_mode='position'):
+                 clock=time.monotonic, sensitivity=2.0, touch_mode='position', pad=None):
         if touch_mode not in TOUCH_MODES:
             raise ValueError('unsupported touch mode')
+        self.pad = self.pad if pad is None else pad
         self.runtime = Path(runtime or os.environ.get('XDG_RUNTIME_DIR', '/nonexistent'))
         self.resolve = resolve or (lambda: GamescopeTarget.resolve(self.runtime))
         self.focus_factory, self.marker_factory = focus_factory, marker_factory

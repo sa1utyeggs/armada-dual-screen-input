@@ -256,6 +256,13 @@ class CompactPanelLayoutTests(unittest.TestCase):
 
     def test_position_controls_do_not_emit_mouse_buttons(self):
         self.app.mode = 'position'
+        # Submodes are selected only in the secondary tab row.
+        for mode in ('direct', 'position'):
+            _, _, rect = next(t for t in self.panel.touchscreen_tabs.TABS if t[0] == mode)
+            self.app._handle_touch_down(10, rect.x+rect.width/2, rect.y+rect.height/2, 1.)
+            self.app._handle_touch_move(10, 620, 600, 1.1)
+            self.app._handle_timed_touch_move(10, 620, 700, 1.2, .01)
+            self.app._handle_touch_up(10, 1.3)
         for key in ('right', 'left', 'pen'):
             _, x, width = next(b for b in self.panel.upstream.HEADER_BUTTONS if b[0] == key)
             self.app._handle_header_touch(1, x+width/2, 30, True)
@@ -264,21 +271,55 @@ class CompactPanelLayoutTests(unittest.TestCase):
         self.app.position.center.assert_called_once()
         self.app.position.toggle.assert_not_called()
         self.app.position.pause.assert_not_called()
+        self.app.position.touch.assert_not_called()
         self.assertFalse(self.bridge.events)
 
     def test_direct_mode_has_no_pause_or_release_control_and_no_center_action(self):
         self.app.mode = 'position'
         self.app.touch_mode = 'direct'
-        labels = [self.app._header_button_look(key)[0] for key in ('left','right')]
-        self.assertEqual(labels, ['定位','直接触屏'])
         with patch.object(self.panel.steam_style, 'draw_header') as draw:
             self.app._draw_header(Mock())
-        self.assertNotIn('pen', [button[0] for button in draw.call_args.args[2]])
+        self.assertTrue({'left', 'right', 'pen'}.isdisjoint(
+            button[0] for button in draw.call_args.args[2]))
         _, x, width = next(b for b in self.panel.upstream.HEADER_BUTTONS if b[0] == 'pen')
         self.app._handle_header_touch(1, x+width/2, 30, True)
         self.app.position.center.assert_not_called()
         self.app.position.pause.assert_not_called()
         self.assertFalse(self.bridge.events)
+
+    def test_secondary_tabs_draw_selected_state_with_shared_hit_geometry(self):
+        tabs = self.panel.touchscreen_tabs
+        for selected in ('position', 'direct'):
+            with patch.object(self.panel.steam_style, 'button') as draw:
+                tabs.draw(Mock(), selected)
+            self.assertEqual(len(draw.call_args_list), 2)
+            for call, (mode, label, rect) in zip(draw.call_args_list, tabs.TABS):
+                self.assertEqual(call.args[1:],
+                                 (rect.x, rect.y, rect.width, rect.height,
+                                  label, mode == selected))
+                self.assertEqual(call.kwargs, {'tab': True})
+
+    def test_secondary_tab_gap_and_status_cannot_become_native_contacts(self):
+        self.app.mode = 'position'
+        for x, y in ((620, 160), (300, 124), (300, 220), (300, 239.999)):
+            self.app._handle_touch_down(10, x, y, 1.)
+            self.assertEqual(self.app._touch_owner[10], 'touch_controls')
+            self.app._handle_touch_move(10, 620, 700, 1.1)
+            self.app._handle_timed_touch_move(10, 620, 700, 1.2, .01)
+            self.app._handle_touch_up(10, 1.3)
+        self.app.position.set_touch_mode.assert_not_called()
+        self.app.position.touch.assert_not_called()
+        self.assertFalse(self.bridge.events)
+
+    def test_reselecting_current_secondary_tab_keeps_controller_and_config(self):
+        self.app.mode = 'position'
+        _, _, rect = self.panel.touchscreen_tabs.TABS[0]
+        self.app._handle_touch_down(10, rect.x+20, rect.y+20, 1.)
+        self.assertEqual(self.app._touch_owner[10], 'touch_controls')
+        self.app._handle_touch_up(10, 1.1)
+        self.app.position.set_touch_mode.assert_not_called()
+        self.app.save_config.assert_not_called()
+        self.app.position.touch.assert_not_called()
 
     def test_position_collapse_unmap_release_and_expand_waits_for_new_group(self):
         self.app.mode = 'position'

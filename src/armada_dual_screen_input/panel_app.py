@@ -57,6 +57,7 @@ from .scroll_output import ScaledScroll, read_scroll_scale
 from .steam_keyboard_guard import SteamKeyboardGuard, keyboard_guard_wanted
 from .panel_modes import SUPPORTED_MODES, normalize_mode
 from .panel_position import PanelPosition, TOUCH_MODES
+from . import touchscreen_tabs
 from .input_settings import read_settings, write_settings, SettingsDraft, NUMBERS, CHOICES
 from . import settings_view
 
@@ -93,7 +94,7 @@ class PanelApp(upstream.ThorApp):
         self.main_loop = None
         super().__init__()
         self.position = PanelPosition(sensitivity=self.input_cfg["position_sensitivity"],
-                                      touch_mode=self.touch_mode)
+                                      touch_mode=self.touch_mode, pad=touchscreen_tabs.PAD)
         self._position_revision = self.position.revision
         self.scroll_output = ScaledScroll(self.bridge.emit_scroll, self.scroll_scale)
         self.bridge.emit_scroll = self.scroll_output.scroll
@@ -549,6 +550,12 @@ class PanelApp(upstream.ThorApp):
             self._preferences_down(tid, x, y)
             return
         if self.mode == "position" and y >= upstream.HEADER_HEIGHT:
+            if y < touchscreen_tabs.CONTENT_TOP:
+                self._touch_owner[tid] = 'touch_controls'
+                selected = touchscreen_tabs.hit(x, y)
+                if selected is not None:
+                    self._set_touch_mode(selected)
+                return
             self._touch_owner[tid] = "position"
             if self.position is not None:
                 self.position.touch('begin', tid, now, x, y)
@@ -680,10 +687,9 @@ class PanelApp(upstream.ThorApp):
             # Settings never send clicks into the game or hold a mouse button.
             return
         elif self.mode == "position" and key in ("left", "right", "pen"):
-            if self.position is not None:
-                if key in ("left", "right"):
-                    self._set_touch_mode('position' if key == 'left' else 'direct')
-                elif getattr(self, 'touch_mode', 'position') == 'position':
+            # Submodes live in their own tab row, not the global mouse controls.
+            if key == 'pen' and self.position is not None:
+                if getattr(self, 'touch_mode', 'position') == 'position':
                     self._clear_panel_contacts()
                     self.position.center()
             self.drawing_area.queue_draw()
@@ -699,11 +705,8 @@ class PanelApp(upstream.ThorApp):
             return "设置", self.mode == "preferences", upstream.theme.BTN_ACCENT_DEFAULT
         if key == "position":
             return "触屏", self.mode == "position", upstream.theme.BTN_ACCENT_DEFAULT
-        if self.mode == "position" and key in ("left", "right", "pen"):
-            mode = getattr(self, 'touch_mode', 'position')
-            label = {"left": "定位", "right": "直接触屏", "pen": "定位居中"}[key]
-            return label, ((key == 'left' and mode == 'position') or
-                           (key == 'right' and mode == 'direct')), upstream.theme.BTN_ACCENT_DEFAULT
+        if self.mode == "position" and key == "pen":
+            return "定位居中", False, upstream.theme.BTN_ACCENT_DEFAULT
         if key == "close":
             return "关闭", True, (0.40, 0.10, 0.12)
         if key == "pen":
@@ -725,8 +728,11 @@ class PanelApp(upstream.ThorApp):
 
     def _draw_header(self, cr) -> None:
         buttons = upstream.HEADER_BUTTONS
-        if self.mode == 'position' and getattr(self, 'touch_mode', 'position') == 'direct':
-            buttons = tuple(button for button in buttons if button[0] != 'pen')
+        if self.mode == 'position':
+            hidden = {'left', 'right'}
+            if getattr(self, 'touch_mode', 'position') == 'direct':
+                hidden.add('pen')
+            buttons = tuple(button for button in buttons if button[0] not in hidden)
         steam_style.draw_header(self, cr, buttons,
                                 upstream.HEADER_BUTTON_Y, upstream.HEADER_BUTTON_H,
                                 SCREEN_WIDTH)
@@ -817,10 +823,12 @@ class PanelApp(upstream.ThorApp):
         position = self.position
         if position is None:
             return
-        steam_style.rounded(cr, 20, 190, 1200, 860, 12,
+        touchscreen_tabs.draw(cr, position.touch_mode)
+        steam_style.rounded(cr, 20, touchscreen_tabs.CONTENT_TOP+8,
+                            1200, 1050-touchscreen_tabs.CONTENT_TOP-8, 12,
                             steam_style.SURFACE, steam_style.BORDER)
         cr.set_source_rgb(*(steam_style.GOOD if position.armed else steam_style.MUTED))
-        steam_style.label(cr, position.message, 20, 150, 24, max_width=1200)
+        steam_style.label(cr, position.message, 20, 220, 24, max_width=1200)
         if position.touch_mode == 'direct':
             cr.set_source_rgb(*steam_style.ACCENT)
             steam_style.label(cr, '直接触屏', 620, 370, 40, centered=True)
