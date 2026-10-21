@@ -16,7 +16,7 @@ import urllib.request
 APP = 'armada-dual-screen-input'
 ROOT_FILES = ('VERSION', 'README.md', 'README.en.md', 'CHANGELOG.md', 'LICENSE', 'THIRD_PARTY.md', 'install.sh', 'uninstall.sh')
 TREES = ('src', 'vendor', 'assets', 'packaging')
-TOOLS = ('manage.py', 'release.py', 'run.py', 'update.py')
+TOOLS = ('manage.py', 'release.py', 'run.py', 'update.py', 'desktop_cache.py')
 DOCS = ('installation.md', 'usage.md', 'compatibility.md', 'multilingual-keyboard.md')
 
 

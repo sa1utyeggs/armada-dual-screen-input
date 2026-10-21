@@ -20,7 +20,7 @@ class WorkerTests(unittest.TestCase):
         home = self.work / 'home'
         self.paths = Paths(home, home / '.local/share', home / '.config', home / '.local/bin', home / 'Desktop')
         self.services = fixture.Services()
-        self.installer = Installer(self.paths, runner=self.services)
+        self.installer = Installer(self.paths, runner=self.services, refresher=Mock(return_value={'warnings': []}))
         self.old = self.bundle('0.1.0')
         self.installer.install(self.old)
         self.current = (self.paths.root / 'current').resolve()
@@ -68,6 +68,14 @@ class WorkerTests(unittest.TestCase):
         self.assertEqual((self.paths.root / 'current').resolve(), self.current)
         self.assertEqual(self.config.read_bytes(), self.original)
         self.assertFalse(self.services.calls)
+
+    def test_cache_failure_is_reported_as_successful_update_with_advice(self):
+        self.installer.refresher.return_value = {'warnings': ['helper unavailable']}
+        self.perform()
+        self.assertEqual((self.paths.root / 'current/VERSION').read_text(), '0.2.0')
+        self.assertEqual(self.status.call_args.args[0], 'success')
+        self.assertIn('桌面缓存刷新未完成', self.status.call_args.args[1])
+        self.assertEqual(self.config.read_bytes(), self.original)
 
     def test_changed_latest_or_wrong_manifest_aborts_before_install(self):
         with self.assertRaisesRegex(worker.UpdateError, '已变化'):

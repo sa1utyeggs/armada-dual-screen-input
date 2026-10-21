@@ -55,6 +55,11 @@ def perform(tag, *, fetch=latest_release, prepare=prepare_download, installer=No
             raise UpdateError('应用版本已变化，请重新检查更新')
         result = installer.install(bundle)
         message = '已更新至 ' + tag + ('，面板已重新打开' if result['started'] else '，下次打开时生效')
+        refresh = result.get('desktop_refresh', {})
+        if refresh.get('warnings'):
+            message += '；桌面缓存刷新未完成，可在下次进入游戏模式后检查图标'
+        elif refresh.get('mobile_session_active'):
+            message += '；若主屏仍显示旧图标，下次重新进入游戏模式后刷新'
         status('success', message, tag=tag)
 
 

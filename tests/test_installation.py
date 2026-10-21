@@ -7,7 +7,7 @@ import sys
 import tempfile
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools'))
 from manage import Installer, Paths
@@ -32,7 +32,8 @@ class InstallTests(unittest.TestCase):
         self.work=tempfile.TemporaryDirectory();self.addCleanup(self.work.cleanup)
         self.work=Path(self.work.name);home=self.work/'home with spaces'
         self.paths=Paths(home,home/'.local/share',home/'.config',home/'.local/bin',home/'Desktop')
-        self.services=Services();self.installer=Installer(self.paths,runner=self.services)
+        self.services=Services();self.refresher=Mock(return_value={'warnings': []})
+        self.installer=Installer(self.paths,runner=self.services,refresher=self.refresher)
         self.repo=Path(__file__).resolve().parents[1]
 
     def bundle(self, version='0.1.0-preview.1', content='first'):
@@ -64,6 +65,41 @@ class InstallTests(unittest.TestCase):
         self.assertTrue(self.services.active)
         self.assertTrue(all('armada-bottom' not in str(c) and 'gamescope' not in str(c) for c in self.services.calls))
 
+    def test_cache_refresh_runs_after_committed_install_rollback_and_removal(self):
+        def refreshed(paths):
+            self.assertEqual(paths,self.paths)
+            if paths.state.exists():
+                self.assertEqual(json.loads(paths.state.read_text())['version'],
+                                 (paths.root/'current/VERSION').read_text().strip())
+            return {'warnings': []}
+        self.refresher.side_effect=refreshed
+        self.installer.install(self.bundle())
+        self.installer.install(self.bundle('0.2.0'))
+        self.installer.rollback()
+        self.installer.uninstall()
+        self.assertEqual(self.refresher.call_count,4)
+
+    def test_cache_failure_does_not_undo_successful_install(self):
+        self.refresher.side_effect=OSError('cache unavailable')
+        result=self.installer.install(self.bundle())
+        self.assertTrue(result['desktop_refresh']['warnings'])
+        self.assertTrue(self.paths.state.is_file())
+        self.assertEqual((self.paths.root/'current/code.py').read_text(),'first')
+
+    def test_rollback_restores_previous_icon_and_managed_metadata(self):
+        first=self.bundle();first_icon=(first/'assets/icons/armada-dual-screen-input.svg').read_bytes()
+        self.installer.install(first)
+        second=self.bundle('0.2.0')
+        icon=second/'assets/icons/armada-dual-screen-input.svg'
+        icon.write_bytes(first_icon+b'\n<!-- updated icon -->\n');seal(second)
+        self.installer.install(second)
+        self.assertNotEqual(self.paths.external()['icon'].read_bytes(),first_icon)
+        self.installer.rollback()
+        self.assertEqual(self.paths.external()['icon'].read_bytes(),first_icon)
+        state=json.loads(self.paths.state.read_text())
+        import hashlib
+        self.assertEqual(state['files'][str(self.paths.external()['icon'])],hashlib.sha256(first_icon).hexdigest())
+
     def test_failed_upgrade_restores_files_link_state_and_running_status(self):
         self.installer.install(self.bundle());self.services.active=True
         before={key:path.read_bytes() for key,path in self.paths.external().items()}
@@ -79,6 +115,7 @@ class InstallTests(unittest.TestCase):
         bundle=self.bundle();(bundle/'code.py').write_text('changed')
         with self.assertRaises(PackageError):self.installer.install(bundle)
         self.assertEqual(self.services.calls,[])
+        self.refresher.assert_not_called()
         self.assertFalse(self.paths.root.exists())
 
     def test_unrelated_desktop_file_is_not_overwritten(self):
@@ -135,11 +172,13 @@ class InstallTests(unittest.TestCase):
         self.installer.install(self.bundle());self.installer.install(self.bundle('0.2.0','second'))
         self.services.active=True
         before=self.paths.state.read_bytes()
+        metadata={name:path.read_bytes() for name,path in self.paths.external().items()}
         with patch.object(self.installer,'save_state',side_effect=OSError('disk full')):
             with self.assertRaises(OSError):self.installer.rollback()
         self.assertEqual(self.paths.state.read_bytes(),before)
         self.assertEqual((self.paths.root/'current/code.py').read_text(),'second')
         self.assertTrue(self.services.active)
+        self.assertEqual(metadata,{name:path.read_bytes() for name,path in self.paths.external().items()})
 
     def test_manifest_traversal_unlisted_file_and_symlink_are_rejected(self):
         bundle=self.bundle();data=json.loads((bundle/'manifest.json').read_text())
