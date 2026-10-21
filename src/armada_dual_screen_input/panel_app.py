@@ -51,6 +51,7 @@ from .toolkit_touch import ToolkitTouch
 from . import steam_style
 from . import steam_keys
 from .keyboard_pulses import KeyboardPulses
+from .keyboard_redraw import KeyboardRedraw, widget_rect
 from .keyboard_languages import KeyboardLanguages
 from . import keyboard_language_view
 from .scroll_output import ScaledScroll, read_scroll_scale
@@ -92,6 +93,7 @@ class PanelApp(upstream.ThorApp):
         # Unlike ToolkitTouch, this set survives logical-contact resets when
         # selecting a tab/control. Never mistake the selecting finger for up.
         self._physical_sequences = set()
+        self.keyboard_redraw = KeyboardRedraw()
         self.main_loop = None
         super().__init__()
         self.position = PanelPosition(sensitivity=self.input_cfg["position_sensitivity"],
@@ -152,7 +154,7 @@ class PanelApp(upstream.ThorApp):
             self.keyboard_guard = SteamKeyboardGuard()
         self.languages = KeyboardLanguages(
             self.input_cfg["keyboard_language"], mode=self.session_mode,
-            runtime=os.environ["XDG_RUNTIME_DIR"], changed=self.drawing_area.queue_draw,
+            runtime=os.environ["XDG_RUNTIME_DIR"], changed=self._queue_language_draw,
             dispatch=GLib.idle_add, forward_key=self.raw_key_pulses.tap,
         )
         self._install_language_key()
@@ -344,6 +346,36 @@ class PanelApp(upstream.ThorApp):
             return
         super()._keyboard_down(tid, x, y)
 
+    def _queue_keyboard_draw(self):
+        """Invalidate only old/new keycaps when no label or modifier changed."""
+        def invalidate():
+            if self._cleaned:
+                return False
+            damage = getattr(self, 'keyboard_redraw', None)
+            if (damage is None or self.mode != 'split' or self.ui_hidden
+                    or self.collapsed):
+                self.drawing_area.queue_draw()
+                return False
+            regions = damage.regions(self.kb_layout, self.active_key_press)
+            if regions is None:
+                self.drawing_area.queue_draw()
+                return False
+            allocation = self.drawing_area.get_allocation()
+            for rect in regions:
+                self.drawing_area.queue_draw_area(*widget_rect(rect,allocation.width,allocation.height))
+            return False
+        GLib.idle_add(invalidate)
+
+    def _queue_language_draw(self):
+        if self._cleaned:
+            return
+        if self.mode != 'split' or self.collapsed or self.ui_hidden:
+            self.drawing_area.queue_draw()
+            return
+        allocation = self.drawing_area.get_allocation()
+        rect = (-5,self._language_top()-5,SCREEN_WIDTH+10,keyboard_language_view.HEIGHT+10)
+        self.drawing_area.queue_draw_area(*widget_rect(rect,allocation.width,allocation.height))
+
     def _keep_contacts_alive(self) -> bool:
         if self._cleaned:
             return False
@@ -394,12 +426,15 @@ class PanelApp(upstream.ThorApp):
             self.key_pulses.stop_repeat()
 
     def _end_key_press(self) -> None:
+        before = getattr(self, 'active_key_press', None)
         if hasattr(self, "key_pulses"):
             # The character must go up before consuming its one-shot modifier.
             self.key_pulses.release()
         if hasattr(self, "raw_key_pulses"):
             self.raw_key_pulses.release()
         super()._end_key_press()
+        if before is not None:
+            self._queue_keyboard_draw()
 
     def _send_keys(self, events) -> None:
         events = list(events)
@@ -755,6 +790,8 @@ class PanelApp(upstream.ThorApp):
             if keyboard_language_view.visible(self.languages):
                 keyboard_language_view.draw(cr, self.languages, self._language_top())
         steam_keys.draw_keyboard(self, cr)
+        if getattr(self, 'keyboard_redraw', None) is not None:
+            self.keyboard_redraw.painted(self.kb_layout, self.active_key_press, cr)
 
     def _language_top(self):
         # The split overlay appears only while composing; idle pad/key bounds
@@ -794,6 +831,15 @@ class PanelApp(upstream.ThorApp):
     def _draw_quick_settings(self, cr) -> None:
         steam_style.draw_monitor(self, cr, upstream.HEADER_HEIGHT,
                                  SCREEN_WIDTH, SCREEN_HEIGHT)
+
+    def _paint_orbital_offset(self, cr, now):
+        # Partial keycap updates must use the same origin as the surrounding
+        # retained pixels. The regular full status repaint advances the orbit.
+        left,top,right,bottom = cr.clip_extents()
+        if (not hasattr(self, '_paint_origin')
+                or (left <= .5 and top <= .5 and right >= SCREEN_WIDTH-.5 and bottom >= SCREEN_HEIGHT-.5)):
+            self._paint_origin = self.burn_in.get_orbital_offset(now)
+        return self._paint_origin
 
     def _draw_collapsed(self, cr, width, height) -> None:
         steam_style.draw_collapsed(cr, width, height)

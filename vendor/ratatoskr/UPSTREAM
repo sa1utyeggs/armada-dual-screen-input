@@ -9,3 +9,9 @@ cannot move the pointer or start a glide. Two-to-one transitions clear pointer
 origin/velocity; duration, cumulative travel, established pointer intent and max
 finger count remain unchanged so real two-finger taps still right-click without
 reclassifying an earlier pointer movement as a tap.
+Local thor_app.py patch (2026-10-21): route keyboard press/release redraws
+through an overridable hook; the vendor default still queues the same full draw.
+The local adapter uses bounded keycap damage; keyboard input logic is unchanged.
+The paint origin is also overridable, retaining the original burn-in calculation
+by default. The adapter keeps a stable origin during partial damage and advances
+the OLED orbit on full repaints to avoid seams against retained pixels.

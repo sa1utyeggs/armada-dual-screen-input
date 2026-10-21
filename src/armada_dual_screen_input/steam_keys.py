@@ -121,9 +121,12 @@ def draw_keyboard(app, cr) -> None:
     layout = app.kb_layout
     shift_on = bool(layout.shift_active or layout.caps_lock)
     caps_lock = bool(layout.caps_lock)
+    left,top,right,bottom = cr.clip_extents()
     cr.save()
     for row in layout.rows:
         for key in row:
+            if key.x+key.w <= left or key.x >= right or key.y+key.h <= top or key.y >= bottom:
+                continue
             pressed = app.active_key_press == key.code
             latched = _modifier_latched(layout, key, shift_on)
             if key.special == "language":

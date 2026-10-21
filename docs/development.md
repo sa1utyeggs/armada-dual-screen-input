@@ -46,9 +46,10 @@ python3 -B tools/keyboard_latency_bench.py --output /tmp/keyboard-timing.json
 ```bash
 python3 -B tools/keyboard_latency_bench.py --run-own-window-test --output /tmp/keyboard-native.json
 python3 -B tools/keyboard_ime_latency_bench.py --run-own-window-test --output /tmp/keyboard-ime.json
+python3 -B tools/keyboard_window_latency_bench.py --run-own-window-test --output /tmp/keyboard-window.json
 ```
 
-两个交互工具必须逐个运行。它们只使用固定测试文字，要求自己的窗口保持焦点，失焦即停止；不向游戏或 Steam 搜索框发送输入，不保存个人文字、不改变输入设置。检查包括每秒 5/10/15 次点按、长按字母/退格，以及拼音候选/空格提交。`passed` 代表内容/次序/释放正确，延迟数值供比较，不代表物理触摸到显示的全链路延迟，也不是长期无卡顿保证。详见 [测量边界与结果](keyboard-latency.md)。
+这些交互工具必须逐个运行。前两个只使用固定测试文字，要求自己的上屏窗口保持焦点，失焦即停止；不向游戏或 Steam 搜索框发送输入，不保存个人文字、不改变输入设置。第三个短暂覆盖下屏，用模拟状态对比真实 Wayland 目标上的完整/局部绘制，不创建输入设备。检查包括每秒 5/10/15 次点按、长按字母/退格，以及拼音候选/空格提交。`passed` 代表内容/次序/释放正确或足量绘制完成，延迟数值供比较，不代表物理触摸到显示的全链路延迟，也不是长期无卡顿保证。详见 [测量边界与结果](keyboard-latency.md)。
 
 ## 构建离线包
 
