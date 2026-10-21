@@ -16,6 +16,7 @@ curl -fsSL https://raw.githubusercontent.com/sa1utyeggs/armada-dual-screen-input
 安装使用普通用户，**不要 sudo**。默认添加“虚拟键鼠”应用和桌面入口，**不自动启动、不启用开机自启动**。
 
 离线安装包在 [GitHub Releases](https://github.com/sa1utyeggs/armada-dual-screen-input/releases) 中按版本发布。
+维护者推送与 `VERSION` 对应的 `v版本号` tag 后，CI 会自动检查、构建并发布；详见[发布流程](docs/development.md#发布)。
 选择版本，在 **Assets** 中同时下载 `armada-dual-screen-input-<版本>-aarch64.tar.gz` 和 `SHA256SUMS`，再传到掌机。
 该安装包包含私有运行库；GitHub 自动生成的 **Source code** 压缩包只是源码，不能代替离线安装包。
 以下以 `v0.1.0-preview.2` 为例：
