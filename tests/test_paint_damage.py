@@ -5,8 +5,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
-from armada_dual_screen_input.paint_damage import clip_regions, intersects, ring_damage
-from armada_dual_screen_input.keyboard_redraw import widget_rect
+from armada_dual_screen_input.paint_damage import clip_regions, intersects
 
 
 class GeometryTests(unittest.TestCase):
@@ -23,19 +22,35 @@ class GeometryTests(unittest.TestCase):
                              clip_extents=lambda: (3, 5, 13, 25))
         self.assertEqual(clip_regions(cr), ((3, 5, 10, 20),))
 
-    def test_circle_damage_includes_departed_contacts_and_skips_unchanged_ones(self):
-        pad = SimpleNamespace(x=20, y=168, width=1200, height=882)
-        before = ((.1, .2, True), (.8, .9, True))
-        after = ((.2, .3, True), (.8, .9, True))
-        rects = ring_damage(before, after, pad)
-        self.assertEqual(len(rects), 2)
-        self.assertIn((112, 316.4, 56, 56), rects)
-        self.assertEqual(ring_damage(after, after, pad), ())
-        self.assertEqual(len(ring_damage(after, (), pad)), 2)
-
 
 @unittest.skipUnless(sys.platform == 'linux', 'Offscreen checks require Linux Cairo/GTK')
 class DrawingTests(unittest.TestCase):
+    def test_touch_tick_keeps_polling_without_contact_redraws(self):
+        app = self.app()
+        app.mode = 'position'; app.session_mode = 'game'; app.collapsed = False
+        app._cleaned = False; app._physical_sequences = set()
+        app.window = SimpleNamespace(get_mapped=lambda: True)
+        app.drawing_area = SimpleNamespace(queue_draw=Mock(), queue_draw_area=Mock())
+        app.position.gesture = SimpleNamespace(held=False)
+        app.position.revision = app._position_revision = 0
+        app.position.auto_requested = True
+        app.position.tick = Mock()
+        app._position_draw_state = None
+        app._on_position_tick()
+        app.drawing_area.queue_draw.reset_mock()
+        for held, rings in ((True, ((.1, .2, True),)),
+                            (True, ((.2, .3, True), (.5, .6, True))),
+                            (False, ())):
+            app.position.gesture.held = held
+            app.position.direct_gesture.rings = rings
+            app._on_position_tick()
+        app.drawing_area.queue_draw.assert_not_called()
+        app.drawing_area.queue_draw_area.assert_not_called()
+        self.assertEqual(app.position.tick.call_count, 4)
+        app.position.message = '目标变化'
+        app._on_position_tick()
+        app.drawing_area.queue_draw.assert_called_once()
+
     def test_key_release_uses_local_damage_without_a_hidden_full_redraw(self):
         from test_panel_keyboard import PanelKeyboardTests
         from armada_dual_screen_input import panel_app as panel
@@ -124,7 +139,7 @@ class DrawingTests(unittest.TestCase):
             app._draw_position(cr)
             self.assertEqual(draw.call_count, 4)
 
-    def test_partial_touch_moves_and_lifts_match_full_render(self):
+    def test_touch_contacts_do_not_change_lower_screen_pixels(self):
         import cairo
         app = self.app(); app.mode = 'position'
         for scale, device_scale in ((1, 1), (.55, 1), (.55, 2)):
@@ -133,27 +148,19 @@ class DrawingTests(unittest.TestCase):
                     s = cairo.ImageSurface(cairo.FORMAT_ARGB32, 1400, 1250)
                     s.set_device_scale(device_scale, device_scale)
                     return s
-                def paint(target, regions=None):
+                def paint(target):
                     cr = cairo.Context(target)
-                    if regions is not None:
-                        # GTK clips queued damage to outward-rounded widget
-                        # pixels before the application's logical transform.
-                        for rect in regions:
-                            cr.rectangle(*widget_rect(rect, 1240*scale, 1080*scale))
-                        cr.clip()
                     cr.scale(scale, scale)
                     app._draw_ui(cr); app._draw_position(cr)
-                actual = surface(); old = (); app.position.direct_gesture.rings = old
-                paint(actual)
+                reference = surface(); app.position.direct_gesture.rings = ()
+                paint(reference)
                 for new in (((.1, .2, True), (.5, .5, True)),
                             ((.15, .2, True), (.5, .55, True)),
                             ((.5, .55, True),), ()):
                     app.position.direct_gesture.rings = new
-                    paint(actual, ring_damage(old, new, app.position.pad))
-                    reference = surface(); paint(reference)
+                    actual = surface(); paint(actual)
                     self.assertTrue(bytes(actual.get_data()) == bytes(reference.get_data()),
-                                    'Partial circles differ from a complete frame')
-                    old = new
+                                    'Touch contacts must only be drawn on the upper screen')
 
     def test_cache_pixels_match_vector_rendering(self):
         import cairo

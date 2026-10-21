@@ -39,7 +39,7 @@ The application and the screenshots below currently use Chinese UI labels. This 
 | --- | --- |
 | Keyboard and touchpad | Steam-style dark controls for moving, clicking and typing on the lower screen; English US layout and Chinese full-pinyin candidates |
 | Two-finger scrolling | One-finger movement, tap to click and two-finger scrolling; pointer speed and scrolling scale can be adjusted independently |
-| Two touch modes | Choose Positioning (定位) or Direct touch (直接触屏) from a dropdown; rings mark upper-screen contacts, and switching pages or closing the panel releases previous contacts |
+| Two touch modes | Choose Positioning (定位) or Direct touch (直接触屏) from a dropdown; contact rings appear only on the upper screen, and switching pages or closing the panel releases previous contacts |
 | Input settings | Adjust sensitivity, inertia and key repeat; saved settings take effect immediately and survive upgrades |
 | Steam keyboard integration | Temporarily suppresses Steam's keyboard on the keyboard/touchpad page; restores it when switching pages, collapsing or exiting, with timeout recovery after an unexpected exit |
 | In-app updates | Manually check stable releases under Settings → Update (设置 → 更新), then confirm a verified installation; retry failures or roll back to the previous version |

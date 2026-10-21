@@ -52,7 +52,7 @@ from . import steam_style
 from . import steam_keys
 from .keyboard_pulses import KeyboardPulses
 from .keyboard_redraw import KeyboardRedraw, widget_rect
-from .paint_damage import clip_regions, intersects, ring_damage
+from .paint_damage import clip_regions, intersects
 from .static_layer import StaticLayer
 from .key_feedback import KeyFeedback
 from .keyboard_languages import KeyboardLanguages
@@ -289,19 +289,12 @@ class PanelApp(upstream.ThorApp):
         if self._position_revision != self.position.revision:
             self._clear_panel_contacts()
             self._position_revision = self.position.revision
-        state = (self.position.armed, self.position.auto_requested,
-                 self.position.message, self.position.gesture.held,
-                 self.position.direct_gesture.rings if self.position.touch_mode == 'direct' else ())
+        # Contact feedback belongs to the upper marker. Moving or lifting
+        # fingers must not invalidate the lower screen's static touch surface.
+        state = (self.position.armed, self.position.auto_requested, self.position.message)
         if state != self._position_draw_state:
-            previous = self._position_draw_state
             self._position_draw_state = state
-            if previous is None or previous[:-1] != state[:-1]:
-                self.drawing_area.queue_draw()
-            else:
-                allocation = self.drawing_area.get_allocation()
-                for rect in ring_damage(previous[-1], state[-1], self.position.pad):
-                    self.drawing_area.queue_draw_area(*widget_rect(
-                        rect, allocation.width, allocation.height))
+            self.drawing_area.queue_draw()
         return True
 
     def _on_map(self, *_) -> None:
@@ -993,19 +986,6 @@ class PanelApp(upstream.ThorApp):
         layer.paint(cr, (position.touch_mode, position.armed, position.message,
                          bool(getattr(self, '_touch_menu_open', False))),
                     SCREEN_WIDTH, SCREEN_HEIGHT, self._draw_position_background)
-        if position.touch_mode == 'direct':
-            regions = clip_regions(cr)
-            for u, v, _ in position.direct_gesture.rings:
-                x, y = position.pad.x+u*position.pad.width, position.pad.y+v*position.pad.height
-                if not intersects(regions, (x-28, y-28, 56, 56)):
-                    continue
-                cr.new_sub_path()
-                cr.set_source_rgba(1., .65, .15, .2)
-                cr.arc(x, y, 24, 0, 6.283185307179586)
-                cr.fill_preserve()
-                cr.set_line_width(3)
-                cr.set_source_rgb(1., .65, .15)
-                cr.stroke()
 
     def _draw_position_background(self, cr) -> None:
         position = self.position
