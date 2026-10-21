@@ -12,6 +12,7 @@ class Marker:
     def __init__(self, **kwargs): self.valid=True; self.closed=False; self.updates=[]; self.restores=0
     def current(self, now): return self.valid and not self.closed
     def update(self, point, pressed=False): self.updates.append((point, pressed))
+    def update_contacts(self, contacts): self.updates.append(tuple(contacts))
     def poll(self):
         if self.closed: raise InputUnavailable('marker gone')
     def restore(self): self.restores+=1
@@ -21,7 +22,8 @@ class Marker:
 
 class Sender:
     ready=True
-    def __init__(self, *args, focus_check): self.events=[]; self.closed=False; self.focus_check=focus_check
+    def __init__(self, *args, focus_check, max_contacts=2):
+        self.events=[]; self.closed=False; self.focus_check=focus_check; self.max_contacts=max_contacts
     def poll(self):
         if not self.focus_check(): raise InputUnavailable('target changed')
     def send(self, event): self.poll(); self.events.append(event)
@@ -193,6 +195,57 @@ class PanelPositionTests(unittest.TestCase):
         marker=self.p.marker
         self.p.stop()
         self.assertTrue(marker.closed)
+
+    def test_switching_to_direct_releases_old_contact_and_waits_for_all_lifts(self):
+        self.arm()
+        self.p.touch('begin', 1, self.now, 300, 300)
+        self.p.touch('begin', 2, self.now, 600, 600)
+        old = self.p.sender
+        self.p.set_touch_mode('direct')
+        self.assertTrue(old.closed)
+        self.assertFalse(self.p.armed)
+        self.assertTrue(self.p.auto_requested)
+        self.tick(.5, contacts=True)
+        self.assertIsNone(self.p.sender)
+        self.tick(); self.tick(.25); self.tick(.01)
+        self.assertTrue(self.p.armed)
+        self.assertEqual(self.p.sender.max_contacts, 10)
+        self.assertEqual(self.p.sender.events, [])
+
+    def test_direct_mode_sends_independent_contacts_and_markers(self):
+        self.p.set_touch_mode('direct')
+        self.arm()
+        self.p.touch('begin', 1, self.now, 310, 363)
+        self.p.touch('begin', 2, self.now, 930, 841)
+        self.p.touch('move', 2, self.now, 620, 602)
+        self.p.touch('end', 1, self.now)
+        self.assertEqual([(e.kind, e.contact_id) for e in self.p.sender.events],
+                         [('down', 1), ('down', 2), ('move', 2), ('up', 1)])
+        self.assertEqual(self.p.marker.updates[-1], ((.5, .5, True),))
+        self.p.touch('end', 2, self.now)
+        self.assertEqual(self.p.marker.updates[-1], ())
+
+    def test_direct_target_change_releases_every_contact_and_clears_rings(self):
+        self.p.set_touch_mode('direct'); self.arm()
+        self.p.touch('begin', 1, self.now, 310, 363)
+        self.p.touch('begin', 2, self.now, 930, 841)
+        old = self.p.sender
+        self.snapshot=replace(self.snapshot, window=22, input_window=22)
+        self.tick(.01)
+        self.assertTrue(old.closed)
+        self.assertFalse(self.p.direct_gesture.contacts)
+        self.assertEqual(self.p.marker.updates[-1], ())
+
+    def test_return_to_position_keeps_previous_aim_without_reusing_old_touch(self):
+        self.p.position_gesture.point = (.2, .8)
+        self.p.set_touch_mode('direct'); self.arm()
+        self.p.touch('begin', 1, self.now, 310, 363)
+        old = self.p.sender
+        self.p.set_touch_mode('position')
+        self.assertTrue(old.closed)
+        self.assertEqual(self.p.gesture.point, (.2, .8))
+        self.assertFalse(self.p.gesture.contacts)
+        self.assertTrue(self.p.auto_requested)
 
     def test_center_releases_sender_without_enabling_a_manually_paused_mode(self):
         self.arm(); old=self.p.sender

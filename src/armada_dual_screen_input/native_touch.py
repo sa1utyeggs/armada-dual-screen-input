@@ -35,20 +35,23 @@ def screen_to_raw(u: float, v: float, rotation: str) -> tuple[int, int]:
 
 
 class TouchSequence:
-    """Encode at most two independently tracked contacts; no I/O."""
+    """Encode a bounded number of independently tracked Type B slots; no I/O."""
 
-    def __init__(self, rotation: str):
+    def __init__(self, rotation: str, *, max_contacts=2):
         screen_to_raw(.5, .5, rotation)
+        if type(max_contacts) is not int or not 1 <= max_contacts <= 10:
+            raise ValueError('invalid native contact capacity')
         self.rotation = rotation
+        self.max_contacts = max_contacts
         self.contacts: dict[int, tuple[int, int, int]] = {}
         self.next_tracking = 1
 
     def down(self, tid: int, u: float, v: float):
         x, y = screen_to_raw(u, v, self.rotation)
-        if tid in self.contacts or len(self.contacts) >= 2:
+        if tid in self.contacts or len(self.contacts) >= self.max_contacts:
             raise ValueError('duplicate or excessive contact')
         slots = {entry[0] for entry in self.contacts.values()}
-        slot = next(n for n in range(2) if n not in slots)
+        slot = next(n for n in range(self.max_contacts) if n not in slots)
         first = not self.contacts
         self.contacts[tid] = (slot, x, y)
         events = [(EV_KEY, BTN_TOUCH, 1)] if first else []
@@ -98,10 +101,10 @@ class AbsInfo(c.Structure):
 class VirtualTouchProbe:
     """Creation sends no contacts. Destroying this object removes its device."""
 
-    def __init__(self, *, rotation: str, guard):
+    def __init__(self, *, rotation: str, guard, max_contacts=2):
         if not callable(guard):
             raise ValueError('an explicit route and foreground guard is required')
-        self.sequence = TouchSequence(rotation)
+        self.sequence = TouchSequence(rotation, max_contacts=max_contacts)
         self.guard = guard
         self.device = self.uinput = None
         name = ctypes.util.find_library('evdev')
@@ -137,7 +140,7 @@ class VirtualTouchProbe:
                 self._check(self.api.libevdev_enable_event_type(self.device, kind))
             self._check(self.api.libevdev_enable_event_code(self.device, EV_KEY, BTN_TOUCH, None))
             for axis in (ABS_X, ABS_Y, ABS_MT_SLOT, ABS_MT_X, ABS_MT_Y, ABS_MT_ID):
-                maximum = 1 if axis == ABS_MT_SLOT else MAX_COORD
+                maximum = self.sequence.max_contacts-1 if axis == ABS_MT_SLOT else MAX_COORD
                 info = AbsInfo(0, 0, maximum, 0, 0, 0)
                 self._check(self.api.libevdev_enable_event_code(
                     self.device, EV_ABS, axis, c.byref(info)))

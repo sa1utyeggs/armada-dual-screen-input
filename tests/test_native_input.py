@@ -12,11 +12,12 @@ from armada_dual_screen_input.native_input import NativeTouchInput, TouchRouteWa
 
 
 class Touch:
-    def __init__(self, *, rotation, guard):
+    def __init__(self, *, rotation, guard, max_contacts=2):
         assert rotation == 'normal'
         self.guard, self.node = guard, Path('/unused/event')
         self.events, self.held, self.closed = [], False, False
         self.contacts = set()
+        self.max_contacts = max_contacts
     def contact(self, phase, tid, u, v):
         if not self.guard(): raise RuntimeError('guard changed')
         self.events.append(phase)
@@ -150,3 +151,15 @@ class NativeInputTests(unittest.TestCase):
         self.assertEqual(self.sender.touch.events, ['down', 'down', 'move', 'up', 'up'])
         self.assertFalse(self.sender.held)
         self.assertFalse(self.sender.active_contacts)
+
+    def test_explicit_multitouch_capacity_reaches_native_device(self):
+        sender = NativeTouchInput(self.target, self.expected, focus_check=lambda: True, max_contacts=10)
+        try:
+            self.assertEqual(sender.touch.max_contacts, 10)
+            for tid in range(10):
+                sender.send(TouchIntent('down', (.5, .5), contact_id=tid))
+            self.assertEqual(len(sender.active_contacts), 10)
+            sender.release_all()
+            self.assertFalse(sender.active_contacts)
+        finally:
+            sender.close()

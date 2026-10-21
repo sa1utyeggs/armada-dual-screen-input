@@ -31,6 +31,17 @@ class NativeTouchTests(unittest.TestCase):
         self.assertNotIn((EV_KEY, BTN_TOUCH, 0), t.up(1))
         self.assertIn((EV_KEY, BTN_TOUCH, 0), t.up(2))
 
+    def test_ten_slots_stay_independent_and_reuse_only_released_slot(self):
+        t = TouchSequence('normal', max_contacts=10)
+        for tid in range(10):
+            self.assertIn((EV_ABS, ABS_MT_SLOT, tid), t.down(tid, .5, .5))
+        with self.assertRaises(ValueError): t.down(10, .5, .5)
+        t.up(4)
+        self.assertIn((EV_ABS, ABS_MT_SLOT, 4), t.down(20, .3, .4))
+        events = t.release_all()
+        self.assertEqual(sum(e == (EV_ABS, ABS_MT_ID, -1) for e in events), 10)
+        self.assertEqual(sum(e == (EV_KEY, BTN_TOUCH, 0) for e in events), 1)
+
     def test_release_clears_every_contact_without_mouse_buttons(self):
         t = TouchSequence('right')
         events = t.down(1, .1, .2) + t.down(2, .5, .6) + t.release_all()

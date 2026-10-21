@@ -31,6 +31,7 @@ class CompactPanelLayoutTests(unittest.TestCase):
         self.app.window = SimpleNamespace(get_mapped=Mock(return_value=True))
         self.app.keyboard_guard = Mock()
         self.app.position = Mock(active=False, armed=False, enable_label='启用触摸')
+        self.app.touch_mode = 'position'
         self.app.touch = SimpleNamespace(release_all=Mock())
         self.app.gesture.touch_down = Mock()
         self.app.gesture.touch_move = Mock()
@@ -63,6 +64,7 @@ class CompactPanelLayoutTests(unittest.TestCase):
             self.assertGreater(width, 0)
             self.assertLessEqual(x + width, self.panel.SCREEN_WIDTH)
         self.assertEqual(self.app._header_button_look("split")[0], "键鼠")
+        self.assertEqual(self.app._header_button_look("position")[0], "触屏")
 
     def test_header_mode_buttons_route_to_the_three_visible_modes(self):
         with patch.object(self.app, "set_mode") as select:
@@ -238,12 +240,28 @@ class CompactPanelLayoutTests(unittest.TestCase):
 
     def test_position_controls_do_not_emit_mouse_buttons(self):
         self.app.mode = 'position'
-        for key in ('left', 'right', 'pen'):
+        for key in ('right', 'left', 'pen'):
             _, x, width = next(b for b in self.panel.upstream.HEADER_BUTTONS if b[0] == key)
             self.app._handle_header_touch(1, x+width/2, 30, True)
-        self.app.position.toggle.assert_called_once()
+        self.assertEqual([c.args for c in self.app.position.set_touch_mode.call_args_list],
+                         [('direct',), ('position',)])
         self.app.position.center.assert_called_once()
-        self.app.position.pause.assert_called_once()
+        self.app.position.toggle.assert_not_called()
+        self.app.position.pause.assert_not_called()
+        self.assertFalse(self.bridge.events)
+
+    def test_direct_mode_has_no_pause_or_release_control_and_no_center_action(self):
+        self.app.mode = 'position'
+        self.app.touch_mode = 'direct'
+        labels = [self.app._header_button_look(key)[0] for key in ('left','right')]
+        self.assertEqual(labels, ['定位','直接触屏'])
+        with patch.object(self.panel.steam_style, 'draw_header') as draw:
+            self.app._draw_header(Mock())
+        self.assertNotIn('pen', [button[0] for button in draw.call_args.args[2]])
+        _, x, width = next(b for b in self.panel.upstream.HEADER_BUTTONS if b[0] == 'pen')
+        self.app._handle_header_touch(1, x+width/2, 30, True)
+        self.app.position.center.assert_not_called()
+        self.app.position.pause.assert_not_called()
         self.assertFalse(self.bridge.events)
 
     def test_position_collapse_unmap_release_and_expand_waits_for_new_group(self):

@@ -11,6 +11,9 @@ from .marker_overlay import MarkerOverlay
 from .input_geometry import Rect
 from .native_input import NativeTouchInput
 from .position_gesture import PositionGesture
+from .direct_touch import DirectTouchGesture, MAX_CONTACTS
+
+TOUCH_MODES = ('position', 'direct')
 
 
 class PanelPosition:
@@ -19,17 +22,22 @@ class PanelPosition:
 
     def __init__(self, *, runtime=None, resolve=None, focus_factory=FocusWatcher,
                  marker_factory=MarkerOverlay, native_factory=NativeTouchInput,
-                 clock=time.monotonic, sensitivity=2.0):
+                 clock=time.monotonic, sensitivity=2.0, touch_mode='position'):
+        if touch_mode not in TOUCH_MODES:
+            raise ValueError('unsupported touch mode')
         self.runtime = Path(runtime or os.environ.get('XDG_RUNTIME_DIR', '/nonexistent'))
         self.resolve = resolve or (lambda: GamescopeTarget.resolve(self.runtime))
         self.focus_factory, self.marker_factory = focus_factory, marker_factory
         self.native_factory, self.clock = native_factory, clock
         self.target = self.focus = self.marker = self.sender = self.expected = None
         self.active = self.armed = self.auto_requested = False
-        self.message = '定位触摸尚未打开'
+        self.message = '触屏尚未打开'
         self.last_error = None
         self.revision = 0
-        self.gesture = PositionGesture(self.pad, sensitivity=sensitivity)
+        self.position_gesture = PositionGesture(self.pad, sensitivity=sensitivity)
+        self.direct_gesture = DirectTouchGesture(self.pad)
+        self.touch_mode = touch_mode
+        self.gesture = self.direct_gesture if touch_mode == 'direct' else self.position_gesture
         self._candidate = self._candidate_since = self._clear_since = None
         self._pending_until = self._retry_after = 0.
         self._retired = []
@@ -38,6 +46,29 @@ class PanelPosition:
     @property
     def enable_label(self):
         return '暂停触摸' if self.armed else '连接中…' if self.auto_requested else '启用触摸'
+
+    def _update_marker(self):
+        if not self.marker:
+            return
+        if self.touch_mode == 'direct':
+            self.marker.update_contacts(self.direct_gesture.rings)
+        else:
+            self.marker.update(self.position_gesture.point, self.position_gesture.held)
+
+    def set_touch_mode(self, mode):
+        if mode not in TOUCH_MODES:
+            raise ValueError('unsupported touch mode')
+        if mode == self.touch_mode:
+            return False
+        self._close_sender()  # Release every old native contact before changing semantics.
+        self.touch_mode = mode
+        self.gesture = self.direct_gesture if mode == 'direct' else self.position_gesture
+        self.gesture.cancel(self.clock())
+        self.auto_requested = self.active
+        self._retry_after = 0
+        self._update_marker()
+        self.message = '模式已切换；抬起所有手指后自动启用'
+        return True
 
     def start(self):
         if self.active:
@@ -63,8 +94,7 @@ class PanelPosition:
             finally:
                 self.sender = None
         self.gesture.cancel(self.clock())
-        if self.marker:
-            self.marker.update(self.gesture.point, False)
+        self._update_marker()
         self._candidate = self._candidate_since = self._clear_since = None
         self.revision += 1
 
@@ -98,10 +128,11 @@ class PanelPosition:
             self._candidate = self._candidate_since = self._clear_since = None
 
     def center(self):
+        if self.touch_mode != 'position':
+            return
         self._close_sender()
         self.gesture.center(self.clock())
-        if self.marker:
-            self.marker.update(self.gesture.point, False)
+        self._update_marker()
         self.message = '定位已居中；抬手后恢复触摸' if self.auto_requested else '定位已居中；触摸保持暂停'
 
     def _focus_current(self):
@@ -141,7 +172,7 @@ class PanelPosition:
                 # not repeat its filesystem checks on each finger update.
                 self.sender.send(event)
                 self.delivered[event.kind] += 1
-            self.marker.update(self.gesture.point, self.gesture.held)
+            self._update_marker()
         except (InputUnavailable, OSError, ValueError, RuntimeError) as error:
             self._retry(now, error)
 
@@ -159,6 +190,7 @@ class PanelPosition:
                 self.marker.poll()
             elif now >= self._retry_after and state.snapshot and state.matches(state.snapshot, now):
                 self.marker = self.marker_factory(display=':0', server_pid=state.snapshot.server_pid)
+                self._update_marker()
             # poll() can receive a heartbeat newer than the pre-poll timestamp.
             # Read the new worker snapshot first, then refresh the clock.
             if requested_now is None:
@@ -176,7 +208,10 @@ class PanelPosition:
                         self.message = '请抬起所有手指；随后自动启用'
                     elif self.sender.ready:
                         self.armed, self._pending_until = True, 0
-                        self.message = '定位触摸已启用 · 单指定位，第二指确认'
+                        self.message = ('直接触屏已启用 · 每根手指独立触摸' if self.touch_mode == 'direct'
+                                        else '定位已启用 · 单指定位，第二指确认')
+                        if self.touch_mode == 'direct' and self.expected.touch_mode == 1:
+                            self.message += ' · 当前应用可能转换为鼠标'
                         self.revision += 1
                     elif now > self._pending_until:
                         raise InputUnavailable('native touch route did not become ready')
@@ -203,7 +238,9 @@ class PanelPosition:
             if now-self._candidate_since >= .2 and now-self._clear_since >= .08:
                 self.expected = expected
                 self.marker.restore()
-                self.sender = self.native_factory(self.target, expected, focus_check=self._focus_current)
+                options = {'max_contacts': MAX_CONTACTS} if self.touch_mode == 'direct' else {}
+                self.sender = self.native_factory(self.target, expected, focus_check=self._focus_current,
+                                                  **options)
                 self._pending_until = now+2
                 self.message = '正在确认原生触摸路由…'
         except (InputUnavailable, OSError, ValueError, RuntimeError) as error:
