@@ -63,6 +63,7 @@ SECTIONS = {
     "keyboard": ("keyboard_language", "keyboard_repeat_enabled", "keyboard_repeat_delay_ms",
                  "keyboard_repeat_interval_ms", "keyboard_caps_window_ms"),
 }
+SETTINGS_PAGES = (*SECTIONS, 'updates')
 
 
 def read_settings(config):
@@ -147,9 +148,18 @@ class SettingsDraft:
                 for index, key in enumerate(SECTIONS[self.section])]
 
     def hit(self, x, y):
-        for index, section in enumerate(SECTIONS):
+        for index, section in enumerate(SETTINGS_PAGES):
             if 24 + index * 204 <= x <= 216 + index * 204 and 220 <= y <= 280:
                 return "section", section
+        if self.section == 'updates':
+            if 760 <= y <= 836:
+                if 44 <= x <= 564:
+                    return 'check_update', None
+                if 620 <= x <= 1192:
+                    return 'install_update', None
+            if 850 <= y <= 914 and 620 <= x <= 1192:
+                return 'cancel_update', None
+            return None, None
         if 996 <= y <= 1060:
             for key, left, width in (("defaults", 24, 270), ("discard", 662, 250), ("save", 936, 280)):
                 if left <= x <= left + width:

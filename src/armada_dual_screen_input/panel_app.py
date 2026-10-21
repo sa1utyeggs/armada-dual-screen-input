@@ -62,6 +62,7 @@ from .panel_position import PanelPosition, TOUCH_MODES
 from . import touchscreen_selector
 from .input_settings import read_settings, write_settings, SettingsDraft, NUMBERS, CHOICES
 from . import settings_view
+from .update_controller import UpdateController
 
 # Isolate our settings/socket names from a separately installed Ratatoskr.
 upstream.CONFIG_PATH = str(Path(os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config"))) / "thor-panel/config.json")
@@ -85,6 +86,8 @@ class PanelApp(upstream.ThorApp):
         self.keyboard_guard = None
         self.position = None
         self.preferences = None
+        self.updates = None
+        self._updates_timer = None
         self.languages = None
         self._language_consumed = set()
         self._last_input_mode = "split"
@@ -161,6 +164,8 @@ class PanelApp(upstream.ThorApp):
             dispatch=GLib.idle_add, forward_key=self.raw_key_pulses.tap,
         )
         self._install_language_key()
+        self.updates = UpdateController(BASE.parent.parent, dispatch=GLib.idle_add,
+                                        changed=self._updates_changed)
         self.update_mode_bounds()
         Gdk.Display.get_default().connect("monitor-removed", self._on_monitor_removed)
         Gdk.Display.get_default().get_default_screen().connect("monitors-changed", self._on_monitors_changed)
@@ -721,6 +726,25 @@ class PanelApp(upstream.ThorApp):
         action, key = draft.hit(x, y)
         if action == "section":
             draft.section = key
+            updates = getattr(self, 'updates', None)
+            if updates:
+                updates.confirming = False
+                if key == 'updates':
+                    updates.refresh()
+                    self._watch_updates()
+        elif action == 'check_update':
+            if getattr(self, 'updates', None):
+                self.updates.check()
+        elif action == 'install_update':
+            updates = getattr(self, 'updates', None)
+            if updates and updates.available and not draft.dirty:
+                if updates.confirming:
+                    updates.install()
+                else:
+                    updates.confirming = True
+        elif action == 'cancel_update':
+            if getattr(self, 'updates', None):
+                self.updates.confirming = False
         elif action in ("minus", "plus"):
             spec = NUMBERS[key]
             draft.change(key, draft.values[key] + spec.step * (1 if action == "plus" else -1))
@@ -739,6 +763,24 @@ class PanelApp(upstream.ThorApp):
         elif action == "save":
             self._save_preferences()
         self.drawing_area.queue_draw()
+
+    def _updates_changed(self):
+        if (not getattr(self, '_cleaned', False) and self.mode == 'preferences'
+                and self.preferences and self.preferences.section == 'updates'):
+            self.drawing_area.queue_draw()
+
+    def _watch_updates(self):
+        if getattr(self, '_updates_timer', None):
+            return
+        def poll():
+            if (getattr(self, '_cleaned', False) or self.mode != 'preferences'
+                    or not self.preferences or self.preferences.section != 'updates'):
+                self._updates_timer = None
+                return False
+            self.updates.refresh()
+            self._updates_changed()
+            return True
+        self._updates_timer = GLib.timeout_add(1000, poll)
 
     def _handle_header_touch(self, tid, x, y, down) -> None:
         if self._touch_selector_down(tid, x, y):
@@ -894,7 +936,7 @@ class PanelApp(upstream.ThorApp):
             cr.scale(allocation.width / SCREEN_WIDTH, allocation.height / SCREEN_HEIGHT)
             self._draw_ui(cr)
             if self.preferences is not None:
-                settings_view.draw(cr, self.preferences)
+                settings_view.draw(cr, self.preferences, getattr(self, 'updates', None))
             cr.restore()
             return True
         if self.mode == "position":
@@ -988,6 +1030,11 @@ class PanelApp(upstream.ThorApp):
     def cleanup(self) -> None:
         if self._cleaned:
             return
+        if getattr(self, 'updates', None):
+            self.updates.close()
+        if getattr(self, '_updates_timer', None):
+            GLib.source_remove(self._updates_timer)
+            self._updates_timer = None
         self._stop_position()
         if getattr(self, "languages", None) is not None:
             self.languages.close()
