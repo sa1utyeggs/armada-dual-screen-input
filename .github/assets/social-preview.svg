@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title desc">
+  <title id="title">Armada Dual Screen Input</title>
+  <desc id="desc">Virtual keyboard, touchpad and multi-touch for ArmadaOS handhelds. Tested on AYN Thor in Steam Game Mode.</desc>
+  <defs>
+    <linearGradient id="hero-bg" x1="0" y1="0" x2="1280" y2="640" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1b2c40"/><stop offset="1" stop-color="#0d141e"/>
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="640" fill="url(#hero-bg)"/>
+  <path d="M72 68h60" stroke="#1a9fff" stroke-width="6" stroke-linecap="round"/>
+  <g font-family="Arial, sans-serif">
+    <text x="72" y="116" fill="#8fa9bf" font-size="17" letter-spacing="3">ARMADA OS  /  DUAL-SCREEN HANDHELDS</text>
+    <text x="68" y="238" fill="#f2f7fc" font-size="82" font-weight="700" letter-spacing="-3">Armada</text>
+    <text x="68" y="328" fill="#f2f7fc" font-size="70" font-weight="700" letter-spacing="-2.8">Dual Screen Input</text>
+    <text x="72" y="390" fill="#a4b8ca" font-size="25">Keyboard. Touchpad. Multi-touch.</text>
+    <text x="72" y="530" fill="#dae6f1" font-size="18" letter-spacing="1.5">AYN THOR</text>
+    <circle cx="210" cy="523" r="3" fill="#1a9fff"/>
+    <text x="232" y="530" fill="#dae6f1" font-size="18" letter-spacing="1.5">STEAM GAME MODE</text>
+    <text x="72" y="575" fill="#6e8ca5" font-size="17">github.com/sa1utyeggs/armada-dual-screen-input</text>
+  </g>
+  <g transform="translate(816 140) scale(.70)">
+  <defs>
+    <linearGradient id="tile" x1="64" y1="24" x2="432" y2="488" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#26384b"/>
+      <stop offset=".55" stop-color="#17222f"/>
+      <stop offset="1" stop-color="#101720"/>
+    </linearGradient>
+    <radialGradient id="light" cx=".88" cy=".05" r=".95">
+      <stop stop-color="#1a9fff" stop-opacity=".16"/>
+      <stop offset="1" stop-color="#1a9fff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="panel" x1="256" y1="198" x2="256" y2="434" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#34495e"/>
+      <stop offset="1" stop-color="#253647"/>
+    </linearGradient>
+    <linearGradient id="key" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#edf5fc"/>
+      <stop offset="1" stop-color="#bed0e1"/>
+    </linearGradient>
+    <filter id="watermark-blur" x="-15%" y="-15%" width="130%" height="130%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="1.2"/>
+    </filter>
+  </defs>
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#tile)"/>
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#light)"/>
+  <rect x="17.5" y="17.5" width="477" height="477" rx="106.5" fill="none" stroke="#9bb5cb" stroke-opacity=".16" stroke-width="3"/>
+
+  <!-- The Armada mark stays softly behind the input surface, without a wordmark. -->
+  <g id="armada-watermark" opacity=".58" filter="url(#watermark-blur)">
+  <g transform="translate(72.1 39.3) scale(1.16)" fill="#a8c5e0">
+    <path d="M206.344 122.573C206.263 121.622 207.432 121.107 208.074 121.814C269.041 188.972 308.836 275.7 316.917 371.46C316.973 372.122 316.378 372.654 315.726 372.524C275.183 364.464 233.52 359.513 190.995 357.929C190.367 357.905 189.915 357.317 190.055 356.704C202.496 302.293 209.077 245.593 209.077 187.329C209.077 165.512 208.151 143.914 206.344 122.573Z"/>
+    <path d="M158.988 0.887912C159.122 -0.205554 160.667 -0.322849 160.947 0.742599C176.598 60.2523 184.945 122.8 184.945 187.33C184.945 245.635 178.129 302.319 165.271 356.607C165.164 357.06 164.759 357.378 164.294 357.376C163.242 357.371 162.189 357.368 161.136 357.368C106.343 357.368 52.8563 362.959 1.21367 373.599C0.286842 373.79 -0.367792 372.706 0.232576 371.974C84.9331 268.78 141.774 141.097 158.988 0.887912Z"/>
+  </g>
+  </g>
+
+  <!-- One input surface: keyboard on the left, touchpad on the right. -->
+  <g id="input-surface" transform="translate(20.48 -34.72) scale(.92)">
+  <rect x="62" y="208" width="388" height="242" rx="35" fill="#050b12" fill-opacity=".38"/>
+  <rect x="62" y="195" width="388" height="242" rx="35" fill="url(#panel)" fill-opacity=".72" stroke="#7e9ab2" stroke-width="4"/>
+  <path d="M92 415h328" fill="none" stroke="#8cb0ca" stroke-opacity=".24" stroke-width="3" stroke-linecap="round"/>
+  <!-- Align the controls and their outer panel to the same icon center. -->
+  <g id="input-controls" transform="translate(.5 10)">
+  <g fill="url(#key)">
+    <rect x="88" y="226" width="36" height="31" rx="7" fill="#1a9fff"/>
+    <rect x="135" y="226" width="36" height="31" rx="7"/>
+    <rect x="182" y="226" width="36" height="31" rx="7"/>
+    <rect x="229" y="226" width="36" height="31" rx="7"/>
+    <rect x="88" y="269" width="36" height="31" rx="7"/>
+    <rect x="135" y="269" width="36" height="31" rx="7"/>
+    <rect x="182" y="269" width="36" height="31" rx="7"/>
+    <rect x="229" y="269" width="36" height="31" rx="7"/>
+    <rect x="88" y="312" width="36" height="31" rx="7"/>
+    <rect x="135" y="312" width="36" height="31" rx="7"/>
+    <rect x="182" y="312" width="36" height="31" rx="7"/>
+    <rect x="229" y="312" width="36" height="31" rx="7"/>
+    <rect x="88" y="355" width="36" height="31" rx="7"/>
+    <rect x="135" y="355" width="83" height="31" rx="7"/>
+    <rect x="229" y="355" width="36" height="31" rx="7"/>
+  </g>
+  <rect x="293" y="226" width="130" height="160" rx="19" fill="#172431" fill-opacity=".78" stroke="#91adc4" stroke-width="4"/>
+  <path d="M295 358h126m-63 0v26" fill="none" stroke="#91adc4" stroke-width="3"/>
+  <circle cx="336" cy="278" r="24" fill="#1a9fff" fill-opacity=".10" stroke="#1a9fff" stroke-width="5"/>
+  <circle cx="336" cy="278" r="8" fill="#f0f8ff"/>
+  <circle cx="386" cy="318" r="17" fill="#1a9fff" fill-opacity=".10" stroke="#57baff" stroke-width="4"/>
+  <circle cx="386" cy="318" r="6" fill="#f0f8ff"/>
+  </g>
+  </g>
+  </g>
+</svg>

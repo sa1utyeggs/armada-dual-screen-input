@@ -1,47 +1,71 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title description">
+  <title id="title">Armada Dual Screen Input</title>
+  <desc id="description">A visible softly faded Armada sail watermark behind a centered keyboard and touchpad, with two touch contact rings. No lettering. Dark slate and SteamOS-inspired blue.</desc>
+  <metadata>Armada mark: armada-os/armada .github/assets/armada-mark-white.svg, revision 86d29b9ba1c660fcfbc43d80d9def02765c41082. Layout, keyboard and touchpad drawn for Armada Dual Screen Input. See THIRD_PARTY.md.</metadata>
   <defs>
-    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
-      <stop stop-color="#344b80"/><stop offset="1" stop-color="#17263f"/>
+    <linearGradient id="tile" x1="64" y1="24" x2="432" y2="488" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#26384b"/>
+      <stop offset=".55" stop-color="#17222f"/>
+      <stop offset="1" stop-color="#101720"/>
     </linearGradient>
-    <linearGradient id="shell" x1="0" y1="0" x2="0" y2="1">
-      <stop stop-color="#f6f9ff"/><stop offset="1" stop-color="#c4d4e8"/>
+    <radialGradient id="light" cx=".88" cy=".05" r=".95">
+      <stop stop-color="#1a9fff" stop-opacity=".16"/>
+      <stop offset="1" stop-color="#1a9fff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="panel" x1="256" y1="198" x2="256" y2="434" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#34495e"/>
+      <stop offset="1" stop-color="#253647"/>
     </linearGradient>
+    <linearGradient id="key" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#edf5fc"/>
+      <stop offset="1" stop-color="#bed0e1"/>
+    </linearGradient>
+    <filter id="watermark-blur" x="-15%" y="-15%" width="130%" height="130%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="1.2"/>
+    </filter>
   </defs>
-  <rect x="16" y="16" width="480" height="480" rx="104" fill="url(#tile)"/>
-  <rect x="34" y="202" width="306" height="196" rx="28" fill="#081526" opacity=".38"/>
-  <rect x="34" y="186" width="306" height="196" rx="28" fill="url(#shell)"/>
-  <rect x="47" y="200" width="280" height="166" rx="18" fill="#233b5c"/>
-  <rect x="60" y="213" width="24" height="23" rx="5" fill="#8ddbf6"/>
-  <rect x="92" y="213" width="24" height="23" rx="5" fill="#ecf3ff"/>
-  <rect x="124" y="213" width="24" height="23" rx="5" fill="#ecf3ff"/>
-  <rect x="156" y="213" width="24" height="23" rx="5" fill="#ecf3ff"/>
-  <rect x="188" y="213" width="24" height="23" rx="5" fill="#ecf3ff"/>
-  <rect x="220" y="213" width="24" height="23" rx="5" fill="#ecf3ff"/>
-  <rect x="252" y="213" width="24" height="23" rx="5" fill="#ecf3ff"/>
-  <rect x="284" y="213" width="24" height="23" rx="5" fill="#ecf3ff"/>
-  <rect x="60" y="246" width="24" height="23" rx="5" fill="#ecf3ff"/>
-  <rect x="92" y="246" width="24" height="23" rx="5" fill="#ecf3ff"/>
-  <rect x="124" y="246" width="24" height="23" rx="5" fill="#ecf3ff"/>
-  <rect x="156" y="246" width="24" height="23" rx="5" fill="#ecf3ff"/>
-  <rect x="188" y="246" width="24" height="23" rx="5" fill="#ecf3ff"/>
-  <rect x="220" y="246" width="24" height="23" rx="5" fill="#ecf3ff"/>
-  <rect x="252" y="246" width="24" height="23" rx="5" fill="#ecf3ff"/>
-  <rect x="284" y="246" width="24" height="23" rx="5" fill="#ecf3ff"/>
-  <rect x="60" y="279" width="24" height="23" rx="5" fill="#ecf3ff"/>
-  <rect x="92" y="279" width="24" height="23" rx="5" fill="#ecf3ff"/>
-  <rect x="124" y="279" width="24" height="23" rx="5" fill="#ecf3ff"/>
-  <rect x="156" y="279" width="24" height="23" rx="5" fill="#ecf3ff"/>
-  <rect x="188" y="279" width="24" height="23" rx="5" fill="#ecf3ff"/>
-  <rect x="220" y="279" width="24" height="23" rx="5" fill="#ecf3ff"/>
-  <rect x="252" y="279" width="24" height="23" rx="5" fill="#ecf3ff"/>
-  <rect x="284" y="279" width="24" height="23" rx="5" fill="#8ddbf6"/>
-  <rect x="60" y="312" width="40" height="27" rx="6" fill="#d3e2f4"/>
-  <rect x="108" y="312" width="148" height="27" rx="6" fill="#79d7f4"/>
-  <rect x="264" y="312" width="50" height="27" rx="6" fill="#d3e2f4"/>
-  <rect x="362" y="142" width="116" height="248" rx="58" fill="#081526" opacity=".38"/>
-  <rect x="358" y="126" width="116" height="248" rx="58" fill="url(#shell)"/>
-  <path d="M416 130v91m-54 12h108" fill="none" stroke="#6882a5" stroke-width="7"/>
-  <rect x="404" y="160" width="24" height="48" rx="12" fill="#29486b"/>
-  <rect x="409" y="165" width="14" height="27" rx="7" fill="#79d7f4"/>
-  <path d="M394 105q22-15 44 0m-54-20q32-24 64 0" fill="none" stroke="#8ddbf6" stroke-width="7" stroke-linecap="round"/>
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#tile)"/>
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#light)"/>
+  <rect x="17.5" y="17.5" width="477" height="477" rx="106.5" fill="none" stroke="#9bb5cb" stroke-opacity=".16" stroke-width="3"/>
+
+  <!-- The Armada mark stays softly behind the input surface, without a wordmark. -->
+  <g id="armada-watermark" opacity=".58" filter="url(#watermark-blur)">
+  <g transform="translate(72.1 39.3) scale(1.16)" fill="#a8c5e0">
+    <path d="M206.344 122.573C206.263 121.622 207.432 121.107 208.074 121.814C269.041 188.972 308.836 275.7 316.917 371.46C316.973 372.122 316.378 372.654 315.726 372.524C275.183 364.464 233.52 359.513 190.995 357.929C190.367 357.905 189.915 357.317 190.055 356.704C202.496 302.293 209.077 245.593 209.077 187.329C209.077 165.512 208.151 143.914 206.344 122.573Z"/>
+    <path d="M158.988 0.887912C159.122 -0.205554 160.667 -0.322849 160.947 0.742599C176.598 60.2523 184.945 122.8 184.945 187.33C184.945 245.635 178.129 302.319 165.271 356.607C165.164 357.06 164.759 357.378 164.294 357.376C163.242 357.371 162.189 357.368 161.136 357.368C106.343 357.368 52.8563 362.959 1.21367 373.599C0.286842 373.79 -0.367792 372.706 0.232576 371.974C84.9331 268.78 141.774 141.097 158.988 0.887912Z"/>
+  </g>
+  </g>
+
+  <!-- One input surface: keyboard on the left, touchpad on the right. -->
+  <g id="input-surface" transform="translate(20.48 -34.72) scale(.92)">
+  <rect x="62" y="208" width="388" height="242" rx="35" fill="#050b12" fill-opacity=".38"/>
+  <rect x="62" y="195" width="388" height="242" rx="35" fill="url(#panel)" fill-opacity=".72" stroke="#7e9ab2" stroke-width="4"/>
+  <path d="M92 415h328" fill="none" stroke="#8cb0ca" stroke-opacity=".24" stroke-width="3" stroke-linecap="round"/>
+  <!-- Align the controls and their outer panel to the same icon center. -->
+  <g id="input-controls" transform="translate(.5 10)">
+  <g fill="url(#key)">
+    <rect x="88" y="226" width="36" height="31" rx="7" fill="#1a9fff"/>
+    <rect x="135" y="226" width="36" height="31" rx="7"/>
+    <rect x="182" y="226" width="36" height="31" rx="7"/>
+    <rect x="229" y="226" width="36" height="31" rx="7"/>
+    <rect x="88" y="269" width="36" height="31" rx="7"/>
+    <rect x="135" y="269" width="36" height="31" rx="7"/>
+    <rect x="182" y="269" width="36" height="31" rx="7"/>
+    <rect x="229" y="269" width="36" height="31" rx="7"/>
+    <rect x="88" y="312" width="36" height="31" rx="7"/>
+    <rect x="135" y="312" width="36" height="31" rx="7"/>
+    <rect x="182" y="312" width="36" height="31" rx="7"/>
+    <rect x="229" y="312" width="36" height="31" rx="7"/>
+    <rect x="88" y="355" width="36" height="31" rx="7"/>
+    <rect x="135" y="355" width="83" height="31" rx="7"/>
+    <rect x="229" y="355" width="36" height="31" rx="7"/>
+  </g>
+  <rect x="293" y="226" width="130" height="160" rx="19" fill="#172431" fill-opacity=".78" stroke="#91adc4" stroke-width="4"/>
+  <path d="M295 358h126m-63 0v26" fill="none" stroke="#91adc4" stroke-width="3"/>
+  <circle cx="336" cy="278" r="24" fill="#1a9fff" fill-opacity=".10" stroke="#1a9fff" stroke-width="5"/>
+  <circle cx="336" cy="278" r="8" fill="#f0f8ff"/>
+  <circle cx="386" cy="318" r="17" fill="#1a9fff" fill-opacity=".10" stroke="#57baff" stroke-width="4"/>
+  <circle cx="386" cy="318" r="6" fill="#f0f8ff"/>
+  </g>
+  </g>
 </svg>

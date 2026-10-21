@@ -14,6 +14,12 @@ gtk-layer-shell is taken from an unmodified Fedora binary RPM with a pinned SHA-
 
 Steam-style controls are independently drawn; no Valve artwork is bundled.
 
+The application icon adapts the Armada sail mark from
+[armada-os/armada](https://github.com/armada-os/armada/blob/86d29b9ba1c660fcfbc43d80d9def02765c41082/.github/assets/armada-mark-white.svg).
+The Armada name and mark retain their original ownership; the project MIT license
+does not relicense that mark. The surrounding icon and input symbols are drawn for this application.
+
+
 The Game Mode text adapter implements only the version-1 subset of Valve's
 [private Gamescope input-method protocol](https://github.com/ValveSoftware/gamescope/blob/master/protocol/gamescope-input-method.xml).
 It is not a stable cross-compositor Wayland API. No Valve source or protocol XML
