@@ -15,13 +15,16 @@ class ControllerTests(unittest.TestCase):
         temp = tempfile.TemporaryDirectory(); self.addCleanup(temp.cleanup)
         self.root = Path(temp.name); (self.root / 'VERSION').write_text('0.1.0')
         self.work, self.delivery = [], []
+        self.deadlines = []
         self.changed = Mock()
         self.fetch = Mock(return_value=parse_release(release_data()))
         self.launch = Mock()
         self.controller = UpdateController(self.root, dispatch=self.delivery.append,
             changed=self.changed, fetch=self.fetch, launch=self.launch, background=self.work.append,
-            status_file=self.root / 'status.json')
+            status_file=self.root / 'status.json', deadline=lambda seconds, callback:
+                self.deadlines.append(callback) or Mock())
         self.controller.managed = True
+        self.addCleanup(self.controller.close)
 
     def finish(self):
         self.work.pop(0)()
@@ -44,6 +47,18 @@ class ControllerTests(unittest.TestCase):
         self.finish()
         self.assertEqual(self.changed.call_count, calls)
         self.launch.assert_not_called()
+
+    def test_slow_dns_cannot_leave_check_busy_or_deliver_stale_results(self):
+        self.controller.check()
+        self.deadlines.pop(0)()
+        self.delivery.pop(0)()
+        self.assertEqual(self.controller.phase, 'error')
+        self.assertIn('超时', self.controller.message)
+        self.assertFalse(self.controller.busy)
+        self.finish()  # The old read-only lookup eventually returns.
+        self.assertIsNone(self.controller.latest)
+        self.controller.check(); self.finish()
+        self.assertTrue(self.controller.available)
 
     def test_error_allows_retry_but_does_not_offer_stale_download(self):
         self.fetch.side_effect = UpdateError('网络不可用')

@@ -11,6 +11,13 @@ from .updates import UpdateError, latest_release, newer, process_identity, state
 BUSY = {'checking', 'starting', 'downloading', 'installing'}
 
 
+def after(seconds, callback):
+    timer = threading.Timer(seconds, callback)
+    timer.daemon = True
+    timer.start()
+    return timer
+
+
 def start_worker(root, tag):
     command = ['systemd-run', '--user', '--collect', '--quiet', '--unit=thor-panel-update',
                '--property=Type=exec', '--expand-environment=no']
@@ -26,7 +33,7 @@ def start_worker(root, tag):
 
 class UpdateController:
     def __init__(self, root, *, dispatch, changed, fetch=latest_release, launch=start_worker,
-                 background=None, status_file=None):
+                 background=None, status_file=None, deadline=after):
         self.root = Path(root).resolve()
         self.current = (self.root / 'VERSION').read_text().strip()
         data = Path(os.environ.get('XDG_DATA_HOME', str(Path.home() / '.local/share')))
@@ -43,6 +50,12 @@ class UpdateController:
         self._closed, self._request = False, 0
         self._launch_time = None
         self._checking = False
+        self._deadline, self.deadline = None, deadline
+
+    def _clear_deadline(self):
+        if self._deadline:
+            self._deadline.cancel()
+            self._deadline = None
 
     @property
     def busy(self):
@@ -76,6 +89,7 @@ class UpdateController:
         self._checking = True
         self.latest, self.confirming = None, False
         def complete(release, error):
+            self._clear_deadline()
             self._checking = False
             if error:
                 self.phase, self.message = 'error', error
@@ -92,6 +106,19 @@ class UpdateController:
             else:
                 self.phase, self.message = 'current', '当前已是最新正式版'
         self._async(self.fetch, complete)
+        request = self._request
+        def expired():
+            def deliver():
+                if not self._closed and request == self._request and self._checking:
+                    self._deadline = None
+                    self._request += 1
+                    self._checking = False
+                    self.phase, self.message = 'error', '检查更新超时，请检查网络后重试'
+                    self.changed()
+                return False
+            self.dispatch(deliver)
+        if self._checking:
+            self._deadline = self.deadline(45, expired)
         self.changed()
 
     def install(self):
@@ -142,5 +169,6 @@ class UpdateController:
                 self._launch_time = None
 
     def close(self):
+        self._clear_deadline()
         self._closed = True
         self._request += 1
