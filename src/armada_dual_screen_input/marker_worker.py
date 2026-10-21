@@ -116,6 +116,7 @@ def run(fd, display, server_pid):
                                  (2.5, (1., .65, .15, 1.) if pressed else (.35, .85, 1., 1.))):
                 cr.set_line_width(width)
                 cr.set_source_rgba(*color)
+                cr.new_sub_path()
                 cr.arc(x, y, 12, 0, math.tau)
                 cr.stroke()
         # Open center keeps small card text and targets visible.

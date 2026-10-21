@@ -833,6 +833,7 @@ class PanelApp(upstream.ThorApp):
             steam_style.label(cr, '手势由上屏应用处理 · 不转成滚轮或第二指确认',
                               620, 940, 24, centered=True, max_width=1120)
             for u, v, _ in position.direct_gesture.rings:
+                cr.new_sub_path()
                 cr.set_source_rgba(1., .65, .15, .2)
                 x, y = position.pad.x+u*position.pad.width, position.pad.y+v*position.pad.height
                 cr.arc(x, y, 24, 0, 6.283185307179586)

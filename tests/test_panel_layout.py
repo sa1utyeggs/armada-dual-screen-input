@@ -133,6 +133,22 @@ class CompactPanelLayoutTests(unittest.TestCase):
                         self.assertEqual(self.app.keyboard_cfg["keyboard_repeat_interval_ms"], 60)
                         self.assertEqual(config.read_bytes(), before)
 
+    def test_saved_touch_submode_loads_without_rewriting_other_settings(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / 'config.json'
+            with patch.object(self.panel.upstream, 'CONFIG_PATH', str(config)):
+                for requested, expected in (('direct','direct'), ('position','position'),
+                                             ('unknown','position'), (None,'position')):
+                    before = json.dumps({'mode':'position', 'touch_mode':requested,
+                                         'scroll_scale':.1, 'keyboard_language':'zh_CN',
+                                         'future_field':42}).encode()
+                    config.write_bytes(before)
+                    self.app.load_config()
+                    self.assertEqual(self.app.touch_mode, expected)
+                    self.assertEqual(self.app.input_cfg['scroll_scale'], .1)
+                    self.assertEqual(self.app.input_cfg['keyboard_language'], 'zh_CN')
+                    self.assertEqual(config.read_bytes(), before)
+
     def test_legacy_mode_calls_normalize_and_guard_tracks_visible_keyboard(self):
         for requested, expected, suppress in (("mirror", "split", True),
                                                ("keyboard", "split", True),
