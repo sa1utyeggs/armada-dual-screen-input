@@ -18,12 +18,12 @@ curl -fsSL https://raw.githubusercontent.com/sa1utyeggs/armada-dual-screen-input
 离线安装包在 [GitHub Releases](https://github.com/sa1utyeggs/armada-dual-screen-input/releases) 中按版本发布。
 选择版本，在 **Assets** 中同时下载 `armada-dual-screen-input-<版本>-aarch64.tar.gz` 和 `SHA256SUMS`，再传到掌机。
 该安装包包含私有运行库；GitHub 自动生成的 **Source code** 压缩包只是源码，不能代替离线安装包。
-以下以 `v0.1.0-preview.1` 为例：
+以下以 `v0.1.0-preview.2` 为例：
 
 ```bash
 sha256sum -c SHA256SUMS
-tar -xzf armada-dual-screen-input-0.1.0-preview.1-aarch64.tar.gz
-cd armada-dual-screen-input-0.1.0-preview.1-aarch64
+tar -xzf armada-dual-screen-input-0.1.0-preview.2-aarch64.tar.gz
+cd armada-dual-screen-input-0.1.0-preview.2-aarch64
 bash install.sh
 ```
 
