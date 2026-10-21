@@ -7,6 +7,7 @@ import re
 import shutil
 import tarfile
 import time
+from urllib.error import HTTPError
 from urllib.parse import unquote, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
@@ -109,6 +110,11 @@ def latest_release(*, opener=open_url):
             return parse_release(json.loads(limited_read(response, 1024 * 1024)))
     except UpdateError:
         raise
+    except HTTPError as error:
+        headers = error.headers or {}
+        if error.code == 429 or (error.code == 403 and headers.get('X-RateLimit-Remaining') == '0'):
+            raise UpdateError('GitHub 查询次数已达上限，请稍后重试') from error
+        raise UpdateError(f'检查更新失败（GitHub HTTP {error.code}），请稍后重试') from error
     except Exception as error:
         raise UpdateError('检查更新失败，请检查网络后重试') from error
 
