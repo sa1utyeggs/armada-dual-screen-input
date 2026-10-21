@@ -8,6 +8,7 @@ from __future__ import annotations
 from math import pi
 
 from . import steam_style as style
+from .paint_damage import clip_regions, intersects
 _SHADOW = (0.055, 0.065, 0.083)
 _RADIUS = 6.0
 _MODIFIER_CODES = {1, 14, 15, 28, 29, 42, 54, 56, 103, 105, 106, 108, 125}
@@ -123,11 +124,11 @@ def draw_keyboard(app, cr) -> None:
     caps_lock = bool(layout.caps_lock)
     feedback = getattr(app,'key_feedback',None)
     pressed_codes = feedback.visible if feedback is not None else {app.active_key_press}
-    left,top,right,bottom = cr.clip_extents()
+    regions = clip_regions(cr)
     cr.save()
     for row in layout.rows:
         for key in row:
-            if key.x+key.w <= left or key.x >= right or key.y+key.h <= top or key.y >= bottom:
+            if not intersects(regions, (key.x, key.y, key.w, key.h)):
                 continue
             pressed = key.code in pressed_codes
             latched = _modifier_latched(layout, key, shift_on)

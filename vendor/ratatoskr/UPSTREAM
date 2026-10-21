@@ -15,3 +15,6 @@ The local adapter uses bounded keycap damage; keyboard input logic is unchanged.
 The paint origin is also overridable, retaining the original burn-in calculation
 by default. The adapter keeps a stable origin during partial damage and advances
 the OLED orbit on full repaints to avoid seams against retained pixels.
+Local thor_app.py patch (2026-10-21): ending a held key also uses the same
+overridable redraw hook; the vendor default remains a full redraw. This closes
+the release/slide-off path that otherwise bypassed adapter keycap damage.

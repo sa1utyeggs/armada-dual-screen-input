@@ -52,6 +52,8 @@ from . import steam_style
 from . import steam_keys
 from .keyboard_pulses import KeyboardPulses
 from .keyboard_redraw import KeyboardRedraw, widget_rect
+from .paint_damage import clip_regions, intersects, ring_damage
+from .static_layer import StaticLayer
 from .key_feedback import KeyFeedback
 from .keyboard_languages import KeyboardLanguages
 from . import keyboard_language_view
@@ -92,6 +94,7 @@ class PanelApp(upstream.ThorApp):
         self._language_consumed = set()
         self._last_input_mode = "split"
         self._position_draw_state = None
+        self._position_background = StaticLayer()
         self._touch_menu_open = False
         self._discarding_contacts = False
         # Unlike ToolkitTouch, this set survives logical-contact resets when
@@ -290,8 +293,15 @@ class PanelApp(upstream.ThorApp):
                  self.position.message, self.position.gesture.held,
                  self.position.direct_gesture.rings if self.position.touch_mode == 'direct' else ())
         if state != self._position_draw_state:
+            previous = self._position_draw_state
             self._position_draw_state = state
-            self.drawing_area.queue_draw()
+            if previous is None or previous[:-1] != state[:-1]:
+                self.drawing_area.queue_draw()
+            else:
+                allocation = self.drawing_area.get_allocation()
+                for rect in ring_damage(previous[-1], state[-1], self.position.pad):
+                    self.drawing_area.queue_draw_area(*widget_rect(
+                        rect, allocation.width, allocation.height))
         return True
 
     def _on_map(self, *_) -> None:
@@ -837,7 +847,23 @@ class PanelApp(upstream.ThorApp):
     def _draw_ui(self, cr) -> None:
         cr.set_source_rgb(*steam_style.BG)
         cr.paint()
-        super()._draw_ui(cr)
+        regions = clip_regions(cr)
+        if intersects(regions, (0, 0, SCREEN_WIDTH, upstream.HEADER_BUTTONS_H)):
+            self._draw_header(cr)
+        if intersects(regions, (0, upstream.HEADER_BUTTONS_H, SCREEN_WIDTH,
+                                upstream.STATUS_RIBBON_H)):
+            self._draw_status_ribbon(cr)
+        if self.mode in ('trackpad', 'split'):
+            bottom = upstream.SPLIT_Y if self.mode == 'split' else SCREEN_HEIGHT
+            if intersects(regions, (0, upstream.HEADER_HEIGHT, SCREEN_WIDTH,
+                                    bottom-upstream.HEADER_HEIGHT)):
+                self._draw_trackpad_surface(cr, upstream.HEADER_HEIGHT,
+                                            bottom-upstream.HEADER_HEIGHT)
+        if self.mode in ('keyboard', 'split'):
+            # The temporary candidate bar can extend above the key area.
+            if intersects(regions, (0, self._language_top(), SCREEN_WIDTH,
+                                    SCREEN_HEIGHT-self._language_top())):
+                self._draw_keyboard(cr)
 
     def _draw_header(self, cr) -> None:
         buttons = upstream.HEADER_BUTTONS
@@ -862,7 +888,9 @@ class PanelApp(upstream.ThorApp):
 
     def _draw_keyboard(self, cr) -> None:
         if getattr(self, "languages", None) is not None:
-            if keyboard_language_view.visible(self.languages):
+            if (keyboard_language_view.visible(self.languages)
+                    and intersects(clip_regions(cr), (0, self._language_top(),
+                                                       SCREEN_WIDTH, keyboard_language_view.HEIGHT))):
                 keyboard_language_view.draw(cr, self.languages, self._language_top())
         steam_keys.draw_keyboard(self, cr)
         visible = self._visible_key_codes()
@@ -959,6 +987,34 @@ class PanelApp(upstream.ThorApp):
         position = self.position
         if position is None:
             return
+        layer = getattr(self, '_position_background', None)
+        if layer is None:
+            self._position_background = layer = StaticLayer()
+        layer.paint(cr, (position.touch_mode, position.armed, position.message,
+                         bool(getattr(self, '_touch_menu_open', False))),
+                    SCREEN_WIDTH, SCREEN_HEIGHT, self._draw_position_background)
+        if position.touch_mode == 'direct':
+            regions = clip_regions(cr)
+            for u, v, _ in position.direct_gesture.rings:
+                x, y = position.pad.x+u*position.pad.width, position.pad.y+v*position.pad.height
+                if not intersects(regions, (x-28, y-28, 56, 56)):
+                    continue
+                cr.new_sub_path()
+                cr.set_source_rgba(1., .65, .15, .2)
+                cr.arc(x, y, 24, 0, 6.283185307179586)
+                cr.fill_preserve()
+                cr.set_line_width(3)
+                cr.set_source_rgb(1., .65, .15)
+                cr.stroke()
+
+    def _draw_position_background(self, cr) -> None:
+        position = self.position
+        # Cache an opaque body so antialiased text is composited exactly once.
+        # The header/status remain transparent and keep their independent draws.
+        cr.set_source_rgb(*steam_style.BG)
+        cr.rectangle(0, upstream.HEADER_HEIGHT, SCREEN_WIDTH,
+                     SCREEN_HEIGHT-upstream.HEADER_HEIGHT)
+        cr.fill()
         steam_style.rounded(cr, 20, 168, 1200, 882, 12,
                             steam_style.SURFACE, steam_style.BORDER)
         cr.set_source_rgb(*(steam_style.GOOD if position.armed else steam_style.MUTED))
@@ -976,15 +1032,6 @@ class PanelApp(upstream.ThorApp):
             cr.set_source_rgb(*steam_style.MUTED)
             steam_style.label(cr, '手势由上屏应用处理 · 不转成滚轮或第二指确认',
                               620, 940, 24, centered=True, max_width=1120)
-            for u, v, _ in position.direct_gesture.rings:
-                cr.new_sub_path()
-                cr.set_source_rgba(1., .65, .15, .2)
-                x, y = position.pad.x+u*position.pad.width, position.pad.y+v*position.pad.height
-                cr.arc(x, y, 24, 0, 6.283185307179586)
-                cr.fill_preserve()
-                cr.set_line_width(3)
-                cr.set_source_rgb(1., .65, .15)
-                cr.stroke()
             return
         cr.set_source_rgb(*steam_style.ACCENT)
         steam_style.label(cr, '只看上屏操作', 620, 370, 40, centered=True)
