@@ -35,6 +35,26 @@ python3 -B tools/run.py --run
 默认只发现 Game Mode。不要在 CI、用户游戏运行时自动执行 `native_touch_probe.py` 或 `position_input_smoke.py`；这些开发工具只针对自己的测试窗口，需要显式安排。
 开发工具的导入示例为 `PYTHONPATH=src python3 -B tools/position_input_smoke.py`，还需正确的 GTK 私有库/typelib 环境。
 
+键盘时序检查使用真实 GLib 时钟，默认只离屏绘制并记录模拟设备，不创建窗口或输入设备：
+
+```bash
+python3 -B tools/keyboard_latency_bench.py --output /tmp/keyboard-timing.json
+```
+
+在已安排交互测试、Steam 首页空闲时，可显式运行自己的上屏输入窗口：
+
+```bash
+python3 -B tools/keyboard_latency_bench.py --run-own-window-test --output /tmp/keyboard-native.json
+python3 -B tools/keyboard_ime_latency_bench.py --run-own-window-test --output /tmp/keyboard-ime.json
+python3 -B tools/keyboard_window_latency_bench.py --run-own-window-test --output /tmp/keyboard-window.json
+python3 -B tools/keyboard_window_latency_bench.py --run-own-window-test --defer-status-during-typing --output /tmp/keyboard-window-status.json
+python3 -B tools/keyboard_window_latency_bench.py --run-own-window-test --defer-status-during-typing --short-taps --output /tmp/keyboard-feedback.json
+```
+
+这些交互工具必须逐个运行。前两个只使用固定测试文字，要求自己的上屏窗口保持焦点，失焦即停止；不向游戏或 Steam 搜索框发送输入，不保存个人文字、不改变输入设置。第三个短暂覆盖下屏，用模拟状态对比真实 Wayland 目标上的完整/局部绘制，不创建输入设备。检查包括每秒 5/10/15 次点按、长按字母/退格，以及拼音候选/空格提交。`passed` 代表内容/次序/释放正确或足量绘制完成，延迟数值供比较，不代表物理触摸到显示的全链路延迟，也不是长期无卡顿保证。详见 [测量边界与结果](keyboard-latency.md)。
+
+`--short-taps` 另测 2/5/8/12/20/40ms 的短促点按，以及主线程同批收到按下/抬起的情形。统计自己的绘制回调是否选择了按下颜色；它不测物理显示器实际呈现，也不把“高亮未绘出”计作真实漏键。
+
 ## 构建离线包
 
 ```bash

@@ -739,6 +739,9 @@ class ThorApp:
             if self.show_debug_hud:
                 GLib.idle_add(self.drawing_area.queue_draw)
 
+    def _queue_keyboard_draw(self) -> None:
+        GLib.idle_add(self.drawing_area.queue_draw)
+
     def _keyboard_down(self, tid: int, x: float, y: float) -> None:
         key = self.kb_layout.hit_test(x, y)
         if not key:
@@ -759,7 +762,7 @@ class ThorApp:
             self.last_key_label = key.shift_label if self.mods.active("shift") else key.label
             self.bridge.tap_key(key.code)
             self._start_key_repeat(key)
-        GLib.idle_add(self.drawing_area.queue_draw)
+        self._queue_keyboard_draw()
 
     def _handle_touch_move(self, tid: int, x: float, y: float, now: float) -> None:
         self.last_event_time = time.time()
@@ -792,7 +795,7 @@ class ThorApp:
             if tid == self.active_key_tid:
                 self.active_key_press = None
                 self.active_key_tid = None
-            GLib.idle_add(self.drawing_area.queue_draw)
+            self._queue_keyboard_draw()
         elif owner == "trackpad" or (owner is None and self.mode != "settings"):
             self.gesture.touch_up(tid, now)
             if self.show_debug_hud:
@@ -1039,6 +1042,9 @@ class ThorApp:
             self._draw_ms_max = max(self._draw_ms_max, took)
             self._draws += 1
 
+    def _paint_orbital_offset(self, cr, now):
+        return self.burn_in.get_orbital_offset(now)
+
     def _paint(self, cr: cairo.Context) -> bool:
         self.frame_count += 1
         now = time.time()
@@ -1053,7 +1059,7 @@ class ThorApp:
 
         # Orbital micro-shift for burn-in protection on static UI
         now_mono = time.monotonic()
-        dx, dy = self.burn_in.get_orbital_offset(now_mono)
+        dx, dy = self._paint_orbital_offset(cr, now_mono)
         cr.save()
         cr.translate(dx, dy)
 
