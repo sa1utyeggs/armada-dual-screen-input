@@ -1,4 +1,8 @@
 <p align="center">
+  <strong>简体中文</strong> · <a href="README.en.md">English</a>
+</p>
+
+<p align="center">
   <img src="assets/icons/armada-dual-screen-input.svg" width="120" height="120" alt="虚拟键鼠应用图标：Armada 船帆、键盘、触控板与触点">
 </p>
 
