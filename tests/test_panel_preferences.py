@@ -151,6 +151,36 @@ class PanelPreferencesTests(unittest.TestCase):
         self.assertTrue(self.app.preferences.dirty)
         self.assertEqual(self.app.preferences.values["sensitivity"], 3.)
 
+    def test_update_buttons_need_confirmation_and_never_send_game_input(self):
+        self.enter()
+        self.app.updates = SimpleNamespace(available=True, confirming=False,
+            refresh=Mock(), check=Mock(), install=Mock())
+        self.app._watch_updates = Mock()
+        self.app._preferences_down(1, 700, 250)
+        self.assertEqual(self.app.preferences.section, 'updates')
+        self.app._preferences_down(1, 200, 800)
+        self.app.updates.check.assert_called_once()
+        self.app._preferences_down(1, 900, 800)
+        self.app.updates.install.assert_not_called()
+        self.assertTrue(self.app.updates.confirming)
+        self.app._preferences_down(1, 900, 880)
+        self.assertFalse(self.app.updates.confirming)
+        self.app._preferences_down(1, 900, 800)
+        self.app._preferences_down(1, 900, 800)
+        self.app.updates.install.assert_called_once()
+        self.assertFalse(self.bridge.events)
+        self.assertFalse(self.config.exists())
+
+    def test_unsaved_settings_block_install_without_saving_or_discarding(self):
+        self.enter()
+        self.app.preferences.change('sensitivity', 3.)
+        self.app.preferences.section = 'updates'
+        self.app.updates = SimpleNamespace(available=True, confirming=True, install=Mock())
+        self.app._preferences_down(1, 900, 800)
+        self.app.updates.install.assert_not_called()
+        self.assertTrue(self.app.preferences.dirty)
+        self.assertFalse(self.config.exists())
+
 
 if __name__ == "__main__":
     unittest.main()
