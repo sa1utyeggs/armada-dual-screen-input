@@ -8,5 +8,6 @@
 - Do not automate real input against a game as a test. Interactive device checks need explicit task context; test helpers should target only their own windows.
 - Preserve vendor provenance, licenses and `UPSTREAM` change notes. The root MIT license does not replace dependency licenses.
 - Keep README concise; installation in `docs/installation.md`, compatibility in `docs/compatibility.md`, detailed historical evidence in the existing docs. Separate measured, user-reported and unverified outcomes.
+- Keep `README.md` (Simplified Chinese) and `README.en.md` (English) aligned when changing features, installation commands, support boundaries or navigation. Retain reciprocal language links; detailed linked documents may remain Chinese and must be labeled accordingly in the English README.
 - Do not change repository visibility or publish a public Release without a direct user request. Preparing a package or a PR does not authorize broader access.
 - Pushing a `v<VERSION>` tag triggers the authorized release pipeline: keep tag/version/changelog validation, full checks and package checksum verification before publishing. Manual workflow runs and PR builds must remain artifact-only.
