@@ -100,10 +100,10 @@ class PanelPreferencesTests(unittest.TestCase):
                            ("scroll_scale", .1), ("keyboard_repeat_enabled", False),
                            ("keyboard_repeat_delay_ms", 500)):
             draft.change(key, value)
-        self.app.position = SimpleNamespace(gesture=SimpleNamespace(sensitivity=2.), stop=Mock())
+        self.app.position = SimpleNamespace(position_gesture=SimpleNamespace(sensitivity=2.), stop=Mock())
         self.app._save_preferences()
         self.assertEqual(self.app.gesture.sensitivity, 2.3)
-        self.assertEqual(self.app.position.gesture.sensitivity, 3.)
+        self.assertEqual(self.app.position.position_gesture.sensitivity, 3.)
         self.assertEqual(self.app.scroll_output.scale, .1)
         self.assertFalse(draft.dirty)
         self.app.set_mode("trackpad")

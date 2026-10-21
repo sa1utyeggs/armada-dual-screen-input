@@ -16,6 +16,7 @@ import threading
 import time
 
 from .gamescope_target import InputUnavailable
+from .marker_state import validate_rings
 
 
 class MarkerOverlay:
@@ -51,6 +52,9 @@ class MarkerOverlay:
                 or type(pressed) is not bool):
             raise ValueError('invalid marker state')
         self.pending = (*point, pressed)
+
+    def update_contacts(self, contacts):
+        self.pending = {'contacts': validate_rings(contacts)}
 
     def restore(self):
         """Reassert only our passive window once after input focus returns."""

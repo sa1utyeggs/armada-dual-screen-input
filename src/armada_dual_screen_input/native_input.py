@@ -86,7 +86,7 @@ class TouchRouteWatch:
 
 
 class NativeTouchInput:
-    def __init__(self, target, expected, *, focus_check):
+    def __init__(self, target, expected, *, focus_check, max_contacts=2):
         if expected.touch_mode not in (1, 4) or expected.server_pid <= 0:
             raise InputUnavailable('upper target touch policy is not supported')
         self.target, self.focus_check = target, focus_check
@@ -99,7 +99,8 @@ class NativeTouchInput:
         try:
             # Verified on Thor: a BUS_VIRTUAL device has no physical connector
             # rotation. Coordinates are already in upper output space.
-            self.touch = VirtualTouchProbe(rotation='normal', guard=self._guard)
+            self.touch = VirtualTouchProbe(rotation='normal', guard=self._guard,
+                                           max_contacts=max_contacts)
             self.node = self.touch.node
             self.route = TouchRouteWatch(self.node, expected.server_pid)
             self.route.start()

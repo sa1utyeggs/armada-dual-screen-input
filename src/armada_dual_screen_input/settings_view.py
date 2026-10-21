@@ -2,7 +2,7 @@
 from . import steam_style as s
 from .input_settings import BOOLEANS, CHOICES, NUMBERS, SECTIONS
 
-TITLES = {"mouse": "鼠标", "position": "定位触摸", "keyboard": "键盘"}
+TITLES = {"mouse": "鼠标", "position": "触屏", "keyboard": "键盘"}
 TOGGLES = {
     "tap_to_click": ("轻点点击", "单指轻点触控板，模拟鼠标左键"),
     "glide": ("惯性滑行", "手指松开后，鼠标继续短暂滑动"),
@@ -50,7 +50,7 @@ def draw(cr, draft):
         cr.set_source_rgb(*s.MUTED)
         for text, y in (("默认 2.00×；调高后，下屏小幅滑动可让上屏圆环移动更远。", 460),
                         ("第一指滑动定位，第二指按住触摸；抬起第二指释放。", 515),
-                        ("仅改变相对移动倍率，不改变触点判定、驱动或游戏设置。", 570)):
+                        ("仅影响定位子模式；直接触屏按绝对位置映射，不使用此倍率。", 570)):
             s.label(cr, text, 44, y, 25, max_width=1140)
     cr.set_source_rgb(*(s.DANGER if draft.error else s.ACCENT if draft.dirty else s.MUTED))
     s.label(cr, draft.message, 28, 934, 24, max_width=1180)

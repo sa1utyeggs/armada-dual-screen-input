@@ -51,6 +51,16 @@ class MarkerOverlayTests(unittest.TestCase):
         self.marker.poll()
         self.assertEqual(self.packets(),[[.5,.5,False],{'restore':True}])
 
+    def test_direct_updates_coalesce_and_empty_payload_clears_contacts(self):
+        self.ready()
+        self.marker.update_contacts(((.2,.3,True),(.7,.8,True)))
+        self.marker.update_contacts(((.4,.3,True),(.6,.8,True)))
+        self.marker.poll()
+        self.assertEqual(self.packets(),[{'contacts':[[.4,.3,True],[.6,.8,True]]}])
+        self.marker.update_contacts(())
+        self.marker.poll()
+        self.assertEqual(self.packets(),[{'contacts':[]}])
+
     def test_restore_survives_temporary_ipc_backpressure(self):
         self.ready()
         self.marker.restore()

@@ -1,6 +1,6 @@
 # Armada Dual Screen Input · 虚拟键鼠
 
-ArmadaOS 双屏掌机的副屏键盘、触控板和定位触摸应用。看上屏，在下屏操作；定位触摸不需要镜像或持续传输画面。
+ArmadaOS 双屏掌机的副屏键盘、触控板和触屏应用。看上屏，在下屏操作；两种触屏模式均不需要镜像或持续传输画面。
 
 目前为预览版，**实机验证设备是 AYN Thor，主要支持 Steam Game Mode**。Desktop Mode 默认关闭，其他机型仍需适配和验证。
 
@@ -18,12 +18,12 @@ curl -fsSL https://raw.githubusercontent.com/sa1utyeggs/armada-dual-screen-input
 离线安装包在 [GitHub Releases](https://github.com/sa1utyeggs/armada-dual-screen-input/releases) 中按版本发布。
 选择版本，在 **Assets** 中同时下载 `armada-dual-screen-input-<版本>-aarch64.tar.gz` 和 `SHA256SUMS`，再传到掌机。
 该安装包包含私有运行库；GitHub 自动生成的 **Source code** 压缩包只是源码，不能代替离线安装包。
-以下以 `v0.1.0-preview.1` 为例：
+以下以 `v0.1.0-preview.2` 为例：
 
 ```bash
 sha256sum -c SHA256SUMS
-tar -xzf armada-dual-screen-input-0.1.0-preview.1-aarch64.tar.gz
-cd armada-dual-screen-input-0.1.0-preview.1-aarch64
+tar -xzf armada-dual-screen-input-0.1.0-preview.2-aarch64.tar.gz
+cd armada-dual-screen-input-0.1.0-preview.2-aarch64
 bash install.sh
 ```
 
@@ -36,7 +36,7 @@ bash install.sh
 - **键鼠**：下屏虚拟键盘和触控板，中文界面、Steam 风格控件；闲置不叠加变暗遮罩。
 - **多语言键盘原型**：英文 US / 中文全拼切换，下屏候选词；复用系统词库，中文当前面向 Game Mode。[使用与兼容限制](docs/multilingual-keyboard.md)
 - **触控板**：单指移动/轻点、双指滚轮，支持独立滚动缩放。
-- **定位触摸**：第一指移动上屏圆环；第二指确认触摸，保持第二指并移动第一指可拖动。
+- **触屏**：在“定位”和“直接触屏”两种子模式中选择；前者保留第一指定位、第二指确认，后者直接映射每根手指的位置并显示多个圆环。进入页签自动启用，不提供暂停按钮。
 - **手动管理**：关闭会释放输入并退出；收起可以再次展开，官方下屏服务继续运行。
 
 ```bash
@@ -79,6 +79,7 @@ python3 -B tools/build_release.py
 ## 当前验证边界
 
 已有 Thor 用户交互验收包括键鼠基础操作、定位触摸与拖动、右侧 Steam 菜单后的圆环自动恢复，以及正常切换恢复速度优化。
+2026-10-21 的“触屏”重命名与直接多指子模式为新增功能；自动检查与用户交互验收分开记录。实际接收的手指数量取决于下屏硬件和上屏应用，部分游戏触摸策略会转换成鼠标。
 《杀戮尖塔2》时间线的间歇重连仍待定位，长期、休眠恢复和其他机型的稳定性尚未完成验证。
 历史测试数量和当时的限制保留在 [历史记录](https://github.com/sa1utyeggs/armada-dual-screen-input/blob/main/docs/history.md)、[定位触摸记录](https://github.com/sa1utyeggs/armada-dual-screen-input/blob/main/docs/position-touch.md)中，不代表当前所有环境都已验证。
 

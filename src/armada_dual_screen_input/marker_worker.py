@@ -25,6 +25,7 @@ def run(fd, display, server_pid):
     from gi.repository import Gtk, Gdk, GdkX11, GLib
     import cairo
     from .gamescope_focus import UpperFocus, Cookie, Geometry
+    from .marker_state import decode_rings
 
     channel = socket.socket(fileno=fd)
     channel.setblocking(False)
@@ -46,7 +47,7 @@ def run(fd, display, server_pid):
     size = root_size()
     if not all(1 <= n <= 8192 for n in size):
         raise RuntimeError('invalid upper output geometry')
-    state = {'point': (.5, .5), 'pressed': False, 'ready': False, 'updates': 0, 'draws': 0}
+    state = {'rings': (), 'ready': False, 'updates': 0, 'draws': 0}
 
     def send(message):
         try:
@@ -109,13 +110,15 @@ def run(fd, display, server_pid):
         cr.set_source_rgba(0, 0, 0, 0)
         cr.paint()
         cr.set_operator(cairo.OPERATOR_OVER)
-        x, y = state['point'][0]*(size[0]-1), state['point'][1]*(size[1]-1)
-        for width, color in ((5, (0, 0, 0, .85)),
-                             (2.5, (1., .65, .15, 1.) if state['pressed'] else (.35, .85, 1., 1.))):
-            cr.set_line_width(width)
-            cr.set_source_rgba(*color)
-            cr.arc(x, y, 12, 0, math.tau)
-            cr.stroke()
+        for u, v, pressed in state['rings']:
+            x, y = u*(size[0]-1), v*(size[1]-1)
+            for width, color in ((5, (0, 0, 0, .85)),
+                                 (2.5, (1., .65, .15, 1.) if pressed else (.35, .85, 1., 1.))):
+                cr.set_line_width(width)
+                cr.set_source_rgba(*color)
+                cr.new_sub_path()
+                cr.arc(x, y, 12, 0, math.tau)
+                cr.stroke()
         # Open center keeps small card text and targets visible.
         if not state['ready']:
             state['ready'] = True
@@ -141,20 +144,16 @@ def run(fd, display, server_pid):
                 if isinstance(message, dict) and message == {'restore': True}:
                     restore = True
                     continue
-                x, y, pressed = message
-                if (not all(type(n) in (float, int) and math.isfinite(n) and 0 <= n <= 1 for n in (x, y))
-                        or type(pressed) is not bool):
-                    raise ValueError('invalid marker update')
-                latest = (x, y, pressed)
+                latest = decode_rings(message)
                 state['updates'] += 1
         except (OSError, ValueError, TypeError):
             loop.quit()
             return False
         if latest is not None:
-            old = state['point']
-            state['point'], state['pressed'] = latest[:2], latest[2]
+            old = state['rings']
+            state['rings'] = latest
             # Redraw the old/new ring bounds, not every pixel of the output.
-            for point in (old, state['point']):
+            for point in (*old, *state['rings']):
                 window.queue_draw_area(round(point[0]*(size[0]-1))-17,
                                        round(point[1]*(size[1]-1))-17, 35, 35)
         if restore:
@@ -164,9 +163,9 @@ def run(fd, display, server_pid):
             # when the controller has verified the foreground target again;
             # never present(), take focus, or fight another overlay on a timer.
             window.get_window().raise_()
-            point = state['point']
-            window.queue_draw_area(round(point[0]*(size[0]-1))-17,
-                                   round(point[1]*(size[1]-1))-17, 35, 35)
+            for point in state['rings']:
+                window.queue_draw_area(round(point[0]*(size[0]-1))-17,
+                                       round(point[1]*(size[1]-1))-17, 35, 35)
             window.get_display().flush()
         return True
 

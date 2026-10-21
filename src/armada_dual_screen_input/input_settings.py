@@ -47,7 +47,7 @@ NUMBERS = {
         NumberSetting("scroll_speed", "滚轮速度档位", "双指滚动；1 最慢，5 最快", 3, 1, 5, 1),
         NumberSetting("scroll_scale", "滚轮输出倍率", "降低倍率可更精细地滚动", 1., .01, 1., .05, "×"),
         NumberSetting("friction", "滑行阻力", "松手后的滑行；越大停止越快", 5, 1, 10, 1),
-        NumberSetting("position_sensitivity", "定位触摸速度", "下屏滑动到上屏圆环的移动倍率", 2., .1, 4., .1, "×"),
+        NumberSetting("position_sensitivity", "定位模式速度", "仅影响定位圆环，不影响直接触屏的绝对位置", 2., .1, 4., .1, "×"),
         NumberSetting("keyboard_repeat_delay_ms", "长按重复等待", "按住多久后开始重复输入", 350, 150, 800, 25, " ms"),
         NumberSetting("keyboard_repeat_interval_ms", "重复输入间隔", "间隔越短，重复输入越快", 60, 20, 200, 10, " ms"),
         NumberSetting("keyboard_caps_window_ms", "Shift 双击间隔", "此时间内双击 Shift 锁定大写", 350, 150, 800, 25, " ms"),
