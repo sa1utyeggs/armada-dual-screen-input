@@ -52,6 +52,7 @@ from . import steam_style
 from . import steam_keys
 from .keyboard_pulses import KeyboardPulses
 from .keyboard_redraw import KeyboardRedraw, widget_rect
+from .key_feedback import KeyFeedback
 from .keyboard_languages import KeyboardLanguages
 from . import keyboard_language_view
 from .scroll_output import ScaledScroll, read_scroll_scale
@@ -96,6 +97,8 @@ class PanelApp(upstream.ThorApp):
         self.keyboard_redraw = KeyboardRedraw()
         self.main_loop = None
         super().__init__()
+        self.key_feedback = KeyFeedback(GLib.timeout_add, GLib.source_remove,
+                                        self._invalidate_keyboard)
         self.position = PanelPosition(sensitivity=self.input_cfg["position_sensitivity"],
                                       touch_mode=self.touch_mode, pad=touchscreen_selector.PAD)
         self._position_revision = self.position.revision
@@ -362,7 +365,20 @@ class PanelApp(upstream.ThorApp):
     def _queue_keyboard_draw(self):
         """Invalidate only old/new keycaps when no label or modifier changed."""
         self._last_keyboard_activity = time.monotonic()
+        feedback = getattr(self, 'key_feedback', None)
+        if feedback is not None:
+            feedback.sync(self.active_key_press)
+        self._invalidate_keyboard()
+
+    def _visible_key_codes(self):
+        feedback = getattr(self, 'key_feedback', None)
+        return feedback.visible if feedback is not None else self.active_key_press
+
+    def _invalidate_keyboard(self):
+        if getattr(self, '_keyboard_damage_source', None):
+            return
         def invalidate():
+            self._keyboard_damage_source = None
             if self._cleaned:
                 return False
             damage = getattr(self, 'keyboard_redraw', None)
@@ -370,7 +386,7 @@ class PanelApp(upstream.ThorApp):
                     or self.collapsed):
                 self.drawing_area.queue_draw()
                 return False
-            regions = damage.regions(self.kb_layout, self.active_key_press)
+            regions = damage.regions(self.kb_layout, self._visible_key_codes())
             if regions is None:
                 self.drawing_area.queue_draw()
                 return False
@@ -378,7 +394,7 @@ class PanelApp(upstream.ThorApp):
             for rect in regions:
                 self.drawing_area.queue_draw_area(*widget_rect(rect,allocation.width,allocation.height))
             return False
-        GLib.idle_add(invalidate)
+        self._keyboard_damage_source = GLib.idle_add(invalidate)
 
     def _queue_language_draw(self):
         if self._cleaned:
@@ -470,6 +486,8 @@ class PanelApp(upstream.ThorApp):
         self._touch_owner.clear()
         self._slider_drag = None
         self.active_key_press = self.active_key_tid = None
+        if getattr(self, 'key_feedback', None) is not None:
+            self.key_feedback.clear()
         if getattr(self, "preferences", None) is not None:
             self.preferences.drag = None
         if getattr(self, "languages", None) is not None:
@@ -805,8 +823,15 @@ class PanelApp(upstream.ThorApp):
             if keyboard_language_view.visible(self.languages):
                 keyboard_language_view.draw(cr, self.languages, self._language_top())
         steam_keys.draw_keyboard(self, cr)
+        visible = self._visible_key_codes()
         if getattr(self, 'keyboard_redraw', None) is not None:
-            self.keyboard_redraw.painted(self.kb_layout, self.active_key_press, cr)
+            self.keyboard_redraw.painted(self.kb_layout, visible, cr)
+        feedback = getattr(self, 'key_feedback', None)
+        if feedback is not None:
+            painted = [key.code for row in self.kb_layout.rows for key in row
+                       if key.code in feedback.visible and all(cr.in_clip(x,y)
+                           for x in (key.x,key.x+key.w) for y in (key.y,key.y+key.h))]
+            feedback.painted(painted)
 
     def _language_top(self):
         # The split overlay appears only while composing; idle pad/key bounds
@@ -977,6 +1002,8 @@ class PanelApp(upstream.ThorApp):
                 self.key_pulses.close()
             if hasattr(self, "raw_key_pulses"):
                 self.raw_key_pulses.close()
+            if getattr(self, 'key_feedback', None) is not None:
+                self.key_feedback.close()
             # The parent cleanup only closes this app's resources; our raw
             # fd stays -1, dim mirror never started, and IPC never bound.
             super().cleanup()

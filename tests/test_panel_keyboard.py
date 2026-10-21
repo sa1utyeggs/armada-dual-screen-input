@@ -119,6 +119,23 @@ class PanelKeyboardTests(unittest.TestCase):
         self.assertFalse(self.bridge.held_keys)
         self.assertIsNone(self.app.held_key)
 
+    def test_visual_feedback_never_extends_logical_key_ownership(self):
+        from armada_dual_screen_input.key_feedback import KeyFeedback
+        feedback=KeyFeedback(self.scheduler.schedule,self.scheduler.cancel,lambda:None,
+                             clock=lambda:self.scheduler.now/1000)
+        self.app.key_feedback=feedback; self.addCleanup(feedback.close)
+        code=self.down('a',1)
+        self.scheduler.advance(3); self.up(1)
+        self.assertEqual(self.bridge.events,[(0,code,True),(3,code,False)])
+        self.assertIsNone(self.app.held_key)
+        self.assertEqual(feedback.visible,{code})
+        feedback.painted([code]); self.scheduler.advance(60)
+        self.assertFalse(feedback.visible)
+        self.assertEqual(self.bridge.events,[(0,code,True),(3,code,False)])
+        self.down('s',2); self.app._reset_input()
+        self.assertFalse(feedback.visible)
+        self.assertFalse(self.bridge.held_keys)
+
     def test_fast_same_key_old_release_cannot_end_new_press(self):
         code = self.down("a", 1)
         old_release = self.scheduler.callbacks[1]

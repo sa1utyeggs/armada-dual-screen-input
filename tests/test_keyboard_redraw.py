@@ -184,8 +184,9 @@ class DamagePixels(unittest.TestCase):
                     cr.set_source_rgb(*steam_style.BG); cr.paint()
                     cr.translate(offset,offset); steam_keys.draw_keyboard(app,cr)
                 paint(surface); damage.remember(layout,None)
-                for code in (30,31,None,42,30,None):
-                    app.active_key_press=code
+                for code in (30,31,frozenset((30,31)),frozenset((31,)),None,42,30,None):
+                    app.key_feedback=SimpleNamespace(visible=code) if isinstance(code,frozenset) else None
+                    app.active_key_press=code if isinstance(code,int) else None
                     if code==42: layout.shift_active=True
                     regions=damage.regions(layout,code)
                     paint(surface,regions); damage.remember(layout,code)

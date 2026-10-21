@@ -22,6 +22,7 @@ def main():
     parser.add_argument('--run-own-window-test',action='store_true',required=True)
     parser.add_argument('--output',type=Path)
     parser.add_argument('--defer-status-during-typing',action='store_true')
+    parser.add_argument('--short-taps',action='store_true',help='Compare sub-frame touch highlight coverage')
     args=parser.parse_args()
     if sys.platform!='linux': parser.error('Linux GTK required')
     sys.path.insert(0,str(Path(__file__).resolve().parent.parent/'src'))
@@ -29,6 +30,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix='ads-render-bench-') as temp,patch.dict(os.environ,{'XDG_STATE_HOME':temp}):
         from armada_dual_screen_input import panel_app as panel
         from armada_dual_screen_input.keyboard_redraw import KeyboardRedraw
+        from armada_dual_screen_input.key_feedback import KeyFeedback
         from keyboard_layout import KeyboardLayout
         from burn_in import BurnInProtector
         Gtk,Gdk,GLib,Layer=panel.Gtk,panel.Gdk,panel.GLib,panel.GtkLayerShell
@@ -59,7 +61,9 @@ def main():
         app.burn_in=BurnInProtector(idle_floor=1)
         loop=GLib.MainLoop(); state={'phase':0,'step':0,'error':None,'last':time.perf_counter()}
         records=[{'mode':name,'draw':[],'heartbeat':[],'partial_draw':[],'full_draw':[]}
-                 for name in ('english-full','english-keycap','ime-full','ime-candidate')]
+                 for name in (('live-state','visible-feedback') if args.short_taps else
+                              ('english-full','english-keycap','ime-full','ime-candidate'))]
+        seen=[set() for _ in records]; trials=[{} for _ in records]; current_taps={}
         sources=[]
         def draw(_,cr):
             try:
@@ -67,6 +71,12 @@ def main():
                 cr.scale(allocation.width/1240,allocation.height/1080)
                 clip=cr.clip_extents(); partial=clip!=(0.,0.,1240.,1080.)
                 began=time.perf_counter(); app._paint(cr)
+                if args.short_taps:
+                    visible=app._visible_key_codes()
+                    codes=set() if visible is None else {visible} if isinstance(visible,int) else visible
+                    for key in (key for row in app.kb_layout.rows for key in row if key.code in codes):
+                        if all(cr.in_clip(x,y) for x in (key.x,key.x+key.w) for y in (key.y,key.y+key.h)):
+                            if key.code in current_taps: seen[state['phase']].add(current_taps[key.code])
                 elapsed=(time.perf_counter()-began)*1000
                 record=records[state['phase']]; record['draw'].append(elapsed)
                 record['partial_draw' if partial else 'full_draw'].append(elapsed)
@@ -74,6 +84,23 @@ def main():
                 state['error']=str(error); loop.quit()
             return True
         area.connect('draw',draw)
+        def short_event(index,code,down):
+            if down: current_taps[code]=index
+            app.active_key_press=code if down else None
+            app._queue_keyboard_draw()
+            return False
+        def short_phase():
+            for i in range(70):
+                duration=(0,2,5,8,12,20,40)[i%7]; code=(30,31,32,33,36,37,38)[(i//7+i)%7]
+                trials[state['phase']][i]=duration
+                if duration==0:
+                    def coalesced(index=i,key=code):
+                        short_event(index,key,True); short_event(index,key,False)
+                        return False
+                    sources.append(GLib.timeout_add(100+i*100,coalesced))
+                else:
+                    sources.append(GLib.timeout_add(100+i*100,short_event,i,code,True))
+                    sources.append(GLib.timeout_add(100+i*100+duration,short_event,i,code,False))
         def tick():
             state['step']+=1
             # Alternating key press/release at 8 keys per second.
@@ -91,6 +118,12 @@ def main():
             now=time.perf_counter(); records[state['phase']]['heartbeat'].append(max(0,(now-state['last'])*1000-5))
             state['last']=now; return True
         def phase():
+            if args.short_taps:
+                if state['phase']==0:
+                    state['phase']=1; current_taps.clear(); app.active_key_press=None
+                    app.key_feedback=KeyFeedback(GLib.timeout_add,GLib.source_remove,app._invalidate_keyboard)
+                    area.queue_draw(); short_phase(); return True
+                loop.quit(); return False
             if state['phase']<3:
                 state['phase']+=1; state['step']=0; app.active_key_press=None
                 if state['phase']==2:
@@ -104,11 +137,14 @@ def main():
             return True
         try:
             window.show_all()
-            sources=[GLib.timeout_add(62,tick),GLib.timeout_add(5,heartbeat),
-                     GLib.timeout_add(6000,phase),GLib.timeout_add(1000,status)]
+            sources=[GLib.timeout_add(5,heartbeat),GLib.timeout_add(7300 if args.short_taps else 6000,phase),
+                     GLib.timeout_add(1000,status)]
+            if args.short_taps: short_phase()
+            else: sources.append(GLib.timeout_add(62,tick))
             loop.run()
         finally:
             app._cleaned=True
+            if getattr(app,'key_feedback',None) is not None: app.key_feedback.close()
             for source in sources:
                 if GLib.MainContext.default().find_source_by_id(source): GLib.source_remove(source)
             window.destroy()
@@ -116,6 +152,13 @@ def main():
             'defer_status_during_typing':args.defer_status_during_typing,
             'cases':[{key:summary(value) if isinstance(value,list) else value for key,value in record.items()} for record in records]}
     result['passed']=not result['error'] and all(c['draw']['count']>=30 for c in result['cases'])
+    if args.short_taps:
+        for i,record in enumerate(result['cases']):
+            record['highlighted_taps']=len(seen[i]); record['planned_taps']=len(trials[i])
+            record['by_duration_ms']={'coalesced' if ms==0 else str(ms):{'shown':sum(1 for tap,duration in trials[i].items()
+                if duration==ms and tap in seen[i]),'planned':sum(1 for duration in trials[i].values() if duration==ms)}
+                for ms in (0,2,5,8,12,20,40)}
+        result['passed']=result['passed'] and len(seen[1])==len(trials[1])==70
     encoded=json.dumps(result,indent=2)
     if args.output: args.output.write_text(encoded+'\n')
     print(encoded)

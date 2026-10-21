@@ -10,10 +10,11 @@ class KeyboardRedraw:
 
     @staticmethod
     def state(layout, pressed):
+        codes = frozenset() if pressed is None else frozenset((pressed,)) if isinstance(pressed,int) else frozenset(pressed)
         return (layout.shift_active, layout.caps_lock,
                 bool(getattr(layout, 'ctrl_active', False)),
                 bool(getattr(layout, 'alt_active', False)),
-                bool(getattr(layout, 'super_active', False)), pressed)
+                bool(getattr(layout, 'super_active', False)), codes)
 
     def remember(self, layout, pressed):
         self.drawn = self.state(layout, pressed)
@@ -23,7 +24,7 @@ class KeyboardRedraw:
         current = self.state(layout, pressed)
         keys = [key for row in layout.rows for key in row]
         if self.drawn is not None and self.drawn[:-1] == current[:-1]:
-            codes = {self.drawn[-1], pressed} - {None}
+            codes = self.drawn[-1] | current[-1]
             keys = [key for key in keys if key.code in codes]
             if {key.code for key in keys} != codes:
                 return
@@ -35,7 +36,7 @@ class KeyboardRedraw:
         current = self.state(layout, pressed)
         if self.drawn is None or self.drawn[:-1] != current[:-1]:
             return None  # Font/label/modifier changes need the full keyboard.
-        codes = {self.drawn[-1], pressed} - {None}
+        codes = self.drawn[-1] | current[-1]
         keys = [key for row in layout.rows for key in row if key.code in codes]
         if {key.code for key in keys} != codes:
             return None
