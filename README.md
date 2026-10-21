@@ -1,98 +1,91 @@
-# Armada Dual Screen Input · 虚拟键鼠
+<p align="center">
+  <img src="assets/icons/armada-dual-screen-input.svg" width="120" height="120" alt="虚拟键鼠应用图标：Armada 船帆、键盘、触控板与触点">
+</p>
 
-ArmadaOS 双屏掌机的副屏键盘、触控板和触屏应用。看上屏，在下屏操作；两种触屏模式均不需要镜像或持续传输画面。
+<h1 align="center">虚拟键鼠 · Armada Dual Screen Input</h1>
 
-当前正式版为 **v0.1.1**，**实机验证设备是 AYN Thor，主要支持 Steam Game Mode**。Desktop Mode 默认关闭，其他机型仍需适配和验证。
+<p align="center">
+  <strong>让下屏成为键盘、触控板与触屏。</strong><br>
+  Virtual keyboard, touchpad and multi-touch for ArmadaOS handhelds.
+</p>
 
-## 安装
+<p align="center">
+  <a href="https://github.com/sa1utyeggs/armada-dual-screen-input/releases/latest"><img src="https://img.shields.io/github/v/release/sa1utyeggs/armada-dual-screen-input?label=release&amp;color=1a9fff" alt="最新正式版"></a>
+  <a href="https://github.com/sa1utyeggs/armada-dual-screen-input/actions/workflows/checks.yml"><img src="https://github.com/sa1utyeggs/armada-dual-screen-input/actions/workflows/checks.yml/badge.svg" alt="自动检查状态"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-52677e" alt="项目代码许可证 MIT"></a>
+</p>
 
-在 **Armada 桌面终端**执行这一条命令即可自动下载、准备依赖并安装，不需要 Git、SSH 密钥或手工解包：
+<p align="center">
+  <a href="https://github.com/sa1utyeggs/armada-dual-screen-input/releases/latest">下载正式版</a> ·
+  <a href="docs/installation.md">安装指南</a> ·
+  <a href="docs/usage.md">使用说明</a> ·
+  <a href="docs/compatibility.md">兼容范围</a> ·
+  <a href="https://github.com/sa1utyeggs/armada-dual-screen-input/issues">反馈问题</a>
+</p>
+
+面向 ArmadaOS 双屏掌机的独立 Linux 应用。在下屏输入、移动指针和触摸上屏，无需镜像或持续传输上屏画面。
+
+> **当前实测：AYN Thor · ArmadaOS · Steam Game Mode。** Desktop Mode 默认关闭，其他机型尚未实测。[系统版本与验证边界](docs/compatibility.md)
+
+## 能做什么
+
+| 功能 | 操作与效果 |
+| --- | --- |
+| 键盘与触控板 | Steam 风格的深色界面；下屏移动、点按与输入，支持英文 US 和中文全拼候选 |
+| 双指滚轮 | 单指移动、轻点点击、双指滚动；移动速度与滚轮倍率分别调整 |
+| 触屏双模式 | 下拉选择“定位”或“直接触屏”；上屏圆环标记触点，切页或关闭时释放旧触点 |
+| 输入设置 | 调整灵敏度、惯性和长按重复；保存后生效，升级保留个人配置 |
+| Steam 键盘联动 | 键鼠页临时抑制原生键盘；切页、收起或退出后恢复，异常退出有超时恢复机制 |
+| 应用内更新 | 在“设置 → 更新”手动检查正式版，确认后校验并安装；失败可重试、旧版本可回退 |
+
+### 界面预览
+
+| 中文键盘与触控板 | 直接触屏 |
+| :---: | :---: |
+| [![中文全拼候选与键鼠输入区域](.github/assets/keyboard-preview.png)](.github/assets/keyboard-preview.png) | [![触屏页的直接触屏模式与顶部下拉框](.github/assets/touch-preview.png)](.github/assets/touch-preview.png) |
+
+以上为离屏渲染预览，状态数值为示例；点击图片可查看原图。真实多指识别取决于下屏硬件、Steam 触摸策略及上屏应用。[多语言键盘](docs/multilingual-keyboard.md) · [触屏说明](docs/usage.md)
+
+## 快速开始
+
+在 **Armada 桌面终端**以普通用户运行：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/sa1utyeggs/armada-dual-screen-input/main/get.sh | bash
 ```
 
-也可以从 GitHub 下载 [`get.sh`](get.sh)，在下载目录执行 `bash get.sh`。
-安装使用普通用户，**不要 sudo**。默认添加“虚拟键鼠”应用和桌面入口，**不自动启动、不启用开机自启动**。
+安装后从桌面或应用菜单打开 **虚拟键鼠**，进入 Steam Game Mode 使用。**不要使用 sudo；默认不自动打开，也不开机自启。** 在线入口安装 `main` 当前构建；需要固定正式版本时，使用下面的离线包或指定已有 tag。
 
-离线安装包在 [GitHub Releases](https://github.com/sa1utyeggs/armada-dual-screen-input/releases) 中按版本发布。
-维护者推送与 `VERSION` 对应的 `v版本号` tag 后，CI 会自动检查、构建并发布；详见[发布流程](docs/development.md#发布)。
-选择版本，在 **Assets** 中同时下载 `armada-dual-screen-input-<版本>-aarch64.tar.gz` 和 `SHA256SUMS`，再传到掌机。
-该安装包包含私有运行库；GitHub 自动生成的 **Source code** 压缩包只是源码，不能代替离线安装包。
-以下以 `v0.1.1` 为例：
+离线安装：从 [最新正式版](https://github.com/sa1utyeggs/armada-dual-screen-input/releases/latest) 同时下载 ARM64 `.tar.gz` 和 `SHA256SUMS`，校验、解压后运行 `bash install.sh`。GitHub 自动生成的 **Source code** 不是离线安装包。
+
+已有安装可进入 **设置 → 更新 → 检查更新**，再确认升级。需要回退时运行：
 
 ```bash
-sha256sum -c SHA256SUMS
-tar -xzf armada-dual-screen-input-0.1.1-aarch64.tar.gz
-cd armada-dual-screen-input-0.1.1-aarch64
-bash install.sh
-```
-
-也可克隆源码后运行 `bash install.sh`；源码入口会校验并准备固定的 Fedora gtk-layer-shell 私有依赖。
-
-[完整安装、升级、回退与卸载](docs/installation.md) · [兼容范围](docs/compatibility.md) · [使用说明](docs/usage.md)
-
-## 功能
-
-- **键鼠**：下屏虚拟键盘和触控板，中文界面、Steam 风格控件；闲置不叠加变暗遮罩。
-- **多语言键盘原型**：英文 US / 中文全拼切换，下屏候选词；复用系统词库，中文当前面向 Game Mode。[使用与兼容限制](docs/multilingual-keyboard.md)
-- **触控板**：单指移动/轻点、双指滚轮，支持独立滚动缩放。
-- **触屏**：在“定位”和“直接触屏”两种子模式中选择；前者保留第一指定位、第二指确认，后者直接映射每根手指的位置并显示多个圆环。进入页签自动启用，不提供暂停按钮。
-- **手动管理**：关闭会释放输入并退出；收起可以再次展开，官方下屏服务继续运行。
-
-```bash
-~/.local/bin/armada-dual-screen-input start
-~/.local/bin/armada-dual-screen-input stop
-~/.local/bin/armada-dual-screen-input doctor
 ~/.local/bin/armada-dual-screen-input rollback
-~/.local/bin/armada-dual-screen-input uninstall
 ```
 
-更新时在新包中再次运行 `bash install.sh`，配置和日志保留。安装器只管理本应用用户目录及用户服务，不安装实验内核驱动。
+安装器只管理本应用的用户目录、桌面入口与用户服务，保留个人配置和原自启动选择。**不包含或启用实验内核驱动。** [完整安装、升级、回退与卸载](docs/installation.md)
 
-## 项目结构
+## 文档导航
 
-```text
-src/armada_dual_screen_input/  应用、输入状态机、会话与覆盖层
-tests/                       Python / JavaScript 回归检查
-tools/                       安装管理、离线打包、开发验证入口
-packaging/                   服务/桌面模板与固定依赖清单
-assets/icons/                应用图标
-vendor/ratatoskr/             固定第三方快照与来源说明
-docs/                        安装、使用、兼容性与实测记录
-extras/thor-touch-driver/    独立实验；不进入应用发布包
-```
+| 我想了解 | 文档 |
+| --- | --- |
+| 安装、依赖、升级或卸载 | [安装指南](docs/installation.md) |
+| 手势、中文输入、设置与更新 | [使用说明](docs/usage.md) · [多语言键盘](docs/multilingual-keyboard.md) |
+| 设备支持与已知限制 | [兼容范围](docs/compatibility.md) |
+| 参与开发与打包发布 | [开发指南](docs/development.md) |
+| 查看版本变化与原始测试结论 | [Changelog](CHANGELOG.md) · [历史记录](docs/history.md) |
+| 排查 Thor 下屏物理触点残留 | [驱动诊断与验证](docs/thor-ft5452-contact-lifecycle.md) · [独立实验与回退](extras/thor-touch-driver/README.md) |
 
-源码重构保留旧 `thor-panel` 配置和服务名，避免与旧安装并行启动。用户数据不进入仓库或发布包。
+触屏双模式的隔离检查与真实交互验收分开记录；直接多指、长期使用和休眠恢复仍需进一步验证。《杀戮尖塔2》时间线出现过间歇重连，原因尚未定位。Thor 原厂 FT5452 的物理触点残留不能靠调整应用灵敏度修复；独立驱动实验的短时实测不等于应用已修复驱动。[完整限制与证据](docs/compatibility.md)
 
-## 开发与发布
+## 开发与致谢
 
 ```bash
 python3 -B tools/run_tests.py --with-node
 python3 -B tools/build_release.py
 ```
 
-构建器只打包白名单源码和校验过的 Fedora 运行库，生成 aarch64 `.tar.gz`、文件清单和 `SHA256SUMS`。
-它不会连接掌机、安装应用或生成/加载驱动。Mac 可以构建包并运行纯逻辑测试；Linux GTK 检查仍需 Linux 环境。
+应用位于 `src/armada_dual_screen_input/`，检查位于 `tests/`，安装与打包工具位于 `tools/`。Mac 跳过 Linux GTK 检查；CI 在 Linux 执行完整检查。推送与 `VERSION` 对应的 tag 后，CI 构建、校验并发布 ARM64 离线包。[发布流程](docs/development.md#发布)
 
-[开发流程](https://github.com/sa1utyeggs/armada-dual-screen-input/blob/main/docs/development.md) · [第三方来源](THIRD_PARTY.md) · [变更记录](CHANGELOG.md)
-
-## 当前验证边界
-
-已有 Thor 用户交互验收包括键鼠基础操作、定位触摸与拖动、右侧 Steam 菜单后的圆环自动恢复，以及正常切换恢复速度优化。
-2026-10-21 的“触屏”重命名与直接多指子模式为新增功能；自动检查与用户交互验收分开记录。实际接收的手指数量取决于下屏硬件和上屏应用，部分游戏触摸策略会转换成鼠标。
-《杀戮尖塔2》时间线的间歇重连仍待定位，长期、休眠恢复和其他机型的稳定性尚未完成验证。
-历史测试数量和当时的限制保留在 [历史记录](https://github.com/sa1utyeggs/armada-dual-screen-input/blob/main/docs/history.md)、[定位触摸记录](https://github.com/sa1utyeggs/armada-dual-screen-input/blob/main/docs/position-touch.md)中，不代表当前所有环境都已验证。
-
-### AYN Thor 下屏触摸驱动问题
-
-在 Armada `20261010.c3d178c` / Linux `7.2.6` 的 Thor 下屏 FT5452 上，曾复现第二指落下漏识别、抬起后圆环仍为橙色；全部抬手后，物理输入设备仍报告接触。该现象发生在应用接收事件之前，调节应用灵敏度不能修复残留触点。
-
-独立驱动模块已完成一次 **90 秒实机测试及自动回退**：用户确认第二指抬起立即释放、拖动正常，触点记录恢复为零，上屏保持原厂驱动。两指同时落下、长期游戏及休眠恢复仍待专项验证；其他设备和系统构建未验证。
-
-这是可选实验，**应用安装器与发布包均不包含或启用驱动补丁**。已测试方案不替换启动内核、不配置开机加载，可手动回退或重启恢复原厂驱动；系统更新后须重新核对内核指纹，不应沿用不匹配的模块。
-参见 [诊断、补丁及验证记录](docs/thor-ft5452-contact-lifecycle.md)、[独立模块操作与回退](extras/thor-touch-driver/README.md)和 [Armada Issue #757](https://github.com/armada-os/armada/issues/757#issuecomment-6284200266)。
-
-## 许可证
-
-本项目代码使用 [MIT](LICENSE)。Ratatoskr、gtk-layer-shell 和仓库内的实验驱动保留各自的许可证，见 [THIRD_PARTY.md](THIRD_PARTY.md)。
+本项目基于 [Ratatoskr](vendor/ratatoskr/UPSTREAM) 的固定快照适配，使用私有 gtk-layer-shell 运行库。项目代码采用 [MIT](LICENSE)；第三方组件与 Armada 标识保留各自来源及权利，见 [THIRD_PARTY.md](THIRD_PARTY.md)。Steam 风格控件为独立绘制。
