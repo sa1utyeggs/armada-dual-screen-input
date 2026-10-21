@@ -82,9 +82,30 @@ SHA256SUMS
 ## 发布
 
 1. 在 feature 分支完成检查和兼容性说明，提交并通过 PR 评审。
-2. 更新 `VERSION` 与 `CHANGELOG.md`，从干净的指定提交构建，保留来源和校验记录。
-3. 为该干净提交创建与 `VERSION` 对应的 `v<VERSION>` 标签；在 GitHub Releases 中选择该标签发布，将 tar.gz 和同次构建的 SHA256SUMS 一起上传到 Assets。`preview` 版本标记为 Pre-release。不要用 GitHub 自动生成的 Source code 压缩包替代安装包；仓库私有时，Release 也不能匿名下载。
-4. 在 AYN Thor 上验证全新安装、保留配置升级、版本回退和卸载，再扩大支持范围。隔离环境检查与实机验收分别记录。
+2. 更新 `VERSION`，将本次 `CHANGELOG.md` 内容归到对应版本的非空 `## <VERSION>` 标题下，合并到 `main`。版本使用 SemVer，例如 `0.1.0-preview.3`；`-preview.3`、`-rc.1` 等标记为 Pre-release，只有 `+build` 元数据的版本仍为正式版。
+3. 在干净的 `main` 提交上创建并推送与 `VERSION` 完全对应的 tag。**推送 tag 就是发布动作**，只在已准备发布时执行：
 
-工作流仅测试或上传 Actions 构建产物，不会自动改变仓库可见性、创建公开 Release、连接掌机或安装驱动。
+   ```bash
+   (
+     set -eu
+     git switch main
+     git pull --ff-only
+     test -z "$(git status --porcelain)"
+     release_version=$(cat VERSION)
+     git tag -a "v$release_version" -m "Release v$release_version"
+     git push origin "v$release_version"
+   )
+   ```
+
+4. 打开 Actions 的 **Build and release offline package**：该 tag 的完整 Linux/Python/JavaScript 检查通过后，CI 校验 tag 与 `VERSION` 一致、目标提交属于 `main`、变更记录存在，再从该提交构建固定依赖的 aarch64 离线包并核对 SHA-256。发布 job 还会核对远端 tag 仍指向已构建提交。
+5. CI 创建 Release 草稿，上传 `armada-dual-screen-input-<VERSION>-aarch64.tar.gz` 和同次构建的 `SHA256SUMS`，最后发布。发布说明取自对应版本的 Changelog；预览版不标为 Latest。只有发布 job 获得 `contents: write`，检查和构建只读，不需要配置个人访问令牌。
+6. 在 AYN Thor 上验证全新安装、保留配置升级、版本回退和卸载，再扩大支持范围。隔离环境检查与实机验收分别记录。不要用 GitHub 自动生成的 Source code 压缩包替代安装包；仓库私有时，Release 也不能匿名下载。
+
+保留 **Run workflow** 手动入口：只运行检查和构建，上传包含安装包、校验文件与发布说明的 Actions artifact，不发布 Release。涉及发布流程的 PR 也会构建验证，但不会发布。
+
+检查、版本校验或构建失败时不创建 Release；上传失败时留在草稿。可在原 Actions run 中 **Re-run failed jobs** 继续上传并发布该草稿。已发布版本不会被重跑覆盖，应更新版本并推送新 tag；不要移动已发布 tag。
+
+工作流不改变仓库可见性、不连接掌机、不安装应用或驱动。
 不要向发布包加入个人运行库目录快照；所有二进制应来自固定依赖清单及可核对的来源。
+
+参考：[GitHub 可复用工作流](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows)、[GitHub CLI Release](https://cli.github.com/manual/gh_release_create)。
