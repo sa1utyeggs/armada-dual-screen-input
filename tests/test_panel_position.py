@@ -5,12 +5,19 @@ import unittest
 from armada_dual_screen_input.gamescope_target import InputUnavailable
 from armada_dual_screen_input.gamescope_focus import FocusSnapshot, FocusState
 from armada_dual_screen_input.panel_position import PanelPosition
+from armada_dual_screen_input.marker_target import MarkerTarget
 from armada_dual_screen_input.touchscreen_selector import PAD
 
 
 class Marker:
     size = (1920, 1080)
-    def __init__(self, **kwargs): self.valid=True; self.closed=False; self.updates=[]; self.restores=0
+    refresh_millihz = 119930
+    def __init__(self, *, target, frame_rate='auto'):
+        self.frame_rate = frame_rate
+        self.target=MarkerTarget.from_focus(target)
+        self.window=999
+        self.valid=True; self.closed=False; self.updates=[]; self.restores=0
+    def matches_focus(self, focus): return self.target.matches_focus(focus)
     def current(self, now): return self.valid and not self.closed
     def update(self, point, pressed=False): self.updates.append((point, pressed))
     def update_contacts(self, contacts): self.updates.append(tuple(contacts))
@@ -19,6 +26,7 @@ class Marker:
     def restore(self): self.restores+=1
     def close(self): self.closed=True
     def wait(self): pass
+    def reaped(self): return self.closed
 
 
 class Sender:
@@ -57,6 +65,15 @@ class PanelPositionTests(unittest.TestCase):
         self.tick(); self.tick(.09); self.tick(.01)
         self.assertTrue(self.p.armed)
         self.assertFalse(hasattr(self.p, 'capture'))
+
+    def test_selected_frame_rate_reaches_marker_without_changing_native_input(self):
+        self.p.frame_rate='30'
+        self.arm()
+        self.assertEqual(self.p.marker.frame_rate,'30')
+        self.assertEqual(self.p.monitor_millihz,119930)
+        self.assertFalse(self.p.sender.events)
+        self.p.stop()
+        self.assertEqual(self.p.monitor_millihz,119930)
 
     def test_new_finger_during_pending_route_cancels_and_waits_for_lift(self):
         self.tick(); self.tick(.25)
@@ -139,6 +156,40 @@ class PanelPositionTests(unittest.TestCase):
         self.tick(.51);self.tick(.25);self.tick(.01)
         self.assertTrue(self.p.armed)
 
+    def test_foreground_change_retires_decoration_and_rebinds_after_stability(self):
+        self.arm()
+        marker=self.p.marker
+        self.snapshot=replace(self.snapshot,window=22,input_window=22,app_id=42,
+                              graphics_app_id=42,surface_display=':1')
+        self.tick(.01)
+        self.assertTrue(marker.closed)
+        self.assertIsNone(self.p.marker)
+        self.assertFalse(self.p.armed)
+        self.tick(.01);self.tick(.21);self.tick(.01)
+        self.assertTrue(self.p.armed)
+        self.assertTrue(self.p.marker.matches_focus(self.snapshot))
+        self.assertEqual(self.p.sender.events,[])
+
+    def test_own_decoration_focus_is_not_adopted_as_an_application(self):
+        self.arm()
+        self.snapshot=replace(self.snapshot,window=self.p.marker.window,input_window=999)
+        self.tick(.01)
+        self.assertFalse(self.p.armed)
+        self.assertIsNone(self.p.marker)
+        self.tick(.01)
+        self.assertIsNone(self.p.marker)
+        self.assertIsNone(self.p.sender)
+
+    def test_completed_retired_markers_do_not_accumulate_across_window_switches(self):
+        self.arm()
+        for window in range(20,30):
+            self.snapshot=replace(self.snapshot,window=window,input_window=window)
+            self.tick(.01)
+            self.assertLessEqual(len(self.p._retired),1)
+            self.tick(.01);self.tick(.21);self.tick(.01)
+            self.assertTrue(self.p.armed)
+            self.assertEqual(self.p._retired,[])
+
     def test_route_failure_with_healthy_marker_still_uses_fault_backoff(self):
         self.arm()
         marker=self.p.marker
@@ -164,7 +215,8 @@ class PanelPositionTests(unittest.TestCase):
         self.snapshot=replace(game,app_id=769)
         self.tick(.01)
         self.assertTrue(old.closed)
-        self.assertIs(self.p.marker,marker)
+        self.assertIsNone(self.p.marker)
+        self.assertTrue(marker.closed)
         self.tick(2)
         self.assertFalse(self.p.armed)
         self.assertEqual(marker.restores,1)
@@ -174,10 +226,13 @@ class PanelPositionTests(unittest.TestCase):
         self.assertEqual(marker.restores,1)
         self.tick();self.tick(.21);self.tick(.01)
         self.assertTrue(self.p.armed)
-        self.assertEqual(marker.restores,2)
+        current_marker = self.p.marker
+        self.assertIsNot(current_marker, marker)
+        self.assertEqual(current_marker.restores,1)
+        self.assertTrue(current_marker.matches_focus(game))
         self.assertFalse(self.p.gesture.held)
         for _ in range(5): self.tick(.1)
-        self.assertEqual(marker.restores,2)
+        self.assertEqual(current_marker.restores,1)
 
     def test_new_aim_after_first_finger_lifts_does_not_require_orphan_end(self):
         self.arm()
@@ -246,11 +301,13 @@ class PanelPositionTests(unittest.TestCase):
         self.p.touch('begin', 1, self.now, 310, 363)
         self.p.touch('begin', 2, self.now, 930, 841)
         old = self.p.sender
+        marker = self.p.marker
         self.snapshot=replace(self.snapshot, window=22, input_window=22)
         self.tick(.01)
         self.assertTrue(old.closed)
         self.assertFalse(self.p.direct_gesture.contacts)
-        self.assertEqual(self.p.marker.updates[-1], ())
+        self.assertEqual(marker.updates[-1], ())
+        self.assertTrue(marker.closed)
 
     def test_return_to_position_keeps_previous_aim_without_reusing_old_touch(self):
         self.p.position_gesture.point = (.2, .8)

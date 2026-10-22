@@ -1,6 +1,6 @@
 """Focus-free settings surface using the same logical hit rectangles as input."""
 from . import steam_style as s
-from .input_settings import BOOLEANS, CHOICES, NUMBERS, SETTINGS_PAGES
+from .input_settings import BOOLEANS, CHOICES, NUMBERS, SETTINGS_PAGES, choice_caption
 
 TITLES = {"mouse": "鼠标", "position": "触屏", "keyboard": "键盘", "updates": "更新"}
 TOGGLES = {
@@ -8,9 +8,13 @@ TOGGLES = {
     "glide": ("惯性滑行", "手指松开后，鼠标继续短暂滑动"),
     "keyboard_repeat_enabled": ("长按重复输入", "按住字母、退格或方向键连续输入"),
 }
+CHOICE_LABELS = {
+    'keyboard_language': ('键盘语言', '点击切换 · 中文拼音目前用于 Game Mode'),
+    'marker_frame_rate': ('圆环帧率上限', '点击切换 · 静止时不持续刷新'),
+}
 
 
-def draw(cr, draft, updates=None):
+def draw(cr, draft, updates=None, *, monitor_millihz=0):
     cr.set_source_rgb(*s.FG)
     s.label(cr, "设置", 28, 150, 34, bold=True)
     cr.set_source_rgb(*s.MUTED)
@@ -25,12 +29,13 @@ def draw(cr, draft, updates=None):
     for key, top in draft.rows():
         s.rounded(cr, 24, top, 1192, 88, 8, s.SURFACE)
         if key in CHOICES:
+            title, note = CHOICE_LABELS[key]
             cr.set_source_rgb(*s.FG)
-            s.label(cr, "键盘语言", 44, top + 12, 26)
+            s.label(cr, title, 44, top + 12, 26)
             cr.set_source_rgb(*s.MUTED)
-            s.label(cr, "点击切换 · 中文拼音目前用于 Game Mode", 44, top + 55, 21, max_width=700)
+            s.label(cr, note, 44, top + 55, 21, max_width=700)
             s.button(cr, 790, top + 12, 402, 64,
-                     CHOICES[key][draft.values[key]], True)
+                     choice_caption(key, draft.values[key], monitor_millihz), True)
             continue
         spec = NUMBERS.get(key)
         title, note = (spec.label, spec.note) if spec else TOGGLES[key]
@@ -52,9 +57,10 @@ def draw(cr, draft, updates=None):
         s.label(cr, spec.display(value), 1134, top + 49, 25, centered=True, max_width=126)
     if draft.section == "position":
         cr.set_source_rgb(*s.MUTED)
-        for text, y in (("默认 2.00×；调高后，下屏小幅滑动可让上屏圆环移动更远。", 460),
-                        ("第一指滑动定位，第二指按住触摸；抬起第二指释放。", 515),
-                        ("仅影响定位子模式；直接触屏按绝对位置映射，不使用此倍率。", 570)):
+        for text, y in (("定位速度仅影响定位子模式；直接触屏按绝对位置映射。", 540),
+                        ("第一指滑动定位，第二指按住触摸；抬起第二指释放。", 595),
+                        ("圆环最高不超过上屏刷新率；实际帧率取决于系统负载。", 650),
+                        ("帧率设置适用于两种触屏模式，不改变游戏限帧或输入频率。", 705)):
             s.label(cr, text, 44, y, 25, max_width=1140)
     cr.set_source_rgb(*(s.DANGER if draft.error else s.ACCENT if draft.dirty else s.MUTED))
     s.label(cr, draft.message, 28, 934, 24, max_width=1180)

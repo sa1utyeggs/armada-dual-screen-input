@@ -106,7 +106,8 @@ class PanelApp(upstream.ThorApp):
         self.key_feedback = KeyFeedback(GLib.timeout_add, GLib.source_remove,
                                         self._invalidate_keyboard)
         self.position = PanelPosition(sensitivity=self.input_cfg["position_sensitivity"],
-                                      touch_mode=self.touch_mode, pad=touchscreen_selector.PAD)
+                                      touch_mode=self.touch_mode, pad=touchscreen_selector.PAD,
+                                      frame_rate=self.input_cfg["marker_frame_rate"])
         self._position_revision = self.position.revision
         self.scroll_output = ScaledScroll(self.bridge.emit_scroll, self.scroll_scale)
         self.bridge.emit_scroll = self.scroll_output.scroll
@@ -243,6 +244,7 @@ class PanelApp(upstream.ThorApp):
         self.scroll_output.rest_x = self.scroll_output.rest_y = 0.
         if self.position is not None:
             self.position.position_gesture.sensitivity = values["position_sensitivity"]
+            self.position.frame_rate = values["marker_frame_rate"]
         if getattr(self, "languages", None) is not None and self.languages.language != values["keyboard_language"]:
             self.languages.set_language(values["keyboard_language"])
         draft.mark_saved()
@@ -957,7 +959,8 @@ class PanelApp(upstream.ThorApp):
             cr.scale(allocation.width / SCREEN_WIDTH, allocation.height / SCREEN_HEIGHT)
             self._draw_ui(cr)
             if self.preferences is not None:
-                settings_view.draw(cr, self.preferences, getattr(self, 'updates', None))
+                settings_view.draw(cr, self.preferences, getattr(self, 'updates', None),
+                                   monitor_millihz=getattr(self.position, 'monitor_millihz', 0))
             cr.restore()
             return True
         if self.mode == "position":

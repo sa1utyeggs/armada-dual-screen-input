@@ -97,6 +97,7 @@ class PanelPreferencesTests(unittest.TestCase):
         self.enter()
         draft = self.app.preferences
         for key, value in (("sensitivity", 2.3), ("position_sensitivity", 3.),
+                           ("marker_frame_rate", "30"),
                            ("scroll_scale", .1), ("keyboard_repeat_enabled", False),
                            ("keyboard_repeat_delay_ms", 500)):
             draft.change(key, value)
@@ -104,11 +105,13 @@ class PanelPreferencesTests(unittest.TestCase):
         self.app._save_preferences()
         self.assertEqual(self.app.gesture.sensitivity, 2.3)
         self.assertEqual(self.app.position.position_gesture.sensitivity, 3.)
+        self.assertEqual(self.app.position.frame_rate, '30')
         self.assertEqual(self.app.scroll_output.scale, .1)
         self.assertFalse(draft.dirty)
         self.app.set_mode("trackpad")
         self.app.load_config()
         self.assertEqual(self.app.input_cfg["position_sensitivity"], 3.)
+        self.assertEqual(self.app.input_cfg["marker_frame_rate"], '30')
         self.assertEqual(self.app.scroll_scale, .1)
         self.assertFalse(self.app.input_cfg["keyboard_repeat_enabled"])
         self.assertEqual(self.app.keyboard_cfg["keyboard_repeat_delay_ms"], 500)

@@ -37,6 +37,24 @@ class InputSettingsTests(unittest.TestCase):
         draft.change("sensitivity", 2.)
         self.assertEqual(read_settings(draft.values)["scroll_scale"], .001)
 
+    def test_marker_frame_rate_choices_are_strict_and_reset_only_touch_preferences(self):
+        for rate in ('auto','120','60','30'):
+            self.assertEqual(read_settings({'marker_frame_rate':rate})['marker_frame_rate'],rate)
+        for rate in (None,{},[],True,120,'240','bad'):
+            self.assertEqual(read_settings({'marker_frame_rate':rate})['marker_frame_rate'],'auto')
+        draft=SettingsDraft({'marker_frame_rate':'30','scroll_scale':.001})
+        draft.change('marker_frame_rate','120');draft.discard()
+        self.assertEqual(draft.values['marker_frame_rate'],'30')
+        draft.section='position';draft.reset_section()
+        self.assertEqual(draft.values['marker_frame_rate'],'auto')
+        self.assertEqual(draft.values['scroll_scale'],.001)
+
+    def test_follow_screen_caption_uses_upper_monitor_when_available(self):
+        from armada_dual_screen_input.input_settings import choice_caption
+        self.assertEqual(choice_caption('marker_frame_rate','auto',119930),'跟随屏幕（120 Hz）')
+        self.assertEqual(choice_caption('marker_frame_rate','auto',0),'跟随屏幕')
+        self.assertEqual(choice_caption('marker_frame_rate','60',119930),'60 FPS')
+
     def test_opening_and_editing_draft_does_not_change_saved_values(self):
         draft = SettingsDraft({"scroll_scale": .25})
         draft.change("sensitivity", 2.3)

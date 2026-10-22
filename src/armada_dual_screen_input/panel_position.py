@@ -8,10 +8,12 @@ import time
 from .gamescope_target import GamescopeTarget, InputUnavailable
 from .gamescope_focus import FocusWatcher
 from .marker_overlay import MarkerOverlay
+from .marker_target import MarkerTarget
 from .input_geometry import Rect
 from .native_input import NativeTouchInput
 from .position_gesture import PositionGesture
 from .direct_touch import DirectTouchGesture, MAX_CONTACTS
+from .marker_frames import read_frame_rate
 
 TOUCH_MODES = ('position', 'direct')
 
@@ -22,7 +24,8 @@ class PanelPosition:
 
     def __init__(self, *, runtime=None, resolve=None, focus_factory=FocusWatcher,
                  marker_factory=MarkerOverlay, native_factory=NativeTouchInput,
-                 clock=time.monotonic, sensitivity=2.0, touch_mode='position', pad=None):
+                 clock=time.monotonic, sensitivity=2.0, touch_mode='position', pad=None,
+                 frame_rate='auto'):
         if touch_mode not in TOUCH_MODES:
             raise ValueError('unsupported touch mode')
         self.pad = self.pad if pad is None else pad
@@ -30,6 +33,8 @@ class PanelPosition:
         self.resolve = resolve or (lambda: GamescopeTarget.resolve(self.runtime))
         self.focus_factory, self.marker_factory = focus_factory, marker_factory
         self.native_factory, self.clock = native_factory, clock
+        self.frame_rate = read_frame_rate(frame_rate)
+        self.monitor_millihz = 0
         self.target = self.focus = self.marker = self.sender = self.expected = None
         self.active = self.armed = self.auto_requested = False
         self.message = '触屏尚未打开'
@@ -42,6 +47,7 @@ class PanelPosition:
         self._candidate = self._candidate_since = self._clear_since = None
         self._pending_until = self._retry_after = 0.
         self._retired = []
+        self._blocked_marker_focus = None
         self.delivered = dict(down=0, move=0, up=0, cancel=0)
 
     @property
@@ -140,19 +146,32 @@ class PanelPosition:
         state = self.focus.latest() if self.focus else None
         now = self.clock()  # Read after the worker snapshot, never before it.
         return bool(state and self.expected and state.matches(self.expected, now)
-                    and self.marker and self.marker.current(now))
+                    and self.marker and self.marker.current(now)
+                    and self.marker.matches_focus(state.snapshot))
+
+    def _retire_marker(self, now):
+        if self.marker:
+            if self.marker.window:
+                # Cover the bounded asynchronous teardown plus stale focus
+                # snapshots; never adopt a retiring helper as a new target.
+                self._blocked_marker_focus = (self.marker.target.surface_display, self.marker.window, now+3.5)
+            self.marker.close()
+            self._retired.append(self.marker)
+            self.marker = None
 
     def _retry(self, now, error, *, focus_changed=False):
         self.last_error = str(error)
         self._close_sender()
-        if self.marker and (not self.marker.current(now) or getattr(self.marker, 'error', None)):
-            self.marker.close()
-            self._retired.append(self.marker)
-            self.marker = None
+        healthy = bool(self.marker and self.marker.current(now) and not getattr(self.marker, 'error', None))
+        state = self.focus.latest() if self.focus else None
+        changed_binding = bool(self.marker and state and state.snapshot
+                               and not self.marker.matches_focus(state.snapshot))
+        if not healthy or changed_binding:
+            self._retire_marker(now)
         # A normal foreground switch only needs the existing stable-target,
         # all-fingers-up and verified-route gates. Keep fault backoff for a
         # lost marker or an actual route/IPC failure.
-        self._retry_after = now if focus_changed and self.marker else now+1.5
+        self._retry_after = now if focus_changed and healthy else now+1.5
         self.message = '上屏目标或定位标识变化；抬手后自动恢复' if self.auto_requested else '定位触摸已暂停'
 
     def touch(self, phase, tid, now, x=0, y=0, *, motion_interval=None):
@@ -180,6 +199,7 @@ class PanelPosition:
     def tick(self, now=None, *, contacts_down=False):
         if not self.active or self.focus is None or self.target is None:
             return
+        self._retired[:] = [marker for marker in self._retired if not marker.reaped()]
         # A worker may publish a new snapshot while GTK is ticking.
         requested_now = now
         state = self.focus.latest()
@@ -187,16 +207,32 @@ class PanelPosition:
         try:
             if self.sender is None and not self.target.is_current():
                 raise InputUnavailable('upper Gamescope instance changed')
+            blocked = self._blocked_marker_focus
+            if (blocked and now < blocked[2] and state.snapshot
+                    and (state.snapshot.surface_display, state.snapshot.window) == blocked[:2]):
+                self.message = '正在等待应用窗口恢复；不连接圆环窗口'
+                return
             if self.marker:
                 self.marker.poll()
+                self.monitor_millihz = self.marker.refresh_millihz
             elif now >= self._retry_after and state.snapshot and state.matches(state.snapshot, now):
-                self.marker = self.marker_factory(display=':0', server_pid=state.snapshot.server_pid)
+                try:
+                    MarkerTarget.from_focus(state.snapshot)
+                except ValueError:
+                    self.message = '正在等待可用的上屏应用窗口'
+                    return
+                self.marker = self.marker_factory(target=state.snapshot, frame_rate=self.frame_rate)
                 self._update_marker()
             # poll() can receive a heartbeat newer than the pre-poll timestamp.
             # Read the new worker snapshot first, then refresh the clock.
             if requested_now is None:
                 state = self.focus.latest()
                 now = self.clock()
+            if (self.marker and state.snapshot and not self.marker.matches_focus(state.snapshot)
+                    and state.matches(state.snapshot, now)):
+                self._retry(now, InputUnavailable('marker bound to a different foreground surface'),
+                            focus_changed=True)
+                return
             if self.armed or self._pending_until:
                 if not self._focus_current():
                     self._retry(now, InputUnavailable('upper foreground or marker changed'),

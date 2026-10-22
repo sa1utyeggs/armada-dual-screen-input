@@ -10,6 +10,7 @@ import tempfile
 
 from .scroll_output import read_scroll_scale
 from .keyboard_languages import LANGUAGES, read_language
+from .marker_frames import FRAME_RATES, read_frame_rate
 
 
 @dataclass(frozen=True)
@@ -54,16 +55,24 @@ NUMBERS = {
     )
 }
 BOOLEANS = {"tap_to_click": True, "glide": True, "keyboard_repeat_enabled": True}
-CHOICES = {"keyboard_language": LANGUAGES}
+CHOICES = {"keyboard_language": LANGUAGES, "marker_frame_rate": FRAME_RATES}
 DEFAULTS = {**{key: spec.default for key, spec in NUMBERS.items()}, **BOOLEANS,
-            "keyboard_language": "en_US"}
+            "keyboard_language": "en_US", "marker_frame_rate": "auto"}
 SECTIONS = {
     "mouse": ("sensitivity", "scroll_speed", "scroll_scale", "tap_to_click", "glide", "friction"),
-    "position": ("position_sensitivity",),
+    "position": ("position_sensitivity", "marker_frame_rate"),
     "keyboard": ("keyboard_language", "keyboard_repeat_enabled", "keyboard_repeat_delay_ms",
                  "keyboard_repeat_interval_ms", "keyboard_caps_window_ms"),
 }
 SETTINGS_PAGES = (*SECTIONS, 'updates')
+
+
+def choice_caption(key, value, monitor_millihz=0):
+    caption = CHOICES[key][value]
+    if (key == 'marker_frame_rate' and value == 'auto' and type(monitor_millihz) is int
+            and 30000 <= monitor_millihz <= 240000):
+        caption += f'（{round(monitor_millihz/1000)} Hz）'
+    return caption
 
 
 def read_settings(config):
@@ -75,6 +84,7 @@ def read_settings(config):
     values.update({key: config[key] if isinstance(config.get(key), bool) else default
                    for key, default in BOOLEANS.items()})
     values["keyboard_language"] = read_language(config)
+    values["marker_frame_rate"] = read_frame_rate(config.get("marker_frame_rate"))
     return values
 
 
