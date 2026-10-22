@@ -240,6 +240,51 @@ class MarkerOverlayTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 MarkerOverlay(target=self.expected, **options)
 
+    def motion(self, at=10., *, snap=False):
+        return dict(ids=(8,),mode='position',active=True,sampled_at=at,snap=snap)
+
+    def test_visual_samples_keep_contact_identity_and_source_time(self):
+        self.ready()
+        self.marker.update((.2,.4),False,motion=self.motion())
+        self.dispatch.run()
+        payload=self.packets()[0]
+        self.assertEqual(payload['contacts'],[[.2,.4,False]])
+        self.assertEqual(payload['motion'],dict(self.motion(),ids=[8]))
+
+    def test_coalesced_lifecycle_barrier_survives_later_moves_and_backpressure(self):
+        self.ready()
+        self.marker.update((.2,.4),True,motion=self.motion(snap=True))
+        self.marker.update((.3,.4),False,motion=self.motion(10.001))
+        original=self.marker.socket
+        self.marker.socket=SimpleNamespace(recv=original.recv,
+            send=lambda _:(_ for _ in ()).throw(BlockingIOError()))
+        try:self.dispatch.run()
+        finally:self.marker.socket=original
+        self.marker.update((.4,.4),False,motion=self.motion(10.002))
+        self.dispatch.run()
+        payload=self.packets()[0]
+        self.assertEqual(payload['contacts'],[[.4,.4,False]])
+        self.assertTrue(payload['motion']['snap'])
+        self.marker.update((.5,.4),False,motion=self.motion(10.003))
+        self.dispatch.run()
+        self.assertFalse(self.packets()[0]['motion']['snap'])
+
+    def test_identical_visual_targets_do_not_send_timestamp_only_updates(self):
+        self.ready()
+        self.marker.update((.2,.4),False,motion=self.motion())
+        self.dispatch.run();self.packets()
+        for i in range(100):
+            self.marker.update((.2,.4),False,motion=self.motion(11+i/1000))
+        self.assertFalse(self.dispatch.callbacks)
+        self.assertEqual(self.packets(),[])
+
+    def test_bad_visual_metadata_is_rejected_before_queuing(self):
+        self.ready()
+        with self.assertRaises(ValueError):
+            self.marker.update((.2,.4),False,motion=dict(self.motion(),ids=(True,)))
+        self.assertFalse(self.dispatch.callbacks)
+        self.assertEqual(self.packets(),[])
+
     def test_default_glib_dispatch_sends_without_a_health_tick(self):
         try:
             from gi.repository import GLib

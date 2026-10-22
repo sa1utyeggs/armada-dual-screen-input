@@ -16,11 +16,13 @@ class Marker:
         self.frame_rate = frame_rate
         self.target=MarkerTarget.from_focus(target)
         self.window=999
-        self.valid=True; self.closed=False; self.updates=[]; self.restores=0
+        self.valid=True; self.closed=False; self.updates=[]; self.restores=0; self.motion=[]
     def matches_focus(self, focus): return self.target.matches_focus(focus)
     def current(self, now): return self.valid and not self.closed
-    def update(self, point, pressed=False): self.updates.append((point, pressed))
-    def update_contacts(self, contacts): self.updates.append(tuple(contacts))
+    def update(self, point, pressed=False, *, motion=None):
+        self.updates.append((point, pressed)); self.motion.append(motion)
+    def update_contacts(self, contacts, *, motion=None):
+        self.updates.append(tuple(contacts)); self.motion.append(motion)
     def poll(self):
         if self.closed: raise InputUnavailable('marker gone')
     def restore(self): self.restores+=1
@@ -97,6 +99,48 @@ class PanelPositionTests(unittest.TestCase):
         self.assertEqual(sender.events[-1].position,self.p.gesture.point)
         self.assertAlmostEqual(sender.events[-1].position[0],.9)
         self.assertAlmostEqual(sender.events[-1].position[1],.9)
+
+    def test_visual_motion_is_separate_and_native_down_move_up_remain_immediate(self):
+        self.arm()
+        self.p.touch('begin',11,self.now,300,300)
+        self.assertTrue(self.p.marker.motion[-1]['snap'])
+        self.assertEqual(self.p.marker.motion[-1]['ids'],(11,))
+        self.p.touch('move',11,self.now,310,300)
+        self.assertFalse(self.p.marker.motion[-1]['snap'])
+        self.assertTrue(self.p.marker.motion[-1]['active'])
+        self.assertEqual(self.p.sender.events,[])
+        self.p.touch('begin',22,self.now,600,600)
+        self.assertEqual([e.kind for e in self.p.sender.events],['down'])
+        self.assertEqual(self.p.sender.events[-1].position,self.p.gesture.point)
+        self.assertTrue(self.p.marker.motion[-1]['snap'])
+        self.p.touch('move',11,self.now,320,300)
+        self.assertEqual([e.kind for e in self.p.sender.events],['down','move'])
+        self.assertEqual(self.p.sender.events[-1].position,self.p.gesture.point)
+        self.assertFalse(self.p.marker.motion[-1]['snap'])
+        self.p.touch('end',22,self.now)
+        self.assertEqual([e.kind for e in self.p.sender.events],['down','move','up'])
+        self.assertTrue(self.p.marker.motion[-1]['snap'])
+        self.p.touch('end',11,self.now)
+        self.assertFalse(self.p.marker.motion[-1]['active'])
+        self.assertTrue(self.p.marker.motion[-1]['snap'])
+
+    def test_direct_visual_contacts_keep_native_ids_and_clear_on_cancel(self):
+        self.p.set_touch_mode('direct')
+        self.arm()
+        self.p.touch('begin',11,self.now,300,300)
+        self.p.touch('begin',22,self.now,600,600)
+        self.assertEqual(self.p.marker.motion[-1]['ids'],(11,22))
+        self.p.touch('move',22,self.now,620,600)
+        self.assertFalse(self.p.marker.motion[-1]['snap'])
+        self.assertEqual(self.p.sender.events[-1].contact_id,22)
+        self.p.touch('end',11,self.now)
+        self.assertEqual(self.p.marker.motion[-1]['ids'],(22,))
+        self.assertTrue(self.p.marker.motion[-1]['snap'])
+        self.p.touch('cancel',22,self.now)
+        self.assertEqual(self.p.marker.updates[-1],())
+        self.assertEqual(self.p.marker.motion[-1]['ids'],())
+        self.assertFalse(self.p.marker.motion[-1]['active'])
+        self.assertEqual([e.kind for e in self.p.sender.events],['down','down','move','up','up'])
 
     def test_target_change_or_expired_marker_releases_and_requires_new_contacts(self):
         self.arm()

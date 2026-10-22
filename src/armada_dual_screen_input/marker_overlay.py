@@ -17,6 +17,7 @@ import time
 
 from .gamescope_target import InputUnavailable
 from .marker_state import validate_rings
+from .marker_sample import sample_payload
 from .marker_target import MarkerTarget
 from .marker_frames import read_frame_rate
 
@@ -47,6 +48,7 @@ class MarkerOverlay:
         self.window = None
         self.pending = (.5, .5, False)
         self.sent = None
+        self._snap_pending = False
         self.restore_pending = False
         self._reaper = None
         try:
@@ -71,15 +73,30 @@ class MarkerOverlay:
         finally:
             child.close()
 
-    def update(self, point, pressed=False):
+    def update(self, point, pressed=False, *, motion=None):
         if (len(point) != 2 or not all(math.isfinite(n) and 0 <= n <= 1 for n in point)
                 or type(pressed) is not bool):
             raise ValueError('invalid marker state')
-        self.pending = (*point, pressed)
-        self._queue_update()
+        rings = ((*point, pressed),)
+        self._set_pending(sample_payload(rings, motion) if motion is not None else (*point, pressed))
 
-    def update_contacts(self, contacts):
-        self.pending = {'contacts': validate_rings(contacts)}
+    def update_contacts(self, contacts, *, motion=None):
+        rings = validate_rings(contacts)
+        self._set_pending(sample_payload(rings, motion) if motion is not None else {'contacts': rings})
+
+    def _set_pending(self, payload):
+        if isinstance(payload, dict) and 'motion' in payload:
+            self._snap_pending |= payload['motion']['snap']
+            payload['motion']['snap'] = self._snap_pending
+            if isinstance(self.pending, dict) and 'motion' in self.pending:
+                # A new timestamp alone must not wake a settled ring. Keep
+                # lifecycle barriers until their latest state is delivered.
+                old = dict(self.pending['motion']); new = dict(payload['motion'])
+                old.pop('sampled_at'); new.pop('sampled_at')
+                if (not self._snap_pending and old == new
+                        and self.pending['contacts'] == payload['contacts']):
+                    return
+        self.pending = payload
         self._queue_update()
 
     def _queue_update(self):
@@ -92,6 +109,7 @@ class MarkerOverlay:
             try:
                 self.socket.send(json.dumps(self.pending).encode())
                 self.sent = self.pending
+                self._snap_pending = False
             except BlockingIOError:
                 pass  # One latest state; a new event or health tick retries.
 

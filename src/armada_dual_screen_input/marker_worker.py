@@ -11,6 +11,7 @@ import ctypes as c
 import json
 import os
 import socket
+import time
 
 
 def run(fd, target, frame_rate='auto'):
@@ -24,7 +25,8 @@ def run(fd, target, frame_rate='auto'):
     from gi.repository import Gtk, Gdk, GdkX11, GLib
     import cairo
     from .gamescope_focus import UpperFocus, Cookie, Geometry
-    from .marker_state import decode_rings
+    from .marker_sample import decode_sample
+    from .marker_motion import MarkerMotion
     from .marker_frames import MarkerFrames
     from .marker_paint import MarkerScene, draw_rings
 
@@ -56,6 +58,7 @@ def run(fd, target, frame_rate='auto'):
         raise RuntimeError('marker requires a full-frame matching-aspect surface')
     canvas = (target.width, target.height)
     scene = MarkerScene(canvas)
+    motion = MarkerMotion(canvas)
     state = {'ready': False, 'updates': 0, 'draws': 0}
 
     def send(message):
@@ -135,8 +138,11 @@ def run(fd, target, frame_rate='auto'):
     def paint_pending():
         if not window.get_mapped():
             return  # Keep damage; map-event requests a frame when visible.
+        scene.update(motion.sample(time.monotonic()))
         rectangles = scene.take_damage()
         if not rectangles:
+            if motion.animating:
+                frames.request()
             return
         region = cairo.Region()
         for rectangle in rectangles:
@@ -149,6 +155,8 @@ def run(fd, target, frame_rate='auto'):
         # GTK 3.24 runtime; it touches only our own marker window.
         native.invalidate_region(region, False)
         native.process_updates(False)
+        if motion.animating:
+            frames.request()  # Only the short visual tail; no input synthesis.
 
     def paint_failed(error):
         send({'error': 'marker frame failed: '+str(error)})
@@ -169,6 +177,7 @@ def run(fd, target, frame_rate='auto'):
             return False
         latest = None
         restore = False
+        snap = False
         try:
             for _ in range(64):
                 try:
@@ -182,13 +191,14 @@ def run(fd, target, frame_rate='auto'):
                 if isinstance(message, dict) and message == {'restore': True}:
                     restore = True
                     continue
-                latest = decode_rings(message)
+                latest = decode_sample(message)
+                snap |= latest.snap  # Preserve click/lift barriers across a batch.
                 state['updates'] += 1
         except (OSError, ValueError, TypeError):
             loop.quit()
             return False
         if latest is not None:
-            if scene.update(latest):
+            if motion.accept(latest, time.monotonic(), force_snap=snap):
                 frames.request()
         if restore:
             # Reassert only our matching-app, input-transparent decoration.

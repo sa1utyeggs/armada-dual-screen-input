@@ -54,13 +54,17 @@ class PanelPosition:
     def enable_label(self):
         return '暂停触摸' if self.armed else '连接中…' if self.auto_requested else '启用触摸'
 
-    def _update_marker(self):
+    def _update_marker(self, now=None, *, snap=True):
         if not self.marker:
             return
+        motion = dict(mode=self.touch_mode, sampled_at=self.clock() if now is None else now, snap=snap)
         if self.touch_mode == 'direct':
-            self.marker.update_contacts(self.direct_gesture.rings)
+            motion.update(ids=tuple(self.direct_gesture.contacts), active=bool(self.direct_gesture.contacts))
+            self.marker.update_contacts(self.direct_gesture.rings, motion=motion)
         else:
-            self.marker.update(self.position_gesture.point, self.position_gesture.held)
+            aim = self.position_gesture.aim
+            motion.update(ids=(aim if aim is not None else 0,), active=aim is not None)
+            self.marker.update(self.position_gesture.point, self.position_gesture.held, motion=motion)
 
     def set_touch_mode(self, mode):
         if mode not in TOUCH_MODES:
@@ -192,7 +196,7 @@ class PanelPosition:
                 # not repeat its filesystem checks on each finger update.
                 self.sender.send(event)
                 self.delivered[event.kind] += 1
-            self._update_marker()
+            self._update_marker(now, snap=phase != 'move')
         except (InputUnavailable, OSError, ValueError, RuntimeError) as error:
             self._retry(now, error)
 

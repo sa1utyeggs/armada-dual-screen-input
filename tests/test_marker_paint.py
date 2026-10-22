@@ -104,5 +104,30 @@ class MarkerPixelTests(unittest.TestCase):
                               for i in range(0,len(pixels),4)))
         self.assertEqual(colors,[True,True])
 
+    def test_smoothed_subpixel_frames_clear_old_pixels_through_contact_changes(self):
+        import cairo
+        from armada_dual_screen_input.marker_motion import MarkerMotion
+        from armada_dual_screen_input.marker_sample import decode_sample, sample_payload
+        canvas=(320,180);scene=MarkerScene(canvas);motion=MarkerMotion(canvas)
+        actual=cairo.ImageSurface(cairo.FORMAT_ARGB32,*canvas)
+        for frame in range(180):
+            now=frame/120
+            if frame < 120:
+                rings=((.25+frame/1000,.3,True),(.75-frame/1000,.7,True))
+                ids=(10,20)
+            elif frame < 150:
+                rings=((.37,.3,True),);ids=(10,)
+            else:rings=();ids=()
+            if frame % 2 == 0 or frame in (120,150):
+                motion.accept(decode_sample(sample_payload(rings,dict(ids=ids,mode='direct',active=bool(ids),
+                    sampled_at=now,snap=frame in (120,150)))),now)
+            scene.update(motion.sample(now))
+            cr=cairo.Context(actual)
+            for rectangle in scene.take_damage():cr.rectangle(*rectangle)
+            cr.clip();draw_rings(cr,scene.rings,canvas)
+            reference=cairo.ImageSurface(cairo.FORMAT_ARGB32,*canvas)
+            draw_rings(cairo.Context(reference),scene.rings,canvas)
+            self.assert_pixels_match(actual,reference)
+
 
 if __name__=='__main__':unittest.main()
