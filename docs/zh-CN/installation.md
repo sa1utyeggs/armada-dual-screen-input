@@ -2,7 +2,7 @@
 
 # 安装、升级与卸载
 
-当前正式版为 `v0.1.3`，实机验证以 AYN Thor / Armada `20261010.c3d178c` / Linux 7.2.6 / Steam Game Mode 为准。
+当前正式版为 `v0.1.4`，实机验证以 AYN Thor / Armada `20261010.c3d178c` / Linux 7.2.6 / Steam Game Mode 为准。
 其他机型和系统版本见 [兼容范围](compatibility.md)。安装器以普通用户运行，**不要加 sudo**。
 
 ## 一键在线安装（推荐）
@@ -133,6 +133,12 @@ python3 -B tools/manage.py doctor
 
 ## 卸载
 
+可在 **Settings → General → Uninstall app**（设置 → 通用 → 卸载应用）中操作：先点“卸载应用”，核对删除/保留范围，再点右侧“确认卸载”。取消或切换设置页会撤销尚未提交的确认；有未保存设置或更新任务正在运行时禁止开始卸载。
+
+卸载使用独立的普通用户任务 `thor-panel-uninstall`，不需要 sudo；它在面板自己的用户服务停止后继续完成清理。成功时面板关闭；失败时，若面板仍运行则显示错误，另尝试发送桌面通知。无通知服务时仍保留结果于 `~/.local/state/thor-panel/uninstall.json`（遵守 `XDG_STATE_HOME`），内含阶段、说明和遗留项。源码运行或旧手工安装不能通过此按钮删除，请使用下方命令核对处理。
+
+此入口复用现有安装器，仅卸载本应用，保留个人配置、日志、备份及本地修改文件，不操作 Steam、Gamescope、官方下屏服务或游戏。
+
 ```bash
 ~/.local/bin/armada-dual-screen-input uninstall
 ```
@@ -141,6 +147,8 @@ python3 -B tools/manage.py doctor
 卸载停止并移除本应用的用户服务、安装器管理的快捷方式、图标、启动命令和未被修改的发布版本。
 被用户修改或不属于本应用的文件不会被强行删除，结果会列出遗留项；服务文件被改动时需先人工核对。
 个人配置 `~/.config/thor-panel/`、日志 `~/.local/state/thor-panel/`、入口备份及旧手工安装文件保留。
+
+2026-10-22 开发分支已通过 Thor 580 项 Python 检查及 Mac 15 项 JavaScript 检查；卸载测试使用临时用户目录和模拟服务，覆盖确认/取消、重复点击、更新互斥、任务失败重试、版本文件删除后继续记录结果及本地修改文件保留。尚未对 Thor 的真实安装执行卸载或桌面通知交互验收。
 
 ## 路径与更新兼容
 

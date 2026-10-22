@@ -1,6 +1,8 @@
 """Validated application preferences and atomic persistence, without GTK/input."""
 from __future__ import annotations
 
+from .i18n import msg, LocalizedState, UI_LANGUAGES, read_ui_language
+
 from dataclasses import dataclass
 import json
 import math
@@ -45,25 +47,27 @@ class NumberSetting:
 
 NUMBERS = {
     spec.key: spec for spec in (
-        NumberSetting("sensitivity", "鼠标移动速度", "数值越大，相同滑动移动越远", 1.5, .2, 5., .1, "×"),
-        NumberSetting("scroll_speed", "滚轮速度档位", "双指滚动；1 最慢，5 最快", 3, 1, 5, 1),
-        NumberSetting("scroll_scale", "滚轮输出倍率", "降低倍率可更精细地滚动", 1., .01, 1., .05, "×"),
-        NumberSetting("friction", "滑行阻力", "松手后的滑行；越大停止越快", 5, 1, 10, 1),
-        NumberSetting("position_sensitivity", "定位模式速度", "仅影响定位圆环，不影响直接触屏的绝对位置", 2., .1, 4., .1, "×"),
-        NumberSetting("keyboard_repeat_delay_ms", "长按重复等待", "按住多久后开始重复输入", 350, 150, 800, 25, " ms"),
-        NumberSetting("keyboard_repeat_interval_ms", "重复输入间隔", "间隔越短，重复输入越快", 60, 20, 200, 10, " ms"),
-        NumberSetting("keyboard_caps_window_ms", "Shift 双击间隔", "此时间内双击 Shift 锁定大写", 350, 150, 800, 25, " ms"),
+        NumberSetting("sensitivity", msg('settings.pointer_speed'), msg('settings.pointer_speed_note'), 1.5, .2, 5., .1, "×"),
+        NumberSetting("scroll_speed", msg('settings.scroll_speed'), msg('settings.scroll_speed_note'), 3, 1, 5, 1),
+        NumberSetting("scroll_scale", msg('settings.scroll_scale'), msg('settings.scroll_scale_note'), 1., .01, 1., .05, "×"),
+        NumberSetting("friction", msg('settings.friction'), msg('settings.friction_note'), 5, 1, 10, 1),
+        NumberSetting("position_sensitivity", msg('settings.position_speed'), msg('settings.position_speed_note'), 2., .1, 4., .1, "×"),
+        NumberSetting("keyboard_repeat_delay_ms", msg('settings.repeat_delay'), msg('settings.repeat_delay_note'), 350, 150, 800, 25, " ms"),
+        NumberSetting("keyboard_repeat_interval_ms", msg('settings.repeat_interval'), msg('settings.repeat_interval_note'), 60, 20, 200, 10, " ms"),
+        NumberSetting("keyboard_caps_window_ms", msg('settings.shift_interval'), msg('settings.shift_interval_note'), 350, 150, 800, 25, " ms"),
     )
 }
 BOOLEANS = {"tap_to_click": True, "glide": True, "keyboard_repeat_enabled": True}
-CHOICES = {"keyboard_language": LANGUAGES, "marker_frame_rate": FRAME_RATES}
+CHOICES = {"keyboard_language": LANGUAGES, "marker_frame_rate": FRAME_RATES,
+           "ui_language": {**UI_LANGUAGES, "auto": msg("settings.follow_system")}}
 DEFAULTS = {**{key: spec.default for key, spec in NUMBERS.items()}, **BOOLEANS,
-            "keyboard_language": "en_US", "marker_frame_rate": "auto", **COLOR_SETTINGS}
+            "keyboard_language": "en_US", "ui_language": "en_US", "marker_frame_rate": "auto", **COLOR_SETTINGS}
 SECTIONS = {
     "mouse": ("sensitivity", "scroll_speed", "scroll_scale", "tap_to_click", "glide", "friction"),
     "position": ("position_sensitivity", "marker_frame_rate", "marker_idle_color", "marker_pressed_color"),
     "keyboard": ("keyboard_language", "keyboard_repeat_enabled", "keyboard_repeat_delay_ms",
                  "keyboard_repeat_interval_ms", "keyboard_caps_window_ms"),
+    "general": ("ui_language",),
 }
 SETTINGS_PAGES = (*SECTIONS, 'updates')
 
@@ -73,10 +77,10 @@ def color_swatches():
 
 
 def choice_caption(key, value, monitor_millihz=0):
-    caption = CHOICES[key][value]
+    caption = str(CHOICES[key][value])
     if (key == 'marker_frame_rate' and value == 'auto' and type(monitor_millihz) is int
             and 30000 <= monitor_millihz <= 240000):
-        caption += f'（{round(monitor_millihz/1000)} Hz）'
+        caption = str(msg('choice.refresh', caption=caption, rate=round(monitor_millihz/1000)))
     return caption
 
 
@@ -88,6 +92,7 @@ def read_settings(config):
     values["scroll_scale"] = read_scroll_scale(config.get("scroll_scale", 1.))
     values.update({key: config[key] if isinstance(config.get(key), bool) else default
                    for key, default in BOOLEANS.items()})
+    values["ui_language"] = read_ui_language(config.get("ui_language"))
     values["keyboard_language"] = read_language(config)
     values["marker_frame_rate"] = read_frame_rate(config.get("marker_frame_rate"))
     values.update({key: read_color(config.get(key), default) for key, default in COLOR_SETTINGS.items()})
@@ -121,14 +126,14 @@ def write_settings(path, updates):
         Path(temporary).unlink(missing_ok=True)
 
 
-class SettingsDraft:
+class SettingsDraft(LocalizedState):
     """Edits stay local until Save. All hit geometry is in logical panel units."""
     def __init__(self, values):
         self.saved = read_settings(values)
         self.values = dict(self.saved)
         self.section = "mouse"
         self.drag = None
-        self.message = "调整后点击保存；离开设置将放弃未保存的修改"
+        self.message = msg('settings.draft')
         self.error = False
 
     @property
@@ -144,22 +149,22 @@ class SettingsDraft:
             value = NUMBERS[key].read(value) if key in NUMBERS else bool(value)
         self.values[key] = value
         self.error = False
-        self.message = "有未保存的修改" if self.dirty else "设置未改变"
+        self.message = msg('settings.dirty') if self.dirty else msg('settings.unchanged')
 
     def reset_section(self):
         for key in SECTIONS[self.section]:
             self.values[key] = DEFAULTS[key]
         self.error = False
-        self.message = "已恢复本页默认值；点击保存后生效"
+        self.message = msg('settings.reset')
 
     def mark_saved(self):
         self.saved = dict(self.values)
-        self.message, self.error = "已保存，设置已生效", False
+        self.message, self.error = msg('settings.saved'), False
 
     def discard(self):
         self.values = dict(self.saved)
         self.drag = None
-        self.message, self.error = "已放弃未保存的修改", False
+        self.message, self.error = msg('settings.discarded'), False
 
     def rows(self):
         return [(key, 300 + index * 98)
@@ -169,6 +174,11 @@ class SettingsDraft:
         for index, section in enumerate(SETTINGS_PAGES):
             if 24 + index * 204 <= x <= 216 + index * 204 and 220 <= y <= 280:
                 return "section", section
+        if self.section == "general" and 742 <= y <= 810:
+            if 44 <= x <= 564:
+                return "uninstall_left", None
+            if 620 <= x <= 1192:
+                return "uninstall_confirm", None
         if self.section == 'updates':
             if 760 <= y <= 836:
                 if 44 <= x <= 564:

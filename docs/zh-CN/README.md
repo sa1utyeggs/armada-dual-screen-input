@@ -10,6 +10,7 @@
 | 操作、设置与更新 | [Usage](../usage.md) | [使用说明](usage.md) |
 | 设备支持与限制 | [Compatibility](../compatibility.md) | [兼容范围](compatibility.md) |
 | 构建、检查与双语发布 | [Development](../development.md) | [开发指南](development.md) |
+| 界面语言 | [Interface language](../i18n.md) | [界面语言](i18n.md) |
 | 中英文键盘输入 | [Multilingual keyboard](../multilingual-keyboard.md) | [多语言键盘](multilingual-keyboard.md) |
 | 键盘输入延迟与绘制 | [Keyboard performance](../keyboard-latency.md) | [键盘性能](keyboard-latency.md) |
 | 原生触屏校验与性能 | [Native routing](../native-touch-routing.md) | [原生触屏路由](native-touch-routing.md) |

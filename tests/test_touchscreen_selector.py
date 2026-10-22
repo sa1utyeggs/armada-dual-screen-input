@@ -10,8 +10,8 @@ class TouchscreenSelectorGeometryTests(unittest.TestCase):
         self.assertLessEqual(selector.BUTTON.x+selector.BUTTON.width, 784)
         self.assertGreaterEqual(selector.BUTTON.y, 0)
         self.assertLess(selector.BUTTON.y+selector.BUTTON.height, 80)
-        self.assertEqual([(mode, label) for mode, label, _ in selector.OPTIONS],
-                         [('position', '定位'), ('direct', '直接触屏')])
+        self.assertEqual([(mode, str(label)) for mode, label, _ in selector.OPTIONS],
+                         [('position', 'Position'), ('direct', 'Direct touch')])
         previous_bottom = selector.MENU.y
         for mode, _, rect in selector.OPTIONS:
             self.assertGreater(rect.y, previous_bottom)

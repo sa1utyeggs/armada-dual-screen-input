@@ -10,6 +10,7 @@ All first-party guides have English and Simplified Chinese editions. Use the lan
 | Controls, settings and updates | [Usage](usage.md) | [使用说明](zh-CN/usage.md) |
 | Device support and limitations | [Compatibility](compatibility.md) | [兼容范围](zh-CN/compatibility.md) |
 | Build, checks and bilingual releases | [Development](development.md) | [开发指南](zh-CN/development.md) |
+| UI language | [Interface language](i18n.md) | [界面语言](zh-CN/i18n.md) |
 | Chinese/English keyboard input | [Multilingual keyboard](multilingual-keyboard.md) | [多语言键盘](zh-CN/multilingual-keyboard.md) |
 | Keyboard latency and drawing | [Keyboard performance](keyboard-latency.md) | [键盘性能](zh-CN/keyboard-latency.md) |
 | Native touch validation and performance | [Native routing](native-touch-routing.md) | [原生触屏路由](zh-CN/native-touch-routing.md) |

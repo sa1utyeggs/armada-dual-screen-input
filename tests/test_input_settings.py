@@ -52,8 +52,8 @@ class InputSettingsTests(unittest.TestCase):
 
     def test_follow_screen_caption_uses_upper_monitor_when_available(self):
         from armada_dual_screen_input.input_settings import choice_caption
-        self.assertEqual(choice_caption('marker_frame_rate','auto',119930),'跟随屏幕（120 Hz）')
-        self.assertEqual(choice_caption('marker_frame_rate','auto',0),'跟随屏幕')
+        self.assertEqual(choice_caption('marker_frame_rate','auto',119930),'Follow display (120 Hz)')
+        self.assertEqual(choice_caption('marker_frame_rate','auto',0),'Follow display')
         self.assertEqual(choice_caption('marker_frame_rate','60',119930),'60 FPS')
 
     def test_marker_colors_validate_old_configs_and_preserve_independent_states(self):

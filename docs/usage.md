@@ -4,7 +4,7 @@ English · [简体中文](zh-CN/usage.md)
 
 # Using Virtual Keyboard & Mouse
 
-Open **虚拟键鼠** from the desktop/menu and enter Steam Game Mode. Only the official lower-screen session is used; its service is not stopped.
+Open **Virtual Keyboard & Mouse / 虚拟键鼠** from the desktop/menu and enter Steam Game Mode. Only the official lower-screen session is used; its service is not stopped. Interface-language selection and in-app uninstall are included in v0.1.4.
 
 | Control/mode | Action |
 | --- | --- |
@@ -30,14 +30,16 @@ The panel does not dim itself when idle. Header telemetry is read-only; Armada c
 
 ## Input settings
 
-Select Settings, then Mouse / Touchscreen / Keyboard / Updates. Drag sliders or use minus/plus, then Save settings. No restart or manual file editing is needed. A failed save keeps the draft and original configuration and displays an error.
+Select Settings, then Mouse / Touchscreen / Keyboard / General / Updates. Drag sliders or use minus/plus, then Save settings. No restart or manual file editing is needed. A failed save keeps the draft and original configuration and displays an error.
 
 | Group | Options |
 | --- | --- |
 | Mouse | Speed 0.2–5.0×, scroll level 1–5, multiplier 0.01–1.0×, tap to click, glide and friction |
 | Touchscreen | Position multiplier 0.1–4.0×, default 2.0×; ring cap 30 / 60 / 120 FPS / Follow display; independent idle / touching colors |
+| General | System language / Simplified Chinese / English UI; missing preference defaults to English, independent of input; confirmed app removal |
 | Keyboard | English US / Chinese pinyin; repeat toggle, delay 150–800 ms, interval 20–200 ms, Shift double-tap interval 150–800 ms |
 
+Choose Settings → General → Interface language and save; no restart is required. Older configurations missing the field also default to English. See [resolution, migration and validation](i18n.md).
 
 Reset this page changes only the selected group and still requires Save. Discard changes restores saved values. Switching to another input mode discards unsaved edits. Entering settings releases held keys and positioning contacts; the page takes no upper-screen keyboard focus and sends no slider touches as mouse movement. Restart returns to the previous input mode, not settings.
 
@@ -66,3 +68,5 @@ The updater runs independently. Installation briefly closes the panel; a panel r
 Only installer-managed per-user app files are updated. No sudo, Armada/Steam update or experimental driver is involved. Source runs can check versions but cannot install through this button. [Manual upgrade/rollback](installation.md) remains available.
 
 [Installation and commands](installation.md) · [Compatibility and known issues](compatibility.md)
+
+The app provides Settings → General → Uninstall app. Review the scope, then confirm on the right. It keeps personal settings/logs and blocks removal during updates or unsaved edits. See [scope, result records and terminal fallback](installation.md#卸载).

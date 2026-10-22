@@ -6,6 +6,8 @@ layout. Flat fills avoid extra animation, blur or compositor dependencies.
 """
 from __future__ import annotations
 
+from .i18n import msg
+
 import math
 
 from .text_render import draw_text
@@ -92,12 +94,12 @@ def draw_status(app, cr, y, h, width):
     cr.rectangle(0, y, width, h)
     cr.fill()
     items = [
-        (f"电量 {stats.get('bat_cap', 0)}%", GOOD),
+        (msg('status.battery', value=stats.get('bat_cap', 0)), GOOD),
         (f"CPU {stats.get('cpu_load', 0)}%  {stats.get('cpu_temp', 0)}°C", MUTED),
         (f"GPU {stats.get('gpu_mhz', 0)}MHz  {stats.get('gpu_temp', 0)}°C", MUTED),
         (f"RAM {stats.get('ram_used_gb', 0)}/{stats.get('ram_total_gb', 0)}GB", MUTED),
-        ("已静音" if stats.get('vol_muted') else f"音量 {stats.get('vol_pct', 0)}%", MUTED),
-        (f"亮度 {stats.get('top_bright_pct', 100)}/{stats.get('bot_bright_pct', 100)}%", MUTED),
+        (msg('status.muted') if stats.get('vol_muted') else msg('status.volume', value=stats.get('vol_pct', 0)), MUTED),
+        (msg('status.brightness', top=stats.get('top_bright_pct', 100), bottom=stats.get('bot_bright_pct', 100)), MUTED),
     ]
     x = 16
     cy = y + h / 2
@@ -126,37 +128,37 @@ def draw_trackpad(app, cr, y, h, width):
     x, top, w, height = 20, y + 20, width - 40, h - 40
     rounded(cr, x, top, w, height, 12, SURFACE, SUBTLE)
     cr.set_source_rgb(*MUTED)
-    label(cr, "触控板", x + 24, top + 19, 22, max_width=180)
+    label(cr, msg('header.pad'), x + 24, top + 19, 22, max_width=180)
     compact = height < 400
     cy = top + height * (0.38 if compact else 0.43)
     mouse_outline(cr, width / 2, cy, 44 if compact else 62)
     cr.set_source_rgb(*FG)
-    label(cr, "移动与点按", width / 2, cy + (47 if compact else 65),
+    label(cr, msg('pad.move'), width / 2, cy + (47 if compact else 65),
           28 if compact else 34, max_width=w - 50, centered=True)
     cr.set_source_rgb(*MUTED)
-    label(cr, "单指移动  ·  轻点点击  ·  双指滚动", width / 2,
+    label(cr, msg('pad.gestures'), width / 2,
           cy + (86 if compact else 111), 22 if compact else 24,
           max_width=w - 60, centered=True)
     if not compact:
         line(cr, x + 26, top + height - 68, x + w - 26, top + height - 68)
         cr.set_source_rgb(*MUTED)
-        label(cr, "顶部左键 / 右键可按住拖动", width / 2,
+        label(cr, msg('pad.drag'), width / 2,
               top + height - 34, 22, max_width=w - 70, centered=True)
 
 
 def draw_monitor(app, cr, top, width, height):
     stats = app.stats.get_stats()
     cr.set_source_rgb(*FG)
-    label(cr, "设备状态", 28, top + 30, 34, bold=True, max_width=400)
+    label(cr, msg('monitor.title'), 28, top + 30, 34, bold=True, max_width=400)
     cr.set_source_rgb(*MUTED)
-    label(cr, "只读监控", width - 105, top + 50, 22, max_width=150, centered=True)
+    label(cr, msg('monitor.readonly'), width - 105, top + 50, 22, max_width=150, centered=True)
     cards = [
-        ("CPU", f"{stats.get('cpu_load', 0)}%", f"温度 {stats.get('cpu_temp', 0)}°C"),
-        ("GPU", f"{stats.get('gpu_mhz', 0)} MHz", f"温度 {stats.get('gpu_temp', 0)}°C"),
-        ("内存", f"{stats.get('ram_used_gb', 0)} GB", f"总计 {stats.get('ram_total_gb', 0)} GB"),
-        ("电池", f"{stats.get('bat_cap', 0)}%", "充电中" if stats.get('bat_status', '').lower() == "charging" else "当前电量"),
-        ("音量", "静音" if stats.get('vol_muted') else f"{stats.get('vol_pct', 0)}%", "系统音量"),
-        ("屏幕亮度", f"{stats.get('top_bright_pct', 100)} / {stats.get('bot_bright_pct', 100)}%", "上屏 / 下屏"),
+        ("CPU", f"{stats.get('cpu_load', 0)}%", msg('monitor.temp', value=stats.get('cpu_temp', 0))),
+        ("GPU", f"{stats.get('gpu_mhz', 0)} MHz", msg('monitor.temp', value=stats.get('gpu_temp', 0))),
+        (msg('monitor.memory'), f"{stats.get('ram_used_gb', 0)} GB", msg('monitor.total', value=stats.get('ram_total_gb', 0))),
+        (msg('monitor.battery'), f"{stats.get('bat_cap', 0)}%", msg('monitor.charging') if stats.get('bat_status', '').lower() == "charging" else msg('monitor.charge')),
+        (msg('monitor.volume'), msg('monitor.muted') if stats.get('vol_muted') else f"{stats.get('vol_pct', 0)}%", msg('monitor.system_volume')),
+        (msg('monitor.brightness'), f"{stats.get('top_bright_pct', 100)} / {stats.get('bot_bright_pct', 100)}%", msg('monitor.screens')),
     ]
     gap, margin = 20, 24
     card_w = (width - margin * 2 - gap) / 2
@@ -172,7 +174,7 @@ def draw_monitor(app, cr, top, width, height):
         cr.set_source_rgb(*MUTED)
         label(cr, note, x + 24, y + card_h - 47, 23, max_width=card_w - 48)
     cr.set_source_rgb(*MUTED)
-    label(cr, "在 Armada Control 中调整设备设置", width / 2, height - 26,
+    label(cr, msg('monitor.control'), width / 2, height - 26,
           22, max_width=width - 60, centered=True)
 
 
@@ -182,6 +184,6 @@ def draw_collapsed(cr, width, height):
     line(cr, 0, 0.5, width, 0.5, SUBTLE)
     rounded(cr, 16, height / 2 - 12, 4, 24, 2, ACCENT)
     cr.set_source_rgb(*FG)
-    label(cr, "虚拟键鼠", 34, height / 2 - 11, 22, max_width=width - 150)
+    label(cr, msg('app.name'), 34, height / 2 - 11, 22, max_width=width - 150)
     cr.set_source_rgb(*MUTED)
-    label(cr, "点击展开", width - 64, height / 2, 20, max_width=100, centered=True)
+    label(cr, msg('header.expand'), width - 64, height / 2, 20, max_width=100, centered=True)

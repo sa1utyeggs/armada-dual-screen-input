@@ -1,4 +1,5 @@
 """Non-blocking settings model; network and process startup run off the GTK loop."""
+from .i18n import msg, LocalizedState, decode_message
 import json
 import os
 from pathlib import Path
@@ -28,10 +29,10 @@ def start_worker(root, tag):
     command += ['/usr/bin/python3', '-B', str(Path(root) / 'tools/update.py'), '--expected-tag', tag]
     result = subprocess.run(command, capture_output=True, text=True, timeout=15)
     if result.returncode:
-        raise UpdateError('无法启动更新任务，请稍后重试')
+        raise UpdateError(msg('update.start_failed'))
 
 
-class UpdateController:
+class UpdateController(LocalizedState):
     def __init__(self, root, *, dispatch, changed, fetch=latest_release, launch=start_worker,
                  background=None, status_file=None, deadline=after):
         self.root = Path(root).resolve()
@@ -45,7 +46,7 @@ class UpdateController:
         self.fetch, self.launch = fetch, launch
         self.background = background or (lambda fn: threading.Thread(target=fn, daemon=True).start())
         self.status_file = status_file or state_path()
-        self.phase, self.message = 'ready', '点击检查最新正式版'
+        self.phase, self.message = 'ready', msg('update.ready')
         self.latest, self.confirming = None, False
         self._closed, self._request = False, 0
         self._launch_time = None
@@ -73,7 +74,7 @@ class UpdateController:
             try:
                 value, error = operation(), None
             except Exception as exc:
-                value, error = None, str(exc) if isinstance(exc, UpdateError) else '操作失败，请检查网络后重试'
+                value, error = None, exc.args[0] if isinstance(exc, UpdateError) and exc.args else msg('update.operation_failed')
             def deliver():
                 if not self._closed and request == self._request:
                     complete(value, error)
@@ -85,7 +86,7 @@ class UpdateController:
     def check(self):
         if self._closed or self.busy:
             return
-        self.phase, self.message = 'checking', '正在检查最新正式版…'
+        self.phase, self.message = 'checking', msg('update.checking')
         self._checking = True
         self.latest, self.confirming = None, False
         def complete(release, error):
@@ -99,12 +100,12 @@ class UpdateController:
                 has_update = newer(release.version, self.current)
             except UpdateError:
                 self.latest = None
-                self.phase, self.message = 'error', '无法比较当前版本，请使用安装包升级'
+                self.phase, self.message = 'error', msg('update.compare_current')
                 return
             if has_update:
-                self.phase, self.message = 'available', '发现新版本 ' + release.tag
+                self.phase, self.message = 'available', msg('update.available', tag=release.tag)
             else:
-                self.phase, self.message = 'current', '当前已是最新正式版'
+                self.phase, self.message = 'current', msg('update.current')
         self._async(self.fetch, complete)
         request = self._request
         def expired():
@@ -113,7 +114,7 @@ class UpdateController:
                     self._deadline = None
                     self._request += 1
                     self._checking = False
-                    self.phase, self.message = 'error', '检查更新超时，请检查网络后重试'
+                    self.phase, self.message = 'error', msg('update.check_timeout')
                     self.changed()
                 return False
             self.dispatch(deliver)
@@ -126,7 +127,7 @@ class UpdateController:
             return
         tag = self.latest.tag
         self.confirming = False
-        self.phase, self.message = 'starting', '正在启动独立更新任务…'
+        self.phase, self.message = 'starting', msg('update.starting')
         self._launch_time = time.time()
         def complete(_, error):
             if error:
@@ -157,15 +158,17 @@ class UpdateController:
             if phase in BUSY:
                 pid = data.get('pid')
                 if type(pid) is not int or pid <= 0 or not data.get('identity') or process_identity(pid) != data['identity']:
-                    phase, message = 'error', '上次更新已中断，请重新检查后重试'
+                    phase = 'error'
             if self.phase == 'available' and self._launch_time is None and phase not in BUSY:
                 return
-            self.phase, self.message = phase, message[:240]
+            token = (msg("update.interrupted") if phase != data["phase"] else
+                     decode_message(data.get("message_i18n"), message[:240]))
+            self.phase, self.message = phase, token
             if phase not in BUSY:
                 self._launch_time = None
         except (OSError, ValueError, TypeError):
             if self._launch_time and time.time() - self._launch_time > 15:
-                self.phase, self.message = 'error', '更新任务未能启动，请重试'
+                self.phase, self.message = 'error', msg('update.did_not_start')
                 self._launch_time = None
 
     def close(self):

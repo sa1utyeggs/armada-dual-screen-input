@@ -31,6 +31,7 @@ A standalone Linux application for dual-screen ArmadaOS handhelds. Type, move th
 
 > **Currently tested: AYN Thor · ArmadaOS · Steam Game Mode.** Desktop Mode is disabled by default; other devices have not been tested. [System versions and validation scope](docs/compatibility.md)
 
+The interface supports English / Simplified Chinese selection, defaulting to English when no preference exists; input language is independent. Screenshots below remain Chinese examples. [Language settings and validation scope](docs/i18n.md). General settings also provide a [confirmed uninstall action](docs/installation.md#卸载) that keeps personal configuration.
 
 <a id="能做什么"></a>
 

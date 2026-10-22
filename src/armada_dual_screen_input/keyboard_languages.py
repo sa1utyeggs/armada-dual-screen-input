@@ -1,6 +1,8 @@
 """Focus-free language UI state and a bounded asynchronous native worker."""
 from __future__ import annotations
 
+from .i18n import msg, LocalizedState
+
 import json
 import os
 from pathlib import Path
@@ -13,7 +15,7 @@ import time
 
 from .keyboard_xkb import XkbLayout
 
-LANGUAGES = {"en_US": "English · US", "zh_CN": "中文 · 拼音"}
+LANGUAGES = {"en_US": "English · US", "zh_CN": msg('language.chinese_pinyin')}
 
 
 def read_language(config):
@@ -128,7 +130,7 @@ class KeyboardWorker:
             pass
 
 
-class KeyboardLanguages:
+class KeyboardLanguages(LocalizedState):
     def __init__(self, language, *, mode, runtime, changed, dispatch,
                  forward_key, worker_factory=KeyboardWorker, xkb_factory=XkbLayout):
         self.language = read_language({"keyboard_language": language})
@@ -141,12 +143,12 @@ class KeyboardLanguages:
         self.ready = False
         self.preedit, self.candidates, self.revision = "", [], 0
         self.page = 0
-        self.message = "英文按键"
+        self.message = msg('ime.english')
         self._generation = 0
 
     @property
     def label(self):
-        return LANGUAGES[self.language]
+        return str(LANGUAGES[self.language])
 
     def clear(self):
         self.preedit, self.candidates, self.page = "", [], 0
@@ -181,12 +183,12 @@ class KeyboardLanguages:
 
     def _start(self):
         if self.closed or self.language == "en_US":
-            self.message = "英文按键"
+            self.message = msg('ime.english')
             return
         if self.mode != "game":
-            self.message = "中文文本通道暂支持 Game Mode；桌面模式请用英文"
+            self.message = msg('ime.game_only')
             return
-        self.message = "正在准备系统拼音…"
+        self.message = msg('ime.preparing')
         generation = self._generation
         try:
             self.xkb = self.xkb_factory()
@@ -198,7 +200,7 @@ class KeyboardLanguages:
                 raise RuntimeError("Worker queue unavailable")
         except Exception:
             self.stop()
-            self.message = "中文后端不可用；可切回英文继续使用"
+            self.message = msg('ime.unavailable')
 
     def _response(self, generation, result):
         if self.closed or generation != self._generation:
@@ -206,7 +208,7 @@ class KeyboardLanguages:
         status = result.get("status")
         if status == "unavailable":
             self.stop()
-            self.message = "中文后端不可用；切回英文后可重新尝试"
+            self.message = msg('ime.unavailable_retry')
         else:
             self.ready = True
             self.preedit = result.get("preedit", "")
@@ -214,10 +216,10 @@ class KeyboardLanguages:
             self.revision = result.get("revision", 0)
             self.page = min(self.page, max(0, (len(self.candidates) - 1) // 6))
             self.message = {
-                "focus_changed": "上屏输入目标已变化，已取消未完成的拼音",
-                "expired": "输入等待过久，已取消；请重新输入",
-                "stale_candidate": "候选词已更新，请重新选择",
-            }.get(status, "空格选首项 · 回车输入拼音 · 1–6 选词")
+                "focus_changed": msg('ime.focus_changed'),
+                "expired": msg('ime.expired'),
+                "stale_candidate": msg('ime.stale'),
+            }.get(status, msg('ime.help'))
             code = result.get("forward_key")
             if (type(code) is int and code in (1, 15, 103, 108)
                     and 0 <= time.monotonic() - result.get("received_at", 0) <= .2):
@@ -233,7 +235,7 @@ class KeyboardLanguages:
         text = self.xkb.character(code, shift=shift, caps=caps)
         if not self.worker.submit({"kind": "key", "code": code, "text": text, "page": self.page}):
             self.stop()
-            self.message = "输入队列已停止，请切换语言后重试"
+            self.message = msg('ime.queue_stopped')
             self.changed()
         return True
 

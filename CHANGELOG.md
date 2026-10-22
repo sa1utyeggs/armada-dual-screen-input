@@ -4,6 +4,12 @@ English · [简体中文](CHANGELOG.zh-CN.md)
 
 ## Unreleased
 
+- No changes yet.
+
+## 0.1.4 · 2026-10-22
+
+- Add a confirmed Settings → General uninstall action with English/Chinese explanations of removed/retained files. It reuses the installer in a detached user task after closing the panel, preserving personal configuration, logs, backups and modified files. A shared update lock, unsaved-settings/source-run/update checks and duplicate-click protection prevent overlapping operations. Persistent results and best-effort desktop notifications report completion. Automated uninstall checks use temporary installations only.
+- Add independent UI language selection: English / Simplified Chinese / System language, with English as the missing/invalid-config default. Panel, settings, status, candidate hints and updater text use stable message keys and switch immediately, independently of keyboard input and other preferences. Desktop entries gain localized names/descriptions. Coverage includes catalogs, save failures, legacy update states, font caches and bilingual offscreen layouts; see [interface language](docs/i18n.md).
 - Make English the default README and documentation language, with aligned Simplified Chinese guides, reciprocal links and preserved historical anchors. Include both editions in offline bundles. Generate future GitHub Release notes in English then Chinese, refusing missing, empty or duplicate translations; translate existing release bodies without changing tags or assets.
 
 ## 0.1.3 · 2026-10-22

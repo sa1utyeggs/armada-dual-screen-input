@@ -6,6 +6,7 @@ from pathlib import Path
 import tarfile
 import tempfile
 import unittest
+from armada_dual_screen_input.i18n import configure, active_language
 from unittest.mock import Mock, patch
 from urllib.error import HTTPError
 
@@ -24,6 +25,11 @@ def release_data(version='0.2.0'):
 
 
 class ReleaseTests(unittest.TestCase):
+    def setUp(self):
+        previous = active_language()
+        configure("zh_CN")
+        self.addCleanup(configure, previous)
+
     def test_only_newer_stable_releases_are_offered(self):
         for latest, current, expected in [('0.1.1', '0.1.0', True), ('0.1.0', '0.1.0', False),
                                          ('0.1.0', '0.1.0-preview.2', True), ('0.1.0', '0.2.0', False),

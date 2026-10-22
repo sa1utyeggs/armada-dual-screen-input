@@ -4,6 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 import tempfile
 import unittest
+from armada_dual_screen_input.i18n import configure, active_language
 from unittest.mock import Mock, patch
 
 import update as worker
@@ -14,6 +15,9 @@ import test_installation as fixture
 
 class WorkerTests(unittest.TestCase):
     def setUp(self):
+        previous = active_language()
+        configure("zh_CN")
+        self.addCleanup(configure, previous)
         temp = tempfile.TemporaryDirectory(); self.addCleanup(temp.cleanup)
         self.work = Path(temp.name).resolve()
         self.repo = Path(__file__).resolve().parents[1]
@@ -74,7 +78,7 @@ class WorkerTests(unittest.TestCase):
         self.perform()
         self.assertEqual((self.paths.root / 'current/VERSION').read_text(), '0.2.0')
         self.assertEqual(self.status.call_args.args[0], 'success')
-        self.assertIn('桌面缓存刷新未完成', self.status.call_args.args[1])
+        self.assertIn('桌面缓存刷新未完成', str(self.status.call_args.args[1]))
         self.assertEqual(self.config.read_bytes(), self.original)
 
     def test_changed_latest_or_wrong_manifest_aborts_before_install(self):

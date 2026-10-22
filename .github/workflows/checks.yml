@@ -13,7 +13,7 @@ jobs:
     container: fedora:44
     steps:
       - name: Install isolated test dependencies
-        run: dnf -y install git gobject-introspection python3-gobject python3-cairo gtk3 gtk-layer-shell python3-websocket-client libevdev libxcb fontconfig google-noto-sans-fonts nodejs shadow-utils util-linux libxkbcommon xkeyboard-config libpinyin libpinyin-data
+        run: dnf -y install git gobject-introspection python3-gobject python3-cairo gtk3 gtk-layer-shell python3-websocket-client libevdev libxcb fontconfig google-noto-sans-fonts google-noto-sans-cjk-fonts nodejs shadow-utils util-linux libxkbcommon xkeyboard-config libpinyin libpinyin-data
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
