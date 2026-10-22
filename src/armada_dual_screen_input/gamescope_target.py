@@ -7,7 +7,7 @@ from pathlib import Path
 import socket
 import struct
 
-from .gamescope_probe import validate_display
+from .gamescope_probe import _display_path, _socket_info, _validate_runtime
 
 
 class InputUnavailable(RuntimeError):
@@ -34,10 +34,16 @@ class GamescopeTarget:
 
     @classmethod
     def resolve(cls, runtime: Path, name: str = 'gamescope-primary') -> GamescopeTarget:
-        display = validate_display(runtime, name)
-        eis = validate_display(runtime, display.name + '-ei')
-        a, b = display.stat(), eis.stat()
-        return cls(runtime.resolve(), name, display, eis,
+        # Resolve the directory once and use each freshly validated socket's
+        # metadata for its identity. is_current() repeats this entire operation;
+        # no path, ownership or identity result authorizes a later event.
+        runtime = _validate_runtime(runtime)
+        display = _display_path(runtime, name)
+        eis = _display_path(runtime, display.name + '-ei')
+        # Read identities after both paths resolve, so replacing the display
+        # socket during the partner lookup cannot reuse its earlier metadata.
+        a, b = _socket_info(display), _socket_info(eis)
+        return cls(runtime, name, display, eis,
                    (a.st_dev, a.st_ino, b.st_dev, b.st_ino))
 
     def is_current(self) -> bool:

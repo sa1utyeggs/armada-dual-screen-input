@@ -52,6 +52,8 @@ from . import steam_style
 from . import steam_keys
 from .keyboard_pulses import KeyboardPulses
 from .keyboard_redraw import KeyboardRedraw, widget_rect
+from .paint_damage import clip_regions, intersects
+from .static_layer import StaticLayer
 from .key_feedback import KeyFeedback
 from .keyboard_languages import KeyboardLanguages
 from . import keyboard_language_view
@@ -61,6 +63,7 @@ from .panel_modes import SUPPORTED_MODES, normalize_mode
 from .panel_position import PanelPosition, TOUCH_MODES
 from . import touchscreen_selector
 from .input_settings import read_settings, write_settings, SettingsDraft, NUMBERS, CHOICES
+from .marker_colors import MarkerColors
 from . import settings_view
 from .update_controller import UpdateController
 
@@ -92,6 +95,7 @@ class PanelApp(upstream.ThorApp):
         self._language_consumed = set()
         self._last_input_mode = "split"
         self._position_draw_state = None
+        self._position_background = StaticLayer()
         self._touch_menu_open = False
         self._discarding_contacts = False
         # Unlike ToolkitTouch, this set survives logical-contact resets when
@@ -103,7 +107,10 @@ class PanelApp(upstream.ThorApp):
         self.key_feedback = KeyFeedback(GLib.timeout_add, GLib.source_remove,
                                         self._invalidate_keyboard)
         self.position = PanelPosition(sensitivity=self.input_cfg["position_sensitivity"],
-                                      touch_mode=self.touch_mode, pad=touchscreen_selector.PAD)
+                                      touch_mode=self.touch_mode, pad=touchscreen_selector.PAD,
+                                      frame_rate=self.input_cfg["marker_frame_rate"],
+                                      marker_colors=MarkerColors(self.input_cfg['marker_idle_color'],
+                                                                 self.input_cfg['marker_pressed_color']))
         self._position_revision = self.position.revision
         self.scroll_output = ScaledScroll(self.bridge.emit_scroll, self.scroll_scale)
         self.bridge.emit_scroll = self.scroll_output.scroll
@@ -240,6 +247,8 @@ class PanelApp(upstream.ThorApp):
         self.scroll_output.rest_x = self.scroll_output.rest_y = 0.
         if self.position is not None:
             self.position.position_gesture.sensitivity = values["position_sensitivity"]
+            self.position.frame_rate = values["marker_frame_rate"]
+            self.position.marker_colors = MarkerColors(values['marker_idle_color'], values['marker_pressed_color'])
         if getattr(self, "languages", None) is not None and self.languages.language != values["keyboard_language"]:
             self.languages.set_language(values["keyboard_language"])
         draft.mark_saved()
@@ -286,9 +295,9 @@ class PanelApp(upstream.ThorApp):
         if self._position_revision != self.position.revision:
             self._clear_panel_contacts()
             self._position_revision = self.position.revision
-        state = (self.position.armed, self.position.auto_requested,
-                 self.position.message, self.position.gesture.held,
-                 self.position.direct_gesture.rings if self.position.touch_mode == 'direct' else ())
+        # Contact feedback belongs to the upper marker. Moving or lifting
+        # fingers must not invalidate the lower screen's static touch surface.
+        state = (self.position.armed, self.position.auto_requested, self.position.message)
         if state != self._position_draw_state:
             self._position_draw_state = state
             self.drawing_area.queue_draw()
@@ -756,6 +765,8 @@ class PanelApp(upstream.ThorApp):
         elif action == "choice":
             choices = list(CHOICES[key])
             draft.change(key, choices[(choices.index(draft.values[key]) + 1) % len(choices)])
+        elif action == 'color':
+            draft.change(*key)
         elif action == "defaults":
             draft.reset_section()
         elif action == "discard":
@@ -837,7 +848,23 @@ class PanelApp(upstream.ThorApp):
     def _draw_ui(self, cr) -> None:
         cr.set_source_rgb(*steam_style.BG)
         cr.paint()
-        super()._draw_ui(cr)
+        regions = clip_regions(cr)
+        if intersects(regions, (0, 0, SCREEN_WIDTH, upstream.HEADER_BUTTONS_H)):
+            self._draw_header(cr)
+        if intersects(regions, (0, upstream.HEADER_BUTTONS_H, SCREEN_WIDTH,
+                                upstream.STATUS_RIBBON_H)):
+            self._draw_status_ribbon(cr)
+        if self.mode in ('trackpad', 'split'):
+            bottom = upstream.SPLIT_Y if self.mode == 'split' else SCREEN_HEIGHT
+            if intersects(regions, (0, upstream.HEADER_HEIGHT, SCREEN_WIDTH,
+                                    bottom-upstream.HEADER_HEIGHT)):
+                self._draw_trackpad_surface(cr, upstream.HEADER_HEIGHT,
+                                            bottom-upstream.HEADER_HEIGHT)
+        if self.mode in ('keyboard', 'split'):
+            # The temporary candidate bar can extend above the key area.
+            if intersects(regions, (0, self._language_top(), SCREEN_WIDTH,
+                                    SCREEN_HEIGHT-self._language_top())):
+                self._draw_keyboard(cr)
 
     def _draw_header(self, cr) -> None:
         buttons = upstream.HEADER_BUTTONS
@@ -862,7 +889,9 @@ class PanelApp(upstream.ThorApp):
 
     def _draw_keyboard(self, cr) -> None:
         if getattr(self, "languages", None) is not None:
-            if keyboard_language_view.visible(self.languages):
+            if (keyboard_language_view.visible(self.languages)
+                    and intersects(clip_regions(cr), (0, self._language_top(),
+                                                       SCREEN_WIDTH, keyboard_language_view.HEIGHT))):
                 keyboard_language_view.draw(cr, self.languages, self._language_top())
         steam_keys.draw_keyboard(self, cr)
         visible = self._visible_key_codes()
@@ -936,7 +965,8 @@ class PanelApp(upstream.ThorApp):
             cr.scale(allocation.width / SCREEN_WIDTH, allocation.height / SCREEN_HEIGHT)
             self._draw_ui(cr)
             if self.preferences is not None:
-                settings_view.draw(cr, self.preferences, getattr(self, 'updates', None))
+                settings_view.draw(cr, self.preferences, getattr(self, 'updates', None),
+                                   monitor_millihz=getattr(self.position, 'monitor_millihz', 0))
             cr.restore()
             return True
         if self.mode == "position":
@@ -959,6 +989,21 @@ class PanelApp(upstream.ThorApp):
         position = self.position
         if position is None:
             return
+        layer = getattr(self, '_position_background', None)
+        if layer is None:
+            self._position_background = layer = StaticLayer()
+        layer.paint(cr, (position.touch_mode, position.armed, position.message,
+                         bool(getattr(self, '_touch_menu_open', False))),
+                    SCREEN_WIDTH, SCREEN_HEIGHT, self._draw_position_background)
+
+    def _draw_position_background(self, cr) -> None:
+        position = self.position
+        # Cache an opaque body so antialiased text is composited exactly once.
+        # The header/status remain transparent and keep their independent draws.
+        cr.set_source_rgb(*steam_style.BG)
+        cr.rectangle(0, upstream.HEADER_HEIGHT, SCREEN_WIDTH,
+                     SCREEN_HEIGHT-upstream.HEADER_HEIGHT)
+        cr.fill()
         steam_style.rounded(cr, 20, 168, 1200, 882, 12,
                             steam_style.SURFACE, steam_style.BORDER)
         cr.set_source_rgb(*(steam_style.GOOD if position.armed else steam_style.MUTED))
@@ -976,15 +1021,6 @@ class PanelApp(upstream.ThorApp):
             cr.set_source_rgb(*steam_style.MUTED)
             steam_style.label(cr, '手势由上屏应用处理 · 不转成滚轮或第二指确认',
                               620, 940, 24, centered=True, max_width=1120)
-            for u, v, _ in position.direct_gesture.rings:
-                cr.new_sub_path()
-                cr.set_source_rgba(1., .65, .15, .2)
-                x, y = position.pad.x+u*position.pad.width, position.pad.y+v*position.pad.height
-                cr.arc(x, y, 24, 0, 6.283185307179586)
-                cr.fill_preserve()
-                cr.set_line_width(3)
-                cr.set_source_rgb(1., .65, .15)
-                cr.stroke()
             return
         cr.set_source_rgb(*steam_style.ACCENT)
         steam_style.label(cr, '只看上屏操作', 620, 370, 40, centered=True)

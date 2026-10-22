@@ -28,6 +28,8 @@ class FocusSnapshot:
     input_window: int = 0
     input_in_surface: bool = True
     touch_mode: int | None = None
+    x: int = 0
+    y: int = 0
 
     def same_target(self, other: FocusSnapshot) -> bool:
         # Chromium/Steam can move keyboard focus between child windows while
@@ -37,10 +39,10 @@ class FocusSnapshot:
         return (self.input_in_surface and other.input_in_surface
                 and (self.window, self.app_id, self.graphics_app_id,
                      self.width, self.height, self.server_pid,
-                     self.surface_display, self.touch_mode)
+                     self.surface_display, self.touch_mode, self.x, self.y)
                 == (other.window, other.app_id, other.graphics_app_id,
                     other.width, other.height, other.server_pid,
-                    other.surface_display, other.touch_mode))
+                    other.surface_display, other.touch_mode, other.x, other.y))
 
     def compatible(self, source_size: tuple[int, int]) -> bool:
         # The first prototype supports a full-frame, matching-aspect surface.
@@ -94,6 +96,7 @@ class UpperFocus:
             'xcb_disconnect': (None, [p]), 'xcb_connection_has_error': (c.c_int, [p]),
             'xcb_get_setup': (p, [p]), 'xcb_setup_roots_iterator': (Iterator, [p]),
             'xcb_get_file_descriptor': (c.c_int, [p]),
+            'xcb_discard_reply': (None, [p, c.c_uint]),
             'xcb_screen_next': (None, [c.POINTER(Iterator)]),
             'xcb_intern_atom': (Cookie, [p, c.c_uint8, c.c_uint16, c.c_char_p]),
             'xcb_intern_atom_reply': (p, [p, Cookie, c.POINTER(p)]),
@@ -153,23 +156,30 @@ class UpperFocus:
     def snapshot(self) -> FocusSnapshot:
         if not self.connection or self.api.xcb_connection_has_error(self.connection):
             raise InputUnavailable('upper XWayland disconnected')
-        # Queue all requests before awaiting the first reply.
-        cookies = [self.api.xcb_get_property(self.connection, False, self.root,
-                                           self.atoms[name], 0, 0, 1)
-                   for name in self.PROPERTIES]
-        values = []
-        for cookie in cookies:
-            reply = self._reply('xcb_get_property_reply', cookie)
-            try:
-                fmt = c.c_uint8.from_address(reply + 1).value
-                if fmt != 32 or self.api.xcb_get_property_value_length(reply) != 4:
-                    raise InputUnavailable('Gamescope focus property is unavailable')
-                values.append(c.c_uint32.from_address(
-                    self.api.xcb_get_property_value(reply)).value)
-            finally:
-                self.libc.free(reply)
-        surface_display = self._display_property('GAMESCOPE_FOCUS_DISPLAY')
-        if self._display_property('GAMESCOPE_MOUSE_FOCUS_DISPLAY') != surface_display:
+        # All root properties are independent. Queue them together, including
+        # display routing and touch policy, rather than waiting four times on
+        # a busy XWayland. This is still a fresh query on every snapshot.
+        cookies = {}
+        try:
+            for name in self.PROPERTIES + self.DISPLAY_PROPERTIES + (self.TOUCH_PROPERTY,):
+                if self.atoms.get(name):
+                    cookies[name] = self.api.xcb_get_property(
+                        self.connection, False, self.root, self.atoms[name], 0, 0,
+                        16 if name in self.DISPLAY_PROPERTIES else 1)
+            values = [self._cardinal_reply(cookies.pop(name), required=True)
+                      for name in self.PROPERTIES]
+            surface_display = self._display_property(
+                self.DISPLAY_PROPERTIES[0], cookies.pop(self.DISPLAY_PROPERTIES[0]))
+            mouse_display = self._display_property(
+                self.DISPLAY_PROPERTIES[1], cookies.pop(self.DISPLAY_PROPERTIES[1]))
+            touch_mode = (self._touch_mode(cookies.pop(self.TOUCH_PROPERTY))
+                          if self.TOUCH_PROPERTY in cookies else None)
+        finally:
+            # An invalid property must not leave the other queued replies
+            # accumulating in a long-lived worker connection.
+            for cookie in cookies.values():
+                self.api.xcb_discard_reply(self.connection, cookie.sequence)
+        if mouse_display != surface_display:
             raise InputUnavailable('visible and mouse-focus XWayland displays differ')
         surface = self
         if surface_display != self.display:
@@ -178,33 +188,45 @@ class UpperFocus:
                     self.surface_connection.close()
                 self.surface_connection = UpperFocus(surface_display, _controller=self)
             surface = self.surface_connection
-        cookie = surface.api.xcb_get_geometry(surface.connection, values[0])
-        reply = surface._reply('xcb_get_geometry_reply', cookie)
+        geometry_cookie = surface.api.xcb_get_geometry(surface.connection, values[0])
+        input_cookie = surface.api.xcb_get_input_focus(surface.connection)
         try:
-            geometry = Geometry.from_address(reply)
-            width, height = geometry.width, geometry.height
-        finally:
-            self.libc.free(reply)
-        input_window, input_in_surface = surface._input_focus(values[0])
+            reply = surface._reply('xcb_get_geometry_reply', geometry_cookie)
+            try:
+                geometry = Geometry.from_address(reply)
+                width, height, x, y = geometry.width, geometry.height, geometry.x, geometry.y
+            finally:
+                surface.libc.free(reply)
+        except Exception:
+            surface.api.xcb_discard_reply(surface.connection, input_cookie.sequence)
+            raise
+        input_window, input_in_surface = surface._input_focus(values[0], input_cookie)
         return FocusSnapshot(*values, width, height, self.server_pid, surface_display,
-                             input_window, input_in_surface, self._touch_mode())
+                             input_window, input_in_surface, touch_mode, x, y)
 
-    def _touch_mode(self) -> int | None:
-        atom = self.atoms.get(self.TOUCH_PROPERTY, 0)
-        if not atom:
-            return None
-        cookie = self.api.xcb_get_property(self.connection, False, self.root, atom, 0, 0, 1)
+    def _cardinal_reply(self, cookie, *, required=False) -> int | None:
         reply = self._reply('xcb_get_property_reply', cookie)
         try:
             if (c.c_uint8.from_address(reply + 1).value != 32
                     or self.api.xcb_get_property_value_length(reply) != 4):
+                if required:
+                    raise InputUnavailable('Gamescope focus property is unavailable')
                 return None
             return c.c_uint32.from_address(self.api.xcb_get_property_value(reply)).value
         finally:
             self.libc.free(reply)
 
-    def _display_property(self, name: str) -> str:
-        cookie = self.api.xcb_get_property(self.connection, False, self.root,
+    def _touch_mode(self, cookie=None) -> int | None:
+        atom = self.atoms.get(self.TOUCH_PROPERTY, 0)
+        if not atom:
+            return None
+        if cookie is None:
+            cookie = self.api.xcb_get_property(self.connection, False, self.root, atom, 0, 0, 1)
+        return self._cardinal_reply(cookie)
+
+    def _display_property(self, name: str, cookie=None) -> str:
+        if cookie is None:
+            cookie = self.api.xcb_get_property(self.connection, False, self.root,
                                            self.atoms[name], 0, 0, 16)
         reply = self._reply('xcb_get_property_reply', cookie)
         try:
@@ -221,8 +243,9 @@ class UpperFocus:
         finally:
             self.libc.free(reply)
 
-    def _input_focus(self, surface: int) -> tuple[int, bool]:
-        cookie = self.api.xcb_get_input_focus(self.connection)
+    def _input_focus(self, surface: int, cookie=None) -> tuple[int, bool]:
+        if cookie is None:
+            cookie = self.api.xcb_get_input_focus(self.connection)
         reply = self._reply('xcb_get_input_focus_reply', cookie)
         try:
             original = c.c_uint32.from_address(reply + 8).value

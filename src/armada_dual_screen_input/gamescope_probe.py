@@ -16,16 +16,37 @@ import subprocess
 import sys
 
 
-def validate_display(runtime: Path, name: str) -> Path:
+def _validate_runtime(runtime: Path) -> Path:
+    """Resolve and validate the directory afresh for this operation."""
+    runtime = runtime.resolve(strict=True)
+    info = runtime.stat()
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid():
+        raise ValueError('runtime directory must belong to the current user')
+    return runtime
+
+
+def _display_path(runtime: Path, name: str) -> Path:
+    """Resolve one endpoint inside an already-validated canonical directory."""
     if not name or name in ('.', '..') or '/' in name or '\0' in name:
         raise ValueError('an explicit display socket basename is required')
-    runtime = runtime.resolve(strict=True)
-    if not runtime.is_dir() or runtime.stat().st_uid != os.getuid():
-        raise ValueError('runtime directory must belong to the current user')
     path = (runtime / name).resolve(strict=True)
-    info = path.stat()
-    if path.parent != runtime or info.st_uid != os.getuid() or not stat.S_ISSOCK(info.st_mode):
+    if path.parent != runtime:
         raise ValueError('display must be a same-user socket inside the runtime directory')
+    return path
+
+
+def _socket_info(path: Path) -> os.stat_result:
+    """Validate fresh metadata; callers must not reuse it for a later check."""
+    info = path.stat()
+    if info.st_uid != os.getuid() or not stat.S_ISSOCK(info.st_mode):
+        raise ValueError('display must be a same-user socket inside the runtime directory')
+    return info
+
+
+def validate_display(runtime: Path, name: str) -> Path:
+    runtime = _validate_runtime(runtime)
+    path = _display_path(runtime, name)
+    _socket_info(path)
     return path
 
 

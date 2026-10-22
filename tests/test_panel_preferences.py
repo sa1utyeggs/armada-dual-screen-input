@@ -97,6 +97,8 @@ class PanelPreferencesTests(unittest.TestCase):
         self.enter()
         draft = self.app.preferences
         for key, value in (("sensitivity", 2.3), ("position_sensitivity", 3.),
+                           ("marker_frame_rate", "30"),
+                           ('marker_idle_color','#FFFFFF'), ('marker_pressed_color','#58E38B'),
                            ("scroll_scale", .1), ("keyboard_repeat_enabled", False),
                            ("keyboard_repeat_delay_ms", 500)):
             draft.change(key, value)
@@ -104,11 +106,17 @@ class PanelPreferencesTests(unittest.TestCase):
         self.app._save_preferences()
         self.assertEqual(self.app.gesture.sensitivity, 2.3)
         self.assertEqual(self.app.position.position_gesture.sensitivity, 3.)
+        self.assertEqual(self.app.position.frame_rate, '30')
+        self.assertEqual(self.app.position.marker_colors.idle,'#FFFFFF')
+        self.assertEqual(self.app.position.marker_colors.pressed,'#58E38B')
         self.assertEqual(self.app.scroll_output.scale, .1)
         self.assertFalse(draft.dirty)
         self.app.set_mode("trackpad")
         self.app.load_config()
         self.assertEqual(self.app.input_cfg["position_sensitivity"], 3.)
+        self.assertEqual(self.app.input_cfg["marker_frame_rate"], '30')
+        self.assertEqual(self.app.input_cfg['marker_idle_color'],'#FFFFFF')
+        self.assertEqual(self.app.input_cfg['marker_pressed_color'],'#58E38B')
         self.assertEqual(self.app.scroll_scale, .1)
         self.assertFalse(self.app.input_cfg["keyboard_repeat_enabled"])
         self.assertEqual(self.app.keyboard_cfg["keyboard_repeat_delay_ms"], 500)
@@ -125,6 +133,22 @@ class PanelPreferencesTests(unittest.TestCase):
         self.assertTrue(self.app.preferences.dirty)
         self.app._save_preferences()
         self.assertFalse(self.app.preferences.error)
+
+    def test_color_palette_edits_only_the_draft_and_never_sends_game_input(self):
+        from armada_dual_screen_input.input_settings import color_swatches
+        self.enter();draft=self.app.preferences
+        draft.section='position'
+        top=dict(draft.rows())['marker_idle_color']
+        left,color,_=color_swatches()[-1]
+        self.app._preferences_down(10,left+30,top+44)
+        self.assertEqual(draft.values['marker_idle_color'],color)
+        self.assertEqual(self.app.input_cfg['marker_idle_color'],DEFAULTS['marker_idle_color'])
+        self.assertEqual(draft.values['marker_pressed_color'],DEFAULTS['marker_pressed_color'])
+        self.assertTrue(draft.dirty)
+        self.assertFalse(self.bridge.events)
+        self.assertFalse(self.config.exists())
+        draft.discard()
+        self.assertEqual(draft.values['marker_idle_color'],DEFAULTS['marker_idle_color'])
 
     def test_leaving_preferences_discards_draft_and_releases_slider(self):
         self.enter()

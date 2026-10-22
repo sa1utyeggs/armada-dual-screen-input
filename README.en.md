@@ -39,8 +39,8 @@ The application and the screenshots below currently use Chinese UI labels. This 
 | --- | --- |
 | Keyboard and touchpad | Steam-style dark controls for moving, clicking and typing on the lower screen; English US layout and Chinese full-pinyin candidates |
 | Two-finger scrolling | One-finger movement, tap to click and two-finger scrolling; pointer speed and scrolling scale can be adjusted independently |
-| Two touch modes | Choose Positioning (定位) or Direct touch (直接触屏) from a dropdown; rings mark upper-screen contacts, and switching pages or closing the panel releases previous contacts |
-| Input settings | Adjust sensitivity, inertia and key repeat; saved settings take effect immediately and survive upgrades |
+| Two touch modes | Choose Positioning (定位) or Direct touch (直接触屏) from a dropdown; upper-screen rings follow smoothly through an independent visual filter and can coexist with Steam's performance overlay; switching pages or closing the panel releases previous contacts |
+| Input settings | Adjust sensitivity, inertia, key repeat, the ring's rendering cap (30 / 60 / 120 FPS / follow screen) and separate idle/pressed colors; saved settings take effect immediately and survive upgrades |
 | Steam keyboard integration | Temporarily suppresses Steam's keyboard on the keyboard/touchpad page; restores it when switching pages, collapsing or exiting, with timeout recovery after an unexpected exit |
 | In-app updates | Manually check stable releases under Settings → Update (设置 → 更新), then confirm a verified installation; retry failures or roll back to the previous version |
 
@@ -85,7 +85,9 @@ The detailed documents below are currently in Simplified Chinese.
 | Version changes and original test results | [Changelog](CHANGELOG.md) · [History](docs/history.md) |
 | Stuck physical touch contacts on the Thor lower screen | [Driver investigation and validation](docs/thor-ft5452-contact-lifecycle.md) · [Separate experiment and rollback](extras/thor-touch-driver/README.md) |
 
-Isolated checks and real interaction acceptance are recorded separately for the touch modes. Direct multi-touch gestures, long sessions and suspend/resume still need further validation. Intermittent reconnects were observed on the *Slay the Spire 2* timeline; the cause is not yet known. Stuck physical contacts in the Thor's stock FT5452 driver cannot be fixed by changing app sensitivity; a short test of a separate experimental driver does not mean the app fixes the driver. [Full limitations and evidence](docs/compatibility.md)
+Isolated checks and real interaction acceptance are recorded separately for the touch modes. Direct multi-touch gestures, long sessions and suspend/resume still need further validation. Marker rendering was found to cause focus-query timeouts in the *Slay the Spire 2* card viewer; the GL fix passed a short user test. The earlier timeline issue and long-term stability still need observation. Ring/FPS coexistence, touch input and Steam menu round trips passed a short user test on this device and depend on passive decoration-window support in the current Thor Gamescope build. Stuck physical contacts in the Thor's stock FT5452 driver cannot be fixed by changing app sensitivity. [Full limitations and evidence](docs/compatibility.md)
+
+Visual ring smoothing on `main` has been installed on the Thor, with the user reporting smoother motion. Eight actual-renderer trials support more even movement and document the additional CPU/GPU cost. These changes remain Unreleased. [Methods, results and limits — Simplified Chinese](docs/position-touch.md#真实窗口安装用户反馈与八轮资源对比)
 
 ## Development and credits
 

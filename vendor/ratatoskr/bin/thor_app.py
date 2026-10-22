@@ -708,7 +708,7 @@ class ThorApp:
         self.held_key = None
         self.held_key_tid = None
         self.active_key_press = None
-        GLib.idle_add(self.drawing_area.queue_draw)
+        self._queue_keyboard_draw()
 
     def _release_ui_button(self) -> None:
         if self.held_ui_button == "left":
