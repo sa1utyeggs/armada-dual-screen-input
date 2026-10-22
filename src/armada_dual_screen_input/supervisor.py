@@ -19,6 +19,7 @@ import sys
 import time
 
 from .session_detect import detect_target_session
+from .steam_ui_language import add_steam_language_hint
 
 BASE = Path(__file__).resolve().parent
 ROOT = BASE.parent.parent
@@ -61,7 +62,7 @@ def child_environment(target) -> dict[str, str]:
     env["PYTHONPATH"] = str(ROOT / "src")
     env["GDK_BACKEND"] = "wayland"
     env["NO_AT_BRIDGE"] = "1"
-    return portable_environment(env)
+    return portable_environment(add_steam_language_hint(env, target.mode))
 
 
 def target_key(target):

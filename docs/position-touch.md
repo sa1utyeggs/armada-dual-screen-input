@@ -65,7 +65,7 @@ Positioning and second-finger-held dragging share that scale. Touchpad, split mo
 | `position_motion.py` | Isolate abnormal coordinate steps using toolkit sample intervals, without replay or physical-input reads |
 | `panel_position.py` | Focus, heartbeat, routing readiness, pause and cleanup, independent of capture |
 | `marker_overlay.py` | Marker child process, nonblocking local IPC, latest positioning state only |
-| `marker_worker.py` | Separate X11 GTK transparent-ring process; empty input region and passive decoration properties on its own window |
+| `marker_worker.py` | Separate X11 marker process; native EGL candidate with setup-only GTK fallback, empty input region and passive own-window decoration properties |
 | `marker_target.py` | App/window/display/geometry binding; decoration properties written only to its own window |
 | `native_input.py` | Native touch, device identity and exclusive upper routing |
 | `gamescope_target.py` / `touch_intent.py` / `input_geometry.py` | Target identity, intent and area geometry independent of mirror code |
@@ -75,7 +75,7 @@ The lower GUI uses the official lower KWin Wayland socket. Read-only `:0` discov
 GDK backends run in separate processes. Transparency, empty input region, no-focus behavior and passive decorations are configured before mapping; the current marker no longer occupies `GAMESCOPE_EXTERNAL_OVERLAY`. Its origin/canvas follow the app window, while input permission still checks the full physical upper image and matching aspect ratio.
 Properties must be acknowledged before display. Only its own window is written; root focus settings, other overlays, cursor and Steam touch policy remain unchanged.
 An inherited local socketpair carries state, without network ports or recorded coordinates, images or typed text.
-Redraw is limited to old/new ring bounds on changes; stationary rings do not paint continuously. Expired heartbeat stops touch.
+Changed old/new ring bounds form surface damage; stationary rings do not paint continuously. The native EGL candidate clears complete backbuffers before submitting those damage hints, while GTK fallback maintains its own buffer history. Expired heartbeat stops touch.
 
 <a id="steam-右侧菜单关闭后的圆环恢复旧外部叠加层实现的历史"></a>
 
@@ -431,3 +431,157 @@ The feature never stops/rewrites the system overlay. If the marker is invisible,
 Return to split or Touchpad to close marker/native touch; upper-right Close exits the panel.
 The same desktop shortcut/manual user service remain, with boot/login autostart disabled by default.
 Before deployment, back up app/config. To roll back, stop `thor-panel.service`, restore that backup and reopen manually.
+
+
+<a id="2026-10-22-touch-cpu-candidate"></a>
+
+## 2026-10-22: touch CPU optimization candidate
+
+This local candidate is based on v0.1.4 (`9326d78`) on `perf/touch-cpu`. The device's installed v0.1.3, personal configuration and disabled autostart were preserved; temporary source copies ran only against an owned receiver window on Steam Home. These results are not an installation, release, game test or battery-life measurement.
+
+### Retained changes and tradeoffs
+
+- Validate/copy marker geometry once at the sender boundary instead of two or three times, and compare motion metadata without making two dictionaries per update. The worker still independently validates IPC; timestamp-only updates, contact identities, lifecycle snaps and backpressure handling remain.
+- Reuse 36×36 Cairo ring sprites at eight subpixel phases per axis. The 128-entry cache holds at most 648 KiB of pixel data, excluding Python/driver bookkeeping. Colors, open centers, outlines and partial-damage clearing remain. Scaled, translated or rotated contexts retain the vector path.
+- Only visual raster coordinates round to the nearest 1/8 pixel: at most 1/16 pixel error per axis (under 0.089 pixel Euclidean error). Native coordinates, event timing/order, focus/route checks, smoothing and frame caps are unchanged. The worker still stops drawing once motion settles.
+- An initial per-contact native-write batching experiment did not show a convincing total CPU benefit and increased the five-finger result in its short A/B. It was discarded; the retained candidate uses the original libevdev writer. No input-rate reduction or cross-event permission cache was introduced.
+
+### Component measurements
+
+Thor/aarch64, Python 3.14.8, kernel 7.2.6. Sender preparation used five rounds of 20,000 updates: single/two/five-contact median CPU time changed from 5.616/7.712/13.428 μs to 4.189/4.723/6.821 μs (about 25/39/49% lower). This excludes GTK/IPC submission and real input.
+
+A separate offscreen 1920×1080 dirty-region workload warmed up for 1,000 frames, then took three rounds of 2,000 frames. Median painting/scene CPU time for one/two/five rings changed from 47.02/92.11/227.84 μs to 8.00/13.39/28.87 μs (about 83/85/87% lower). This CPU-only component result is **not** the whole-application reduction. Reproduce on a Linux Cairo runtime with:
+
+```bash
+python3 -B /path/to/candidate/tools/marker_paint_bench.py --source-root /path/to/baseline --output /tmp/marker-before.json
+python3 -B /path/to/candidate/tools/marker_paint_bench.py --source-root /path/to/candidate --output /tmp/marker-after.json
+```
+
+### Completed actual-window A/B
+
+Order: baseline → candidate → candidate → baseline; case order reversed for the last two runs. Each case had a two-second warmup and six-second sampling window. Four cases per run: positioning idle/moving and direct two/five-finger movement. An independent driver sent synthetic lower-panel contacts, guarded against leaving our own upper receiver. It never targeted Steam controls or games. Both versions used a temporary 120 FPS cap; saved preferences were untouched. The interrupted preliminary cache run is excluded.
+
+Two-run means, before → candidate:
+
+| Workload | Panel + children CPU, one-core % | Marker CPU, one-core % | Attributable DRM GPU busy, ms/s |
+| --- | --- | --- | --- |
+| Positioning, idle | 12.70 → 14.11 | 0.20 → 0.10 | 0.00 → 0.00 |
+| Positioning, moving | 41.75 → 41.14 | 23.47 → 23.33 | 12.30 → 11.36 |
+| Direct touch, two fingers | 48.28 → 47.35 | 25.79 → 24.97 | 16.85 → 15.38 |
+| Direct touch, five fingers | 65.99 → 61.36 | 33.15 → 29.53 | 31.93 → 32.48 |
+
+CPU 100% means one logical core. The CPU scope includes the test panel and its marker children, excluding the independent input driver, receiver, collector, compositor and normal service supervisor. GPU covers deduplicated readable DRM clients belonging to those processes; it does not cover all lower-screen compositor work or total application/device GPU cost.
+
+The five-finger aggregate fell about 7.0%, with marker CPU about 10.9% lower; both candidate repeats were below both baselines. Positioning/two-finger aggregate changes were only about 1.4/1.9% and are too small to establish a reliable general improvement from these short samples. Idle did **not** improve: its baseline repeats ranged from 10.60 to 14.79%, so the higher candidate mean remains inconclusive. GPU did not consistently decrease; no power/battery claim follows.
+
+Active rendering remained about 109–110 draw callbacks/s in both versions, not confirmed physical presentation FPS. Source rates were about 53–54 updates/s per finger; the candidate did not throttle them. Handler P95 stayed around 1.5–1.7 ms, with no demonstrated increase. Five-finger aggregate PSS rose about 1.8 MiB (141.25 → 143.09 MiB); this includes runtime/driver allocation, not just cached pixels.
+
+595 Thor Python checks passed; Mac passed the remainder with 105 Linux checks skipped, plus 15 JavaScript checks. Offscreen comparisons cover all 64 phase combinations for both colors, fallback transforms and partial-frame clearing. Five own-window GL pixel captures covered movement, one/two/five contacts and clearing: no pixels outside the expected circles, and zero nontransparent pixels after clearing. Worker cache counters confirmed actual reuse. After completion, configuration hashes, installed target and service/autostart state matched; test processes and virtual touch nodes were gone. No real-game, FPS-overlay coexistence, long-session or suspend/resume acceptance is claimed for this candidate.
+
+<a id="2026-10-22-whole-app-idle-cpu"></a>
+
+## 2026-10-22: whole-application idle CPU follow-up
+
+The `perf/touch-idle` candidate retains the preceding sender/sprite changes. This round compares that preceding candidate with the additional changes below, **not** installed v0.1.3 against an official new release. The installed release, personal config and disabled autostart remain unchanged. No commit, installation or publication follows from these measurements.
+
+### Attribution and retained changes
+
+Two 30-second complete-service idle baselines were 15.05% / 15.18% of one core. Representative surviving threads accounted for about 5.3–5.7% in route ownership scanning, 4.2–4.3% in the GUI main thread, 2.2–2.3% in foreground queries, 0.8% in supervision and 0.1% in the marker. Service `cpu.stat` also includes short-lived children missed by process snapshots; these categories do not exhaust or independently partition every cost. Idle marker painting was not the principal source of application CPU.
+
+Idle-only ablations disabled one subsystem at a time, with contact injection disabled. Their effects are not additive and the disabled checks are **not** product changes. A first attempt to use concurrent `cProfile` instances conflicted with Python's profiler tool allocation; that failed run is excluded. Replacement wrappers measured selected calls with per-thread CPU clocks. They identified repeated strict path resolution as a main-thread cost, in addition to route scanning and foreground queries.
+
+Retained changes:
+
+- Resolve current endpoint paths through Linux libc's strict `realpath()` instead of issuing each path-component operation through Python. Only function pointers are cached: runtime ownership/type, canonical paths and both socket identities are still checked afresh. Other platforms/unavailable APIs retain strict `Path.resolve()`. Allocated native results are always freed. The [POSIX interface](https://man7.org/linux/man-pages/man3/realpath.3.html) does not add an authorization cache.
+- Decode the already-received [XCB property header](https://xcb.freedesktop.org/manual/structxcb__get__property__reply__t.html) directly, avoiding extra value-pointer/length accessor calls for each property. New tests cover layout and truncated bodies; request batching, geometry, ancestry, policy checks and snapshot expiry remain.
+- Parse only the required `/proc/*/status` fields during session discovery, ending early for unrelated process names. Relevant processes still require fresh UID/parent/session corroboration.
+- Refresh the touch page's status stripe instead of the whole lower page each second. Mode/message changes still request a full repaint. Keyboard/trackpad orbital behavior is retained; status damage is rounded in widget pixels and checked against full-frame output at 1× and 0.55× scale.
+
+No input frequency, frame cap, native contact encoding, per-contact guard, route scan interval/expiry, foreground expiry or marker heartbeat was reduced. No new helper process or compiled library is retained.
+
+### Complete-service comparison
+
+Thor / Python 3.14.8 / kernel 7.2.6, Steam Home, owned receiver only. Temporary settings selected a 120 FPS ring cap; saved settings were untouched. CPU comes from the entire transient service cgroup: supervisor, lower GUI, marker and transient children. The receiver, external input driver and collector are excluded.
+
+Idle used two 20-second samples per implementation, with a separate process experiment interleaved: baseline → candidate → experiment → experiment → candidate → baseline. Active tests used baseline → candidate → candidate → baseline, reversing workload order for the latter two runs, with two-second warmups and ten-second CPU samples. Synthetic contacts targeted only the owned receiver; no real game input was sent.
+
+| Workload | Service CPU: preceding → new candidate, one-core % | Relative change | Readable DRM GPU busy, ms/s |
+| --- | --- | --- | --- |
+| Touch page idle | 14.66 → 13.25 | −9.6% | 0 → 0 |
+| Positioning drag | 44.42 → 44.11 | −0.7% | 12.56 → 12.57 |
+| Direct touch, two moving fingers | 47.52 → 48.51 | +2.1% | 16.59 → 16.58 |
+| Direct touch, five moving fingers | 62.91 → 61.59 | −2.1% | 32.01 → 31.93 |
+
+100% CPU means one logical core, **not** the entire handheld. Idle repeats were 14.44/14.89% before and 13.57/12.93% after; both candidate observations were below both baselines. The active ±2% differences do not establish a reliable overall active CPU reduction. The engineering targets of 30% less idle CPU and 15% less active CPU were not reached.
+
+Marker draw callbacks stayed around 116.5–117.4/s in both versions; this is not physical presentation FPS. Positioning source rate was 54.34 → 54.53 events/s, with comparable per-finger rates in multi-touch. Handler P95 for positioning/two/five fingers was 1.74/1.47/1.50 → 1.57/1.49/1.40ms: no consistent material regression was demonstrated, but this is not physical touch-to-display latency or long-session acceptance.
+
+Idle service PSS was 150.33 → 152.62 MiB; active end-of-sample PSS increased about 0.53/3.77/1.94 MiB by workload. These short point samples include runtime/driver allocations and cannot establish a leak or a permanent allocation delta. GPU figures deduplicate readable service-process DRM clients, largely the marker; they omit lower-compositor work without an independent counter. No total-GPU, game-frame-time, power or battery-life improvement is established.
+
+### Experiments not retained and validation
+
+- Moving the Python ownership scan into a separate process produced variable CPU and about 163.42 MiB idle PSS versus 152.62 MiB for the normal candidate. It was not retained.
+- A small independently compiled C scanner preserved complete owner detection, including duplicate descriptors, inherited descriptors in another process, close/recheck and root errors. Its additional idle comparison was 13.63 → 12.77% on average, with overlapping repeats and only two observations each. That evidence did not justify adding a compiled runtime/build dependency; source/binary remain experiment artifacts only.
+- Empty marker IPC polling was comparatively small. No check intervals or freshness limits were relaxed to manufacture a lower number. Active renderer submission remains a candidate for further attribution, rather than a proven GTK-only cause.
+
+The Thor suite passed all 603 Python checks. Mac ran the same 603 checks with 107 Linux-specific skips, plus 15 passing JavaScript checks. Pixel comparisons cover partial status repaint; target tests retain alias retargeting, endpoint replacement during partner lookup, ownership/type failures and metadata failures. Steam FPS coexistence and real-game behavior were not newly accepted by a user in this round.
+
+Each controller compared config hashes, installed target and service/autostart state before/after. Temporary windows, service units, input devices and test copies are removed after collection. Detailed raw evidence is retained locally under `outputs/ads-touch-idle-20261022`; it is not bundled into releases.
+
+
+<a id="2026-10-22-native-marker-submission"></a>
+
+## 2026-10-22: native EGL marker submission candidate
+
+The preceding idle optimization did not achieve the intended active reduction. This follow-up compares that same `perf/touch-idle` candidate with a native marker backend, rather than comparing the installed v0.1.3 with a new release. Formal installation and saved preferences remain unchanged. The saved cap was 60 FPS; both that cap and a temporary 120 FPS test cap were measured in isolated copies on Steam Home, sending contacts only to the benchmark's own receiver.
+
+### Cost attribution and implementation
+
+Explicit per-thread timing in two ten-second ring-only runs attributed about 16 / 21% of one core to the existing `Gdk.Window.process_updates(False)` path for one / five rings, including its draw callback and driver work. Circle drawing itself accounted for about 0.7 / 1.7%. These nested timings are not additive, and this is evidence about this GTK 3/GDK submission path, not a claim about every GTK application. The measured marker process used about 25.90 / 35.40% CPU. A Gtk.GLArea atlas prototype increased that to 32.60 / 38.10% and was rejected. A direct XCB/EGL prototype reached 10.90 / 12.70% and motivated the integrated tests below.
+
+The retained candidate:
+
+- Creates a checked, override-redirect RGBA8 XCB window on the verified target display, with an empty input shape, `WM_HINTS.input=false`, the existing matching-app decoration properties and no focus request. It claims neither the Steam overlay nor external FPS-overlay slot.
+- Uses a private GLES 3 context and two small texture atlases generated from the existing Cairo subpixel sprites. Premultiplied alpha, colors, outline, transparent center and coordinate quantization remain the same. There is no new compiled helper or installed RPM.
+- Clears and redraws every complete backbuffer, then submits current surface-damage hints through the advertised swap-damage extension. Damage hints do not imply preserved backbuffer contents. This deliberately avoids the earlier partial-buffer trail failure. No readback or `glFinish()` occurs in the application frame loop.
+- Preserves the existing motion filter, latest-state IPC, demand-driven pacer, 30/60/120/follow-display caps, native contact sender, per-contact checks and all freshness limits. Only the marker child changes; the lower GUI stays GTK.
+- Falls back to the existing GTK backend only when native setup is unavailable, after cleaning its unmapped resources and before consuming IPC or publishing a window. Known software-renderer setups are rejected. A post-activation error closes the worker and triggers normal parent protection, rather than switching a live backend. Optional GL/EGL/XCB-shape libraries use the existing host runtime; their absence must not become a new mandatory installation dependency.
+
+The prototype initially declared the XCB restack function with an incomplete native signature. The first whole-app attempt therefore hit BadWindow during restore and correctly disarmed input; it is excluded. The corrected four-argument signature retains the complete 32-bit XID and has a regression test. An unavailable-entry `ValueError` was subsequently added to setup-only fallback; the 60 FPS and compositor rounds below include that final exception-handling change. Normal rendering code was unchanged from the 120 FPS round.
+
+References: [EGL XCB platform](https://registry.khronos.org/EGL/extensions/EXT/EGL_EXT_platform_xcb.txt), [swap-damage semantics](https://registry.khronos.org/EGL/extensions/KHR/EGL_KHR_swap_buffers_with_damage.txt), [XCB Shape API](https://xcb.freedesktop.org/manual/group__XCB__Shape__API.html).
+
+### Complete-service CPU, GPU and memory
+
+Each cap used baseline → candidate → candidate → baseline, with workload order reversed for the latter two runs. Warmup was two seconds; CPU samples were 15 seconds at 60 FPS and 20 seconds at 120 FPS. CPU comes from the entire transient service cgroup, including supervisor, lower GUI, marker and transient children; the receiver, input driver and collector are excluded. Table values are the means of two observations per implementation.
+
+| Temporary cap | Workload | Service CPU, one-core % | Relative CPU change | Readable service DRM busy, ms/s | Service PSS, MiB |
+| --- | --- | --- | --- | --- | --- |
+| 60 | Positioning drag | 33.44 → 27.46 | -17.9% | 3.67 → 8.83 | 155.13 → 175.57 |
+| 60 | Direct touch, two fingers | 35.85 → 30.08 | -16.1% | 2.68 → 8.95 | 157.83 → 174.12 |
+| 60 | Direct touch, five fingers | 47.61 → 37.21 | -21.9% | 18.88 → 9.19 | 156.72 → 173.16 |
+| 120 | Positioning drag | 43.03 → 30.35 | -29.5% | 12.62 → 17.54 | 155.93 → 172.94 |
+| 120 | Direct touch, two fingers | 46.57 → 34.65 | -25.6% | 16.73 → 17.83 | 155.62 → 174.75 |
+| 120 | Direct touch, five fingers | 61.37 → 42.21 | -31.2% | 32.33 → 18.43 | 155.81 → 172.92 |
+
+100% CPU means one logical core, not the whole handheld. The active target of at least 15% lower service CPU was reached in these cases: about 16–22% at the saved 60 FPS cap and 26–31% at 120 FPS. Both candidate observations were below both baselines for every active case. This does not establish a game-frame-time or battery-life improvement.
+
+Idle still did **not** meet its target: the final 120 FPS series was 15.30 → 14.95%, with overlapping repeats (16.20/14.40 before, 15.51/14.38 after). Idle marker draw counts were zero. The rendering change does not resolve the foreground, route-verification and other persistent idle costs.
+
+At 60 FPS, marker callbacks stayed about 59.1–59.5/s; at 120 FPS, about 117.9–118.9/s, using heartbeat count windows rather than physical presentation timestamps. Positioning input stayed about 55 events/s, with comparable per-finger rates for multi-touch. Handler P95 remained about 1.3–1.6ms, without a consistent meaningful change. Sampled readiness stayed true; non-idle rounds delivered native movement with no cancellation, so reduced CPU was not produced by disabling touch mid-run.
+
+PSS increased about 16–21 MiB. These process/runtime/driver point samples do not isolate texture memory or establish a leak. Service-only GPU busy increased for positioning and two fingers, while decreasing for five fingers; CPU reduction alone must not be described as universally lower GPU work.
+
+### External rendering costs and validation limits
+
+The first external sampler included Xwayland/KWin but missed Gamescope's actual `gamescope-wl` process name. A separate 120 FPS baseline → candidate → candidate → baseline follow-up explicitly included both Gamescope processes, Xwayland and readable related DRM clients, using two-second warmups and twelve-second samples for positioning/five fingers.
+
+For positioning, Xwayland CPU was 39.32 → 20.86% and Gamescope CPU 13.66 → 14.23%; for five fingers, 45.44 → 25.34% and 15.48 → 17.34%. Gamescope's small increase was considerably smaller than the service plus Xwayland reduction; KWin stayed about 0.2–0.3%. The deduplicated readable application-plus-selected-external GPU engine time was 123.54 → 33.85ms/s and 160.79 → 34.76ms/s. This broader evidence supports reduced work in the measured rendering path, but it remains a selected-process counter scope, not total device GPU utilization, power, or all compositor activity.
+
+Native framebuffer readback covered 381 frames: every 8×8 subpixel phase for both colors, clipped edges, overlapping rings, ten contacts, repeated two/five-ring moves and clearing across swapped buffers. All channels exactly matched the existing Cairo reference, with zero alpha outside reference pixels. Readback touched only the test window. A real X Shape query confirmed an empty input region; the owned receiver retained foreground. These checks do not replace physical scanout or in-game interaction acceptance.
+
+Thor passed all 615 Python checks. Mac ran the same suite with 107 Linux-specific skips; the remainder and 15 JavaScript checks passed. Earlier incomplete test exports lacked repository metadata/documentation and are excluded from pass claims. Resource controllers compare configuration hashes, installed target and inactive/disabled service state, then close their own windows, transient units and virtual devices. No official Steam, Gamescope or Armada service was restarted, and no driver, kernel or real game setting changed. Raw evidence remains local under `outputs/ads-marker-submit-20261022`, outside release bundles. Long-session, suspend/resume and real-game/FPS coexistence acceptance have not been repeated for this native candidate.
+
+A separate passive-window cap check measured about 29.98 / 59.95 / 119.86 / 119.90 draw callbacks/s for 30 / 60 / 120 / Follow display on the reported 119930mHz upper monitor. Every cap added zero stationary draws over a three-second settled window. Intentionally rejecting native surface setup in a fresh child produced a ready GTK marker on the same owned receiver; foreground and saved state stayed unchanged. These are callback/functional checks, not physical scanout measurements.
+
+A further read-only directory-FD ownership-scan experiment opened directories, never event devices. Four batches of 200 scans gave baseline 4.463/4.475ms CPU per scan versus 3.960/3.979ms, with identical owner sets. At the unchanged four checks/s, this isolated difference is roughly 0.2 percentage points of a core under those conditions, far below the idle target. It was not adopted; the native input/route module is unchanged in this renderer stage.

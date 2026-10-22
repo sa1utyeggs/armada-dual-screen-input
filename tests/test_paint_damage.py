@@ -139,6 +139,33 @@ class DrawingTests(unittest.TestCase):
             app._draw_position(cr)
             self.assertEqual(draw.call_count, 4)
 
+    def test_touch_status_damage_keeps_static_pixels_and_matches_full_frame(self):
+        import cairo
+        app = self.app(); app.mode = 'position'
+        values = {'bat_cap': 99, 'cpu_load': 1}
+        app.stats.get_stats = lambda: values
+        for scale in (1., .55):
+            with self.subTest(scale=scale):
+                actual = cairo.ImageSurface(cairo.FORMAT_ARGB32, 1240, 1080)
+                def paint(surface, partial=False):
+                    cr = cairo.Context(surface)
+                    if partial:
+                        # GTK damages integer widget pixels, before the
+                        # logical-to-widget scale used by on_draw().
+                        from armada_dual_screen_input.keyboard_redraw import widget_rect
+                        cr.rectangle(*widget_rect((-5, 75, 1250, 54), 1240*scale, 1080*scale))
+                        cr.clip()
+                    cr.scale(scale, scale)
+                    app._draw_ui(cr); app._draw_position(cr)
+                paint(actual)
+                values.update(bat_cap=1, cpu_load=100, cpu_temp=100)
+                with patch.object(app, '_draw_position_background') as body:
+                    paint(actual, True)
+                    body.assert_not_called()
+                reference = cairo.ImageSurface(cairo.FORMAT_ARGB32, 1240, 1080)
+                paint(reference)
+                self.assertEqual(bytes(actual.get_data()), bytes(reference.get_data()))
+
     def test_touch_contacts_do_not_change_lower_screen_pixels(self):
         import cairo
         app = self.app(); app.mode = 'position'

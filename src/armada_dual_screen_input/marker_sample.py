@@ -40,7 +40,10 @@ def decode_sample(message):
 
 
 def sample_payload(rings, motion):
-    payload = {'contacts': validate_rings(rings), 'motion': dict(motion)}
+    # Decode once at the sender boundary, retaining a private immutable copy.
+    # The worker independently validates the untrusted IPC message as before.
+    payload = {'contacts': rings, 'motion': dict(motion)}
     sample = decode_sample(payload)
+    payload['contacts'] = sample.rings
     payload['motion']['ids'] = sample.ids
     return payload

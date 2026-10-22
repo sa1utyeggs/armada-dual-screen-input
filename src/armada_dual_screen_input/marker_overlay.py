@@ -78,15 +78,17 @@ class MarkerOverlay:
             child.close()
 
     def update(self, point, pressed=False, *, motion=None):
-        if (len(point) != 2 or not all(math.isfinite(n) and 0 <= n <= 1 for n in point)
-                or type(pressed) is not bool):
-            raise ValueError('invalid marker state')
-        rings = ((*point, pressed),)
-        self._set_pending(sample_payload(rings, motion) if motion is not None else (*point, pressed))
+        if motion is not None:
+            self._set_pending(sample_payload(((*point, pressed),), motion))
+        else:
+            if (len(point) != 2 or not all(math.isfinite(n) and 0 <= n <= 1 for n in point)
+                    or type(pressed) is not bool):
+                raise ValueError('invalid marker state')
+            self._set_pending((*point, pressed))
 
     def update_contacts(self, contacts, *, motion=None):
-        rings = validate_rings(contacts)
-        self._set_pending(sample_payload(rings, motion) if motion is not None else {'contacts': rings})
+        self._set_pending(sample_payload(contacts, motion) if motion is not None
+                          else {'contacts': validate_rings(contacts)})
 
     def _set_pending(self, payload):
         if isinstance(payload, dict) and 'motion' in payload:
@@ -95,9 +97,10 @@ class MarkerOverlay:
             if isinstance(self.pending, dict) and 'motion' in self.pending:
                 # A new timestamp alone must not wake a settled ring. Keep
                 # lifecycle barriers until their latest state is delivered.
-                old = dict(self.pending['motion']); new = dict(payload['motion'])
-                old.pop('sampled_at'); new.pop('sampled_at')
-                if (not self._snap_pending and old == new
+                old, new = self.pending['motion'], payload['motion']
+                if (not self._snap_pending
+                        and old['ids'] == new['ids'] and old['mode'] == new['mode']
+                        and old['active'] == new['active'] and old['snap'] == new['snap']
                         and self.pending['contacts'] == payload['contacts']):
                     return
         self.pending = payload

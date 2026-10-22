@@ -64,3 +64,7 @@ Application commit `5e127ed` from PR #4 was installed through an offline per-use
 This was short interactive acceptance on one Thor. Other hardware, Desktop Mode, long sessions and suspend/resume were not verified. Isolated checks cover defaults, discard and save-failure protection; users were not asked to repeat each of those cases.
 
 Full historical evidence is in the repository's [position-touch record](https://github.com/sa1utyeggs/armada-dual-screen-input/blob/main/docs/position-touch.md), [driver investigation](https://github.com/sa1utyeggs/armada-dual-screen-input/blob/main/docs/thor-ft5452-contact-lifecycle.md) and [history](https://github.com/sa1utyeggs/armada-dual-screen-input/blob/main/docs/history.md). Short user acceptance is not evidence of long-term stability.
+
+## Unreleased native marker candidate
+
+The optional XCB/EGL backend is currently a tested source candidate, with GTK fallback only before activation. It reduces active service CPU in owned-window comparisons while adding about 16–21 MiB PSS; idle remains unresolved. Separate external counters help distinguish service GPU costs from Xwayland/Gamescope work. The installed release and earlier user acceptance are unchanged; physical game/FPS interaction, long sessions and suspend/resume need new acceptance for this backend. See [measurements and limits](position-touch.md#2026-10-22-native-marker-submission).

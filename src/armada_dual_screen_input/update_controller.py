@@ -8,6 +8,7 @@ import threading
 import time
 
 from .updates import UpdateError, latest_release, newer, process_identity, state_path
+from .user_tasks import manager_environment
 
 BUSY = {'checking', 'starting', 'downloading', 'installing'}
 
@@ -27,7 +28,8 @@ def start_worker(root, tag):
         if value and Path(value).is_absolute():
             command.append('--setenv=' + key + '=' + value)
     command += ['/usr/bin/python3', '-B', str(Path(root) / 'tools/update.py'), '--expected-tag', tag]
-    result = subprocess.run(command, capture_output=True, text=True, timeout=15)
+    result = subprocess.run(command, capture_output=True, text=True, timeout=15,
+                            env=manager_environment())
     if result.returncode:
         raise UpdateError(msg('update.start_failed'))
 

@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from armada_dual_screen_input.input_settings import (
     DEFAULTS, NUMBERS, CHOICES, SECTIONS, SettingsDraft, read_settings, write_settings, color_swatches,
+    settings_tabs,
 )
 from armada_dual_screen_input.marker_colors import COLOR_SETTINGS, COLOR_PRESETS
 
@@ -141,6 +142,15 @@ class InputSettingsTests(unittest.TestCase):
                                  (expected, key))
             self.assertEqual(draft.hit(1100, 1020), ("save", None))
             self.assertEqual(draft.hit(30, 120), (None, None))
+        for section, left, width in settings_tabs():
+            self.assertEqual(draft.hit(left + width/2, 250), ('section', section))
+            self.assertLessEqual(left + width, 1216)
+        draft.section = 'general'
+        self.assertEqual(draft.hit(200, 648), ('update_left', None))
+        self.assertEqual(draft.hit(900, 648), ('install_update', None))
+        self.assertEqual(draft.hit(200, 882), ('uninstall_left', None))
+        self.assertEqual(draft.hit(900, 882), ('uninstall_confirm', None))
+        self.assertEqual(draft.hit(900, 800), (None, None))  # Former update action is inert.
 
     def test_save_merges_unknown_fields_and_preserves_previous_input_page(self):
         with tempfile.TemporaryDirectory() as directory:

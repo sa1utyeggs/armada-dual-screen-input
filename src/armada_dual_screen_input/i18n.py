@@ -13,11 +13,18 @@ from .ui_catalogs import EN_US, ZH_CN
 
 CATALOGS = {'en_US': EN_US, 'zh_CN': ZH_CN}
 UI_LANGUAGES = {'auto': None, 'zh_CN': '简体中文', 'en_US': 'English'}
+STEAM_LANGUAGE_HINT = 'ADS_STEAM_UI_LANGUAGE'
 _language = 'en_US'
 
 
 def read_ui_language(value):
     return value if isinstance(value, str) and value in UI_LANGUAGES else 'en_US'
+
+
+def neutral_locale(environ):
+    locale = next((environ.get(key) for key in ('LC_ALL', 'LC_MESSAGES', 'LANG')
+                   if environ.get(key)), 'C')
+    return locale.split('.', 1)[0].split('@', 1)[0].upper() in ('C', 'POSIX')
 
 
 def resolve_language(value, environ=None):
@@ -26,9 +33,12 @@ def resolve_language(value, environ=None):
         return value
     env = os.environ if environ is None else environ
     locale = next((env.get(key) for key in ('LC_ALL', 'LC_MESSAGES', 'LANG') if env.get(key)), 'C')
-    # Like gettext, LANGUAGE does not override the untranslated C locale.
-    if locale.split('.', 1)[0].upper() in ('C', 'POSIX'):
-        return 'en_US'
+    # Armada's Game Mode uses C.UTF-8 even with a translated Steam UI. The
+    # launcher supplies a validated, startup-only hint without changing LANG.
+    # LANGUAGE alone still does not override the untranslated C locale.
+    if neutral_locale(env):
+        hint = env.get(STEAM_LANGUAGE_HINT)
+        return hint if hint in ('en_US', 'zh_CN') else 'en_US'
     choices = env.get('LANGUAGE', '').split(':') + [locale]
     for choice in choices:
         language = choice.replace('-', '_').split('_', 1)[0].split('.', 1)[0].lower()

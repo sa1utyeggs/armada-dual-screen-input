@@ -6,6 +6,7 @@ import unittest
 from unittest.mock import patch
 
 from armada_dual_screen_input.gamescope_target import GamescopeTarget
+from armada_dual_screen_input.canonical_path import canonical_path
 
 
 class TargetIdentityTests(unittest.TestCase):
@@ -81,7 +82,7 @@ class TargetValidationTests(unittest.TestCase):
                 self.assertTrue(self.target.is_current())
 
     def test_endpoint_replaced_during_partner_lookup_uses_fresh_identity(self):
-        original = Path.resolve
+        original = canonical_path
         replaced = False
         def resolve(path, *args, **kwargs):
             nonlocal replaced
@@ -91,7 +92,7 @@ class TargetValidationTests(unittest.TestCase):
                 (self.runtime/'a').rename(self.runtime/'saved')
                 self.open_socket('a')
             return result
-        with patch.object(Path, 'resolve', resolve):
+        with patch('armada_dual_screen_input.gamescope_probe.canonical_path', resolve):
             self.assertFalse(self.target.is_current())
         self.assertTrue(replaced)
 

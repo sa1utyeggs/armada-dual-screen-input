@@ -45,6 +45,52 @@ class MarkerSceneTests(unittest.TestCase):
 
 @unittest.skipUnless(sys.platform=='linux','Offscreen Cairo checks require Linux runtime')
 class MarkerPixelTests(unittest.TestCase):
+    def vector_reference(self, cr, rings, canvas, colors):
+        import cairo, math
+        cr.set_operator(cairo.OPERATOR_SOURCE)
+        cr.set_source_rgba(0,0,0,0);cr.paint()
+        cr.set_operator(cairo.OPERATOR_OVER)
+        for u,v,pressed in rings:
+            for width,color in ((5,(0,0,0,.85)),
+                                (2.5,colors.pressed_rgba if pressed else colors.idle_rgba)):
+                cr.set_line_width(width);cr.set_source_rgba(*color)
+                cr.new_sub_path();cr.arc(u*(canvas[0]-1),v*(canvas[1]-1),12,0,math.tau);cr.stroke()
+
+    def test_cached_subpixel_phases_match_vector_strokes_for_both_colors(self):
+        import cairo
+        from armada_dual_screen_input.marker_colors import MarkerColors
+        colors=MarkerColors('#FF0000','#00FF00');canvas=(96,96)
+        for pressed in (False,True):
+            for x in range(8):
+                for y in range(8):
+                    rings=(((40+x/8)/95,(40+y/8)/95,pressed),)
+                    actual=cairo.ImageSurface(cairo.FORMAT_ARGB32,*canvas)
+                    reference=cairo.ImageSurface(cairo.FORMAT_ARGB32,*canvas)
+                    draw_rings(cairo.Context(actual),rings,canvas,colors)
+                    self.vector_reference(cairo.Context(reference),rings,canvas,colors)
+                    self.assert_pixels_match(actual,reference)
+
+    def test_scaled_and_transformed_contexts_retain_original_vector_pixels(self):
+        import cairo
+        from armada_dual_screen_input.marker_colors import DEFAULT_COLORS
+        canvas=(96,96);rings=((.301,.529,False),(.8,.6,True))
+        for scale,translate in ((2,False),(1,True)):
+            actual=cairo.ImageSurface(cairo.FORMAT_ARGB32,96*scale,96*scale)
+            reference=cairo.ImageSurface(cairo.FORMAT_ARGB32,96*scale,96*scale)
+            actual.set_device_scale(scale,scale);reference.set_device_scale(scale,scale)
+            a,b=cairo.Context(actual),cairo.Context(reference)
+            if translate:a.translate(1,2);b.translate(1,2)
+            draw_rings(a,rings,canvas)
+            self.vector_reference(b,rings,canvas,DEFAULT_COLORS)
+            self.assert_pixels_match(actual,reference)
+
+    def test_cache_is_bounded_when_colors_change(self):
+        from armada_dual_screen_input.marker_paint import _ring_sprite
+        _ring_sprite.cache_clear()
+        for n in range(160):_ring_sprite((n/160,0.,0.,1.),0,0)
+        self.assertLessEqual(_ring_sprite.cache_info().currsize,128)
+        _ring_sprite.cache_clear()
+
     def test_selected_colors_apply_independently_without_filling_the_center(self):
         import cairo
         from armada_dual_screen_input.marker_colors import MarkerColors

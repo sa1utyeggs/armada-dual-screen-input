@@ -3,7 +3,7 @@ import ctypes as c
 from types import SimpleNamespace
 import unittest
 
-from armada_dual_screen_input.gamescope_focus import Cookie, Geometry, FocusSnapshot, FocusState, UpperFocus
+from armada_dual_screen_input.gamescope_focus import Cookie, Geometry, PropertyReply, FocusSnapshot, FocusState, UpperFocus
 from armada_dual_screen_input.gamescope_target import InputUnavailable
 
 
@@ -48,7 +48,10 @@ class FocusServer:
         buf = c.create_string_buffer(32 + len(data))
         address = c.addressof(buf)
         if kind == 'property':
-            c.c_uint8.from_address(address+1).value = 8 if isinstance(value, bytes) else 32
+            header = PropertyReply.from_address(address)
+            header.format = 8 if isinstance(value, bytes) else 32
+            header.value_len = len(data) if header.format == 8 else len(data)//4
+            header.length = (len(data)+3)//4
             c.memmove(address+32, data, len(data))
         elif kind == 'geometry':
             geo = Geometry.from_address(address)
@@ -80,6 +83,32 @@ class FocusServer:
 
 
 class FocusTests(unittest.TestCase):
+    def test_property_header_matches_xcb_wire_layout_without_accessor_calls(self):
+        self.assertEqual(c.sizeof(PropertyReply), 32)
+        self.assertEqual(PropertyReply.value_len.offset, 16)
+        server = FocusServer()
+        def unexpected(*args):
+            self.fail('snapshot must decode the received reply without another native call')
+        server.xcb_get_property_value = unexpected
+        server.xcb_get_property_value_length = unexpected
+        self.assertEqual(server.focus().snapshot().touch_mode, 4)
+
+    def test_truncated_property_body_is_rejected_and_reply_freed(self):
+        for name in ('GAMESCOPE_FOCUSED_WINDOW', 'GAMESCOPE_FOCUS_DISPLAY'):
+            with self.subTest(name=name):
+                server = FocusServer()
+                focus = server.focus()
+                original = focus._reply
+                def reply(kind, cookie):
+                    address = original(kind, cookie)
+                    if server.requests[cookie.sequence] == ('property', name):
+                        PropertyReply.from_address(address).length = 0
+                    return address
+                focus._reply = reply
+                with self.assertRaises(InputUnavailable):
+                    focus.snapshot()
+                self.assertTrue(server.freed)
+
     def test_snapshot_batches_root_properties_and_surface_queries(self):
         server = FocusServer()
         snapshot = server.focus().snapshot()

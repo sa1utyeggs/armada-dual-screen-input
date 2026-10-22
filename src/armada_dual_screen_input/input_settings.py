@@ -69,7 +69,15 @@ SECTIONS = {
                  "keyboard_repeat_interval_ms", "keyboard_caps_window_ms"),
     "general": ("ui_language",),
 }
-SETTINGS_PAGES = (*SECTIONS, 'updates')
+SETTINGS_PAGES = (*SECTIONS, 'driver')
+GENERAL_UPDATE_BUTTON_TOP = 618
+GENERAL_UNINSTALL_BUTTON_TOP = 854
+
+
+def settings_tabs():
+    width = (1192 - 12 * (len(SETTINGS_PAGES) - 1)) / len(SETTINGS_PAGES)
+    return tuple((section, 24 + index * (width + 12), width)
+                 for index, section in enumerate(SETTINGS_PAGES))
 
 
 def color_swatches():
@@ -168,25 +176,31 @@ class SettingsDraft(LocalizedState):
 
     def rows(self):
         return [(key, 300 + index * 98)
-                for index, key in enumerate(SECTIONS[self.section])]
+                for index, key in enumerate(SECTIONS.get(self.section, ()))]
 
     def hit(self, x, y):
-        for index, section in enumerate(SETTINGS_PAGES):
-            if 24 + index * 204 <= x <= 216 + index * 204 and 220 <= y <= 280:
+        for section, left, width in settings_tabs():
+            if left <= x <= left + width and 220 <= y <= 280:
                 return "section", section
-        if self.section == "general" and 742 <= y <= 810:
-            if 44 <= x <= 564:
-                return "uninstall_left", None
-            if 620 <= x <= 1192:
-                return "uninstall_confirm", None
-        if self.section == 'updates':
-            if 760 <= y <= 836:
+        if self.section == "general":
+            if GENERAL_UPDATE_BUTTON_TOP <= y <= GENERAL_UPDATE_BUTTON_TOP + 60:
                 if 44 <= x <= 564:
-                    return 'check_update', None
+                    return 'update_left', None
                 if 620 <= x <= 1192:
                     return 'install_update', None
-            if 850 <= y <= 914 and 620 <= x <= 1192:
-                return 'cancel_update', None
+            if GENERAL_UNINSTALL_BUTTON_TOP <= y <= GENERAL_UNINSTALL_BUTTON_TOP + 56:
+                if 44 <= x <= 564:
+                    return "uninstall_left", None
+                if 620 <= x <= 1192:
+                    return "uninstall_confirm", None
+        if self.section == 'driver':
+            if 760 <= y <= 836:
+                if 44 <= x <= 564:
+                    return 'driver_left', None
+                if 620 <= x <= 1192:
+                    return 'driver_right', None
+            if 850 <= y <= 914 and 44 <= x <= 564:
+                return 'driver_refresh', None
             return None, None
         if 996 <= y <= 1060:
             for key, left, width in (("defaults", 24, 270), ("discard", 662, 250), ("save", 936, 280)):

@@ -78,3 +78,13 @@ The earlier whole-kernel build stayed stopped; the module used a separate worksp
 
 The driver changes, 90-second test, rollback, extended-trial status and limits were added to [Issue #757's follow-up comment](https://github.com/armada-os/armada/issues/757#issuecomment-6284200266) on 2026-10-20.
 The comment also separates application marker-recovery/wait improvements and intermittent timeline reconnections from driver observations; unconfirmed app problems were not attributed to the driver. The issue remains open in this historical record.
+
+## 2026-10-22 follow-up and Settings integration
+
+After a reboot the original `edt_ft5x06` driver was active again; the experimental module had no autoload rule. The user reproduced a stuck orange marker by holding the first finger and quickly tapping twice with the second. After all fingers lifted, read-only snapshots still reported one physical slot and `BTN_TOUCH=true`, including 31 samples across 15 seconds.
+
+Isolated application replay completed 20,000 double-tap cycles (40,000 confirming taps) with complete events and no retained native press. Deliberately omitting the first confirming END reproduced orange remaining after the second tap until the aim finger lifted. This models the failure but does not locate every real lost event. The CPU renderer candidate was not installed when the user reported the failure.
+
+The same fingerprint-matched module was reapplied with explicit authorization, with the app and configuration unchanged. The lower driver changed to `armada_thor_ft5452`, stale physical slots cleared, the upper driver/input stayed unchanged, and the user confirmed recovery. The CPU candidate was installed later while keeping that module active. This further supports the driver cleanup fix for this observed problem; it does not establish universal DOWN delivery or long-session/suspend reliability.
+
+The current source adds **Settings → Experimental** through a separately installed root-owned component. Normal app installation remains unprivileged and excludes the kernel experiment. Status is read-only and requested only on opening/refreshing the page; enable/restore require confirmation and administrator authentication, preserve preferences and operate only on the lower screen. No boot loading is added. See [component preparation, controls and rollback](../extras/thor-touch-driver/README.md#settings-controls).

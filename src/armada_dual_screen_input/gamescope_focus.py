@@ -70,6 +70,16 @@ class Geometry(c.Structure):
                ('border_width', c.c_uint16)]
 
 
+class PropertyReply(c.Structure):
+    # xcb_get_property_reply_t, xproto.h: the value follows this 32-byte
+    # header. Reading its already-received metadata avoids two extra ctypes
+    # calls (and GIL handoffs) for each of the six properties per snapshot.
+    _fields_ = [('response_type', c.c_uint8), ('format', c.c_uint8),
+               ('sequence', c.c_uint16), ('length', c.c_uint32),
+               ('type', c.c_uint32), ('bytes_after', c.c_uint32),
+               ('value_len', c.c_uint32), ('pad', c.c_uint8 * 12)]
+
+
 class UpperFocus:
     """One worker-thread connection. Never call X reply waits on the GTK thread."""
 
@@ -102,8 +112,6 @@ class UpperFocus:
             'xcb_intern_atom_reply': (p, [p, Cookie, c.POINTER(p)]),
             'xcb_get_property': (Cookie, [p, c.c_uint8, u, u, u, u, u]),
             'xcb_get_property_reply': (p, [p, Cookie, c.POINTER(p)]),
-            'xcb_get_property_value': (p, [p]),
-            'xcb_get_property_value_length': (c.c_int, [p]),
             'xcb_get_geometry': (Cookie, [p, u]),
             'xcb_get_geometry_reply': (p, [p, Cookie, c.POINTER(p)]),
             'xcb_get_input_focus': (Cookie, [p]),
@@ -207,12 +215,12 @@ class UpperFocus:
     def _cardinal_reply(self, cookie, *, required=False) -> int | None:
         reply = self._reply('xcb_get_property_reply', cookie)
         try:
-            if (c.c_uint8.from_address(reply + 1).value != 32
-                    or self.api.xcb_get_property_value_length(reply) != 4):
+            header = PropertyReply.from_address(reply)
+            if header.format != 32 or header.value_len != 1 or header.length < 1:
                 if required:
                     raise InputUnavailable('Gamescope focus property is unavailable')
                 return None
-            return c.c_uint32.from_address(self.api.xcb_get_property_value(reply)).value
+            return c.c_uint32.from_address(reply + c.sizeof(PropertyReply)).value
         finally:
             self.libc.free(reply)
 
@@ -230,12 +238,14 @@ class UpperFocus:
                                            self.atoms[name], 0, 0, 16)
         reply = self._reply('xcb_get_property_reply', cookie)
         try:
-            length = self.api.xcb_get_property_value_length(reply)
-            if not 0 < length <= 64:
+            header = PropertyReply.from_address(reply)
+            length = header.value_len * (header.format // 8)
+            if (header.format not in (8, 16, 32) or not 0 < length <= 64
+                    or length > header.length * 4):
                 raise InputUnavailable('focused XWayland display is unavailable')
             # Gamescope publishes a C string through a CARDINAL property;
             # trailing values past its NUL are not part of the display name.
-            raw = c.string_at(self.api.xcb_get_property_value(reply), length).split(b'\0', 1)[0]
+            raw = c.string_at(reply + c.sizeof(PropertyReply), length).split(b'\0', 1)[0]
             value = raw.decode('ascii')
             if not re.fullmatch(r':[0-9]+(?:\.[0-9]+)?', value):
                 raise InputUnavailable('focused display is not a local XWayland server')

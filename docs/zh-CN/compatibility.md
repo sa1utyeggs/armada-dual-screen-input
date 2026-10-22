@@ -62,3 +62,7 @@ Game Mode 的文字提交使用隔离的 Gamescope 私有协议适配器，不�
 这是单台 Thor 的短时交互验收；其他设备、Desktop Mode、长期与休眠恢复仍未由本轮验证。恢复默认、放弃编辑与保存失败保护由隔离检查覆盖，本轮未要求用户逐项复测。
 
 完整历史证据见源码仓库的 [定位触摸记录](https://github.com/sa1utyeggs/armada-dual-screen-input/blob/main/docs/position-touch.md)、[驱动研究](https://github.com/sa1utyeggs/armada-dual-screen-input/blob/main/docs/thor-ft5452-contact-lifecycle.md)和[历史汇总](https://github.com/sa1utyeggs/armada-dual-screen-input/blob/main/docs/history.md)。短时用户验收不等同于长期稳定性验证。
+
+## 未发布的原生圆环候选
+
+可选 XCB/EGL 后端目前是经过测试的源码候选，仅在激活前回退 GTK。在自有窗口对比中降低活跃服务 CPU，同时增加约 16–21 MiB PSS；静置仍未解决。独立外部计数器用于区分服务 GPU 成本与 Xwayland/Gamescope 工作。正式安装和之前的用户验收保持不变；此后端还需重新验收实际游戏／FPS 交互、长时间及休眠恢复。详见[测量与限制](position-touch.md#2026-10-22-native-marker-submission)。

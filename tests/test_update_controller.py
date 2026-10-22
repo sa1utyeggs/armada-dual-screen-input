@@ -1,5 +1,6 @@
 """UI lifecycle and detached startup, with a deterministic fake thread queue."""
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -132,7 +133,8 @@ class ControllerTests(unittest.TestCase):
         self.assertFalse(self.controller.busy)
 
     def test_transient_service_does_not_wait_or_inherit_panel_cgroup(self):
-        with patch('armada_dual_screen_input.update_controller.subprocess.run') as run:
+        with patch.dict(os.environ, {'DBUS_SESSION_BUS_ADDRESS':'unix:path=/tmp/lower-private-bus'}), \
+             patch('armada_dual_screen_input.update_controller.subprocess.run') as run:
             run.return_value.returncode = 0
             start_worker(self.root, 'v0.2.0')
         args = run.call_args.args[0]
@@ -142,6 +144,7 @@ class ControllerTests(unittest.TestCase):
         self.assertNotIn('--scope', args)
         self.assertNotIn('--wait', args)
         self.assertNotIn('sudo', args)
+        self.assertNotIn('DBUS_SESSION_BUS_ADDRESS', run.call_args.kwargs['env'])
         self.assertEqual(args[-2:], ['--expected-tag', 'v0.2.0'])
 
 
