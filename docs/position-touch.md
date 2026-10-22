@@ -1,400 +1,433 @@
-# 触屏：定位与直接多指
+English · [简体中文](zh-CN/position-touch.md)
 
-版本：`0.1.0-preview.2`（2026-10-21）在原定位功能上增加“直接触屏”，使用顶部下拉框选择；实际发布提交以对应 Git 标签为准。隔离检查、已有定位功能验收与新增多指功能的待验收项分别记录。
-最后更新：2026-10-21。实机环境：AYN Thor / Armada `20261010.c3d178c` / Steam Game Mode。
+<a id="触屏定位与直接多指"></a>
 
-## 目的与操作
+# Touchscreen: positioning and direct multi-touch
 
-看上屏、在下屏操作，减少镜像方案中的视线切换与画面传输。
-新模式不启动捕获源、GStreamer 管线或图像复制，只维护定位坐标、被动标识和原生触点。
-其他机型及 Desktop Mode 尚未验证。
+Version `0.1.0-preview.2` (2026-10-21) added Direct touch to the existing Positioning feature, selected through a top dropdown. The corresponding Git tag identifies the actual released commit. Isolated checks, existing positioning acceptance and pending multi-touch acceptance are recorded separately.
+Last updated: 2026-10-21, with subsequent dated records below. Device: AYN Thor / Armada `20261010.c3d178c` / Steam Game Mode.
 
-在“虚拟键鼠”顶部选择第三个“触屏”页签，再通过同一工具栏的下拉框选择“定位”或“直接触屏”子模式。当前选择显示在带箭头的框内，不增加第二行，操作区仍从逻辑坐标 y=124 延伸至下屏底部。此页不提供暂停、启用或释放触点按钮，可见且就绪时自动启用。菜单展开时先释放旧触点并阻止自动重连，选择或点外部收起后，等待全部抬手和目标稳定再恢复；菜单使用现有面板绘制，不新建获取焦点的弹窗。顶部控制按钮和状态栏不发送触摸，菜单操作的触摸序列也不会传到上屏。
-等待上屏标识就绪、前台目标稳定 200ms、所有真实手指抬起至少 80ms，再自动启用。
+<a id="目的与操作"></a>
 
-下表为保留的“定位”子模式：
+## Purpose and operation
 
-| 操作 | 效果 |
+Look at the upper screen while operating the lower one, avoiding mirror transport and repeated changes of gaze.
+No capture source, GStreamer pipeline or image copying runs; the feature maintains positions, passive markers and native contacts.
+Other devices and Desktop Mode are unverified.
+
+Choose the third top page, Touchscreen, then select Positioning or Direct touch in the same toolbar's dropdown. Its arrowed box adds no second row: the input area still runs from logical y=124 to the lower edge. There is no pause/enable/release-contact button; a visible, ready page enables automatically. Opening the menu releases old contacts and blocks reconnection. Selecting or dismissing it waits for all fingers up and a stable target before resuming. The menu uses existing panel drawing, not a focus-taking popup. Header/status controls and menu gestures never send upper-screen touch.
+Enable waits for the upper marker, a foreground target stable for 200ms and all physical fingers lifted for at least 80ms.
+
+Retained Positioning behavior:
+
+| Action | Effect |
 | --- | --- |
-| 第一指落下 | 不跳转标识，不触摸、不发送鼠标悬停 |
-| 第一指滑动 | 从标识现有位置相对定位，无惯性和双指判定延迟 |
-| 第一指抬起后再次落下 | 从原位置继续，不跳回起点 |
-| 保持第一指，第二指在操作区任意位置落下 | 在标识位置按下一个原生触点 |
-| 保持第二指，移动第一指 | 移动同一个触点，执行拖动或单指滑动 |
-| 第二指抬起 | 释放触点，第一指可继续只定位 |
-| 第一指先抬起 | 释放触点；剩余手指不接替定位。新落下的手指可重新定位，再次触摸仍须新的第二指落下 |
-| 第三指 | 不参与定位或触摸，不更换既有手指角色 |
-| 定位居中 | 先释放触点并重置手势，再居中；抬手且就绪后自动恢复 |
+| First finger down | No marker jump, touch or mouse hover |
+| Move first finger | Relative positioning from the ring's current location, without inertia or two-finger decision delay |
+| Lift and replace first finger | Continue from the current location, not the starting point |
+| Hold first finger, press a second anywhere in the input area | Press one native contact at the marker |
+| Hold second finger, move first | Move that same contact for dragging or a one-finger swipe |
+| Lift second finger | Release contact; first finger can continue positioning only |
+| Lift first finger first | Release contact; remaining fingers never inherit positioning. A new finger can position again; touching still needs a new second-finger begin |
+| Third finger | No positioning/touch role or role reassignment |
+| Center positioning | Release/reset the gesture, then center; resume after lift/readiness |
 
-两根下屏手指控制上屏的一个触点，不代表上屏双指手势。第二指的位置与移动不改变定位。
-标识为中心透明圆环，普通定位为蓝色，触摸按下时为橙色。
-切页、收起、窗口隐藏、退出、输入路由失效或前台目标变化均先释放触点。
-重新进入 / 展开后等待就绪并抬手，旧接触不续接。
+Two lower fingers control **one** upper contact, not an upper two-finger gesture. The second finger's location/movement does not change positioning.
+The marker is a transparent-center ring: blue while positioning, orange while pressed in the original defaults.
+Changing pages, collapsing, hiding, exiting, invalid routing or changing foreground targets releases contacts first.
+Re-entering/expanding waits for readiness and lift; old contacts never resume.
 
-### 直接触屏子模式（2026-10-21）
+<a id="直接触屏子模式2026-10-21"></a>
 
-下屏操作区按绝对位置映射到上屏完整画面：单指落下立即发送一个触点，不需要第二指确认；多根手指各有独立接触 ID，可分别移动、抬起。上屏为每一个保持的触点显示橙色透明圆环。2026-10-21 的未发布调整已移除下屏的对应圆环；下屏保留操作说明和状态，触点移动、按下或抬起本身不再触发重绘。全部抬手后清空上屏圆环。圆环仅为位置标识，不是传感器测得的真实手指大小或压力。
+### Direct touch submode (2026-10-21)
 
-编码器与虚拟设备支持最多 10 个独立槽，实际可用手指数仍受物理下屏、GTK 上报和接收应用限制。不模拟鼠标悬停、鼠标按钮或双指滚轮；不进行画面捕获。Gamescope 模式 1 仍可能把触摸转为鼠标；模式 4 及接收应用需支持原生多指，程序不会改写 Steam 的触摸策略。
+The lower input area maps absolute coordinates to the complete upper image. One finger immediately sends one contact; each additional finger has an independent contact ID and can move/lift separately. Each held upper contact gets an orange transparent ring. An adjustment unreleased at the time on 2026-10-21 removed the corresponding lower rings: instructions/status remain, but contact motion/press/release alone no longer redraws the lower UI. All upper rings clear when fingers lift. Rings indicate position, not sensor-measured finger size or pressure.
 
-进入任一子模式均自动等待目标稳定、圆环心跳、独占路由及全部抬手；切换子模式先释放旧触点、清空旧手势并重新等待，避免将选择按钮的手指传到上屏。定位模式的圆环位置与倍率保留；直接触屏不使用相对定位倍率。子模式保存在 `touch_mode` 字段，旧配置默认进入定位，其他配置保留。底层漏报触点的已知问题不因新增模式而视作已修复。
+The encoder/virtual device supports up to 10 slots; actual simultaneous fingers depend on hardware, GTK reports and receiving apps. No mouse hover/buttons, two-finger wheel or capture is simulated. Gamescope touch mode 1 may translate touch to mouse; mode 4 and the receiver must support native multi-touch. The app does not rewrite Steam touch policy.
 
-### 移动倍率
+Both submodes wait for target stability, marker heartbeat, exclusive routing and all fingers lifted. Switching releases old contacts, clears gestures and waits again so the selector's finger cannot reach the upper screen. Positioning location/scale persist; Direct touch does not use relative scale. `touch_mode` stores the submode; old configs default to Positioning while preserving other values. Adding a mode does not fix known missing physical events.
 
-2026-10-20 按用户要求，将定位触摸的水平、垂直移动倍率从 1.0 提高为 2.0。
-下屏滑动操作区宽度 / 高度的 10%，对应上屏标识移动屏幕宽度 / 高度的 20%；到达屏幕边缘时仍限位。
-纯定位与按住第二指的拖动使用相同倍率。原触控板、键鼠模式、滚轮及异常跳点保护保持原样。
+<a id="移动倍率"></a>
 
-## 实现与隔离
+### Movement scale
 
-| 模块 | 职责 |
+On 2026-10-20, horizontal/vertical positioning scale changed from 1.0 to 2.0 at the user's request.
+Moving 10% of the lower area width/height moves the upper marker 20% of screen width/height, clamped at edges.
+Positioning and second-finger-held dragging share that scale. Touchpad, split mode, wheel and abnormal-jump protection remain unchanged.
+
+<a id="实现与隔离"></a>
+
+## Implementation and isolation
+
+| Module | Responsibility |
 | --- | --- |
-| `position_gesture.py` | 无 I/O 手势状态机；固定第一指 / 第二指角色，输出至多一个接触 |
-| `position_motion.py` | 使用工具包采样间隔隔离异常大步坐标，不回放未知位移；不读取物理输入 |
-| `panel_position.py` | 焦点、标识心跳、路由就绪、暂停及回收；不依赖捕获状态 |
-| `marker_overlay.py` | 启动标识子进程，非阻塞本机 IPC，仅保留最新定位状态 |
-| `marker_worker.py` | 独立 X11 GTK 进程，绘制透明圆环并设置自己的空输入区域和被动装饰属性 |
-| `marker_target.py` | 验证应用 / 窗口 / 显示服务器与几何位置绑定，构建仅写入自身窗口的装饰属性 |
-| `native_input.py` | 原生触摸发送、设备身份和独占上屏路由验证 |
-| `gamescope_target.py` / `touch_intent.py` / `input_geometry.py` | 独立的目标身份、输入意图及操作区几何数据；不导入镜像代码 |
-| `position_input_smoke.py` | 仅向自己的上屏测试窗口发送有限输入的开发验证 |
+| `position_gesture.py` | I/O-free gesture state machine; fixed first/second roles, at most one contact |
+| `position_motion.py` | Isolate abnormal coordinate steps using toolkit sample intervals, without replay or physical-input reads |
+| `panel_position.py` | Focus, heartbeat, routing readiness, pause and cleanup, independent of capture |
+| `marker_overlay.py` | Marker child process, nonblocking local IPC, latest positioning state only |
+| `marker_worker.py` | Separate X11 GTK transparent-ring process; empty input region and passive decoration properties on its own window |
+| `marker_target.py` | App/window/display/geometry binding; decoration properties written only to its own window |
+| `native_input.py` | Native touch, device identity and exclusive upper routing |
+| `gamescope_target.py` / `touch_intent.py` / `input_geometry.py` | Target identity, intent and area geometry independent of mirror code |
+| `position_input_smoke.py` | Bounded input only to its own upper-screen test window |
 
-下屏 GUI 仍使用官方下屏 KWin 的 Wayland socket；程序从 `:0` 只读确认前台，再在同属上屏 Gamescope 的目标 XWayland 中创建标识。
-两种 GDK 后端在独立进程中运行。标识在映射前完成透明视觉、空输入区域、拒绝焦点及被动装饰属性设置；不再占用 `GAMESCOPE_EXTERNAL_OVERLAY`。几何原点跟随应用窗口，画布使用应用尺寸，但输入许可仍按物理上屏完整画面及匹配宽高比检查。
-属性请求必须被确认后才显示。只写自己的窗口，不修改根窗口焦点配置、其他覆盖层、系统光标或 Steam 触摸策略。
-坐标和标识状态通过继承的本机 socketpair 传递，不开网络端口，不记录用户坐标、画面或输入文字。
-圆环只在位置 / 状态变化时重绘旧、新范围，静止时不做逐帧画面绘制。心跳过期则停止触摸。
+The lower GUI uses the official lower KWin Wayland socket. Read-only `:0` discovery identifies the foreground, then creates the marker in the target XWayland belonging to the same upper Gamescope.
+GDK backends run in separate processes. Transparency, empty input region, no-focus behavior and passive decorations are configured before mapping; the current marker no longer occupies `GAMESCOPE_EXTERNAL_OVERLAY`. Its origin/canvas follow the app window, while input permission still checks the full physical upper image and matching aspect ratio.
+Properties must be acknowledged before display. Only its own window is written; root focus settings, other overlays, cursor and Steam touch policy remain unchanged.
+An inherited local socketpair carries state, without network ports or recorded coordinates, images or typed text.
+Redraw is limited to old/new ring bounds on changes; stationary rings do not paint continuously. Expired heartbeat stops touch.
 
-### Steam 右侧菜单关闭后的圆环恢复（旧外部叠加层实现的历史）
+<a id="steam-右侧菜单关闭后的圆环恢复旧外部叠加层实现的历史"></a>
 
-2026-10-20 用户反馈游戏中打开再关闭右侧菜单后圆环消失，切换模式可以恢复。现场圆环进程仍在运行，窗口仍有外部覆盖层属性；
-同一 XWayland 中的 mangoapp 也使用此外部覆盖层，且堆叠顺序在圆环上方。
-[Gamescope 的覆盖层选择逻辑](https://github.com/ValveSoftware/gamescope/blob/master/src/steamcompmgr.cpp)对旧式外部覆盖层按透明度和堆叠顺序选取一个窗口；
-这与本次现象一致，但未将上游当前源码视作已核对本机的确切构建。
+### Recovery after closing Steam's right menu (historical external-overlay implementation)
 
-应用在前台目标重新稳定、所有手指抬起、准备恢复输入路由时，通过有界 IPC 请求圆环恢复一次。
-子进程只提升自己的空输入区域窗口并重绘圆环局部，不调用 `present()`、不请求焦点，也不持续争抢堆叠顺序。
-不修改 mangoapp、Steam、游戏、系统光标或触摸驱动；菜单切换期间的旧触点仍先释放，返回后不续接。
-Mac 的 254 项检查通过（36 项 Linux GTK 检查跳过），掌机的 20 项相关检查通过。
-部署后用户确认：游戏中打开再关闭 Steam 右侧菜单，无需切换模式，圆环能自动恢复，定位触摸正常。
-本次验收针对菜单往返后的恢复行为，不扩大为长期使用或休眠恢复均已验证。
+On 2026-10-20, the user reported a disappearing ring after opening/closing the right menu; switching modes restored it. The marker process and external-overlay property remained, while mangoapp in the same XWayland used the same overlay category and stacked above it.
+[Gamescope's overlay selection](https://github.com/ValveSoftware/gamescope/blob/master/src/steamcompmgr.cpp) chooses one legacy external window by opacity/stacking. That matches the symptom, but current upstream source was not treated as the exact verified local build.
 
-随后用户反馈恢复偏慢。代码检查发现，正常前台切换与真正的故障共用 1.5 秒重试冷却，再叠加目标稳定和输入路由确认。
-已改为：圆环正常时，前台变化立即释放旧触点并重新等待稳定目标，不额外冷却；圆环失效、IPC 或路由故障仍保留故障冷却。
-目标稳定 200ms、全部抬手 80ms、路由独占与新鲜度检查均保持原样，不复用切换前的接触。
-Mac 与掌机各 35 项相关检查通过，包括正常切换跳过故障等待、未稳定时不恢复、旧接触释放及真实故障仍冷却。
-部署后用户确认“明显更快，操作正常”，本轮恢复速度优化通过交互验收；上述时限与模拟时钟检查不是端到端实机延迟测量。
+On stable foreground recovery, all fingers up and routing re-establishment, bounded IPC requested one marker restoration.
+The child raised only its own input-transparent window and redrew local ring bounds, without `present()`, focus requests or continuous stacking competition.
+No mangoapp, Steam, game, cursor or driver changes; old menu-time contacts released and did not resume.
+254 Mac checks passed with 36 Linux GTK skips; 20 related device checks passed.
+The user confirmed automatic recovery and normal positioning after a right-menu round trip without changing modes. This accepts that behavior briefly, not long sessions or suspend/resume.
 
-后续用户在《杀戮尖塔2》时间线中反馈间歇性反复提示连接 / 恢复，圆环本身不跳动。
-一次约 25 秒的独立只读焦点采样得到 1,240 个样本，只有一个前台状态且没有查询错误；这不能替代应用内部检查，也不能确定故障时的状态。
-掌机临时诊断版最多记录 60 次恢复的原因、焦点 / 圆环 / 路由时效及接触数量，不记录坐标或输入文本，不修改控制逻辑。
-随后用户在同一界面测试约 20 秒，反馈这次未复现；目前原因未确认，不能标记已修复。保留限量诊断版，待再次复现时读取对应记录。
+Recovery was then reported slow. Ordinary foreground transitions shared a 1.5-second fault retry cooldown, on top of target stability and route confirmation.
+Healthy-marker transitions now release old contacts and immediately wait for stability without extra cooldown. Marker/IPC/routing failures retain it.
+The 200ms target stability, 80ms all-up period, exclusive/fresh routing and no resumed contacts remain.
+35 related checks passed on both Mac and device, covering skipped healthy cooldown, unstable targets, old-contact release and retained fault cooldown.
+The user reported noticeably faster recovery with normal operation. These limits/fake-clock tests are not end-to-end latency measurements.
 
-仍沿用 Gamescope / Steam 当前的触摸模式 1 或 4。模式 1 可能把触摸转成鼠标左键，不能宣称所有应用收到原生多点触摸。
-首次支持匹配上屏宽高比的完整窗口；裁切、非匹配比例、缩放 / 旋转组合和其他机型需要额外验证。
-每次实际触摸发送前仍检查目标、焦点、标识心跳和原生路由。只定位没有应用输入，因此不在每个移动事件上重复原生发送检查；
-后台路由检查仍每 250ms 扫描全部进程所有者，750ms 过期。将 Path 对象遍历改为 scandir，不减少检查范围、频率或身份验证。
+Later, intermittent connection/recovery notices occurred in the Slay the Spire 2 timeline without ring jumps.
+A separate read-only focus sample captured 1,240 samples in about 25 seconds with one foreground state and no query errors; it cannot replace internal checks or establish the original fault state.
+A temporary device build capped diagnostics at 60 recovery records, containing reason, focus/marker/route ages and contact counts, without coordinates/text or control changes.
+A subsequent roughly 20-second user test did not reproduce it. Cause remained unconfirmed; the bounded diagnostic build was retained for another occurrence, not marked fixed.
 
-## 2026-10-21：查看牌界面的圆环卡顿与重新识别
+Current Gamescope/Steam touch modes 1 or 4 remain; mode 1 may turn touch into left mouse, so native multi-touch cannot be claimed for every app.
+Initial support is a complete window with matching upper aspect ratio. Crops, mismatched ratios, scale/rotation combinations and other models need checks.
+Each real send still validates target, focus, heartbeat and route. Positioning alone sends no app input and does not repeat send checks on every motion.
+Background routing scans all process owners every 250ms, expiring at 750ms. `scandir` replaced Path traversal without reducing scope, frequency or identity checks.
 
-用户反馈《杀戮尖塔2》查看牌时圆环 / 拖动明显停顿，游戏画面基本正常，偶有重新识别。短时人工记录捕获到目标身份未变、焦点检查年龄超过 200ms 后的保护性释放；路由仍有效，圆环心跳未过期。GTK 主循环并未同样持续阻塞，单次输入处理通常不足 2ms。这确认了部分重新识别的直接触发条件，不能据此确定全部卡顿来源。
+<a id="2026-10-21查看牌界面的圆环卡顿与重新识别"></a>
 
-先将根窗口的焦点、显示路由、触屏策略请求统一排队，再读取回复；游戏窗口的几何和输入焦点请求也一并发送。每轮仍重新读取，不缓存发送许可；无效属性 / X 错误仍拒绝输入，提前失败时丢弃其余排队回复。此改动缩短了常规查询，但人工复测仍卡顿并发生超时，不能单独视为修复。
+## 2026-10-21: card-viewer ring stutter and re-identification
 
-用户随后指出，一轮自动绘制对比没有停留在查看牌界面。因此该轮被排除，不用于查看牌场景的效果结论。下述对比均在用户重新明确确认进入查看牌界面、保持不操作后执行，只移动本应用的被动圆环；未创建输入设备、未向游戏发送输入。
+The user reported ring/drag pauses in Slay the Spire 2's card viewer while game rendering was mostly normal, with occasional re-identification. Bounded manual records captured protective release when focus age exceeded 200ms despite unchanged target identity, valid route and fresh heartbeat. GTK was not persistently blocked, and an input callback usually took under 2ms. This identifies a direct trigger for some reconnections, not every stutter's cause.
 
-同一界面先静止圆环 6 秒、移动 18 秒、再静止 6 秒，独立焦点查询 P95 约为 1.01 / 33.00 / 0.80ms。一次约 101ms 的查询等待期间，`:0` XWayland 主线程的四次只读采样均为 `dma_fence_default_wait`；`:1` 游戏服务器查询并非本轮的主要等待点。现有证据将问题缩小到圆环的 X11 绘制 / GPU 同步路径，尚不足单独归因于某个驱动版本。
+Root focus/display-route/touch-policy requests were queued together before reading replies, as were game geometry/input-focus requests. Each round rereads them without caching permission; invalid properties/X errors still refuse input and early failure discards outstanding replies. Common queries shortened, but manual retesting still stuttered/timed out; batching alone was not the fix.
 
-尝试先在小 Cairo 位图中绘圆环再提交，仍出现约 344ms 等待，未采用。最终候选仅对 `MarkerOverlay` 启动的 X11 子进程设置 `GDK_GL=always`，让 GTK 使用 GL 合成；父进程、下屏、游戏、系统和 Steam 的环境均不改写。空输入区域、不获取焦点、覆盖层属性、圆环外观及局部刷新保留。
+The user noted one automatic rendering comparison was not in the card viewer. That round was excluded. Comparisons below followed explicit confirmation of that scene and no user operation; only the app's passive ring moved, without input devices or game input.
 
-在已确认的查看牌界面按「原路径 → GL → GL → 原路径」顺序，每段预热约 0.8 秒、采样 8 秒：
+With 6 seconds stationary, 18 moving and 6 stationary, independent focus-query P95 was about 1.01 / 33.00 / 0.80ms. During an approximately 101ms query, four read-only `:0` XWayland main-thread samples showed `dma_fence_default_wait`; `:1` game-server queries were not the main wait. Evidence narrowed the path to X11 marker drawing/GPU synchronization, without proving a driver-version cause.
 
-| 路径 | 焦点查询 P95，ms | 查询最大值，ms |
+Drawing into a small Cairo bitmap first still produced about 344ms waits and was rejected. The adopted candidate sets `GDK_GL=always` **only** for the X11 child started by `MarkerOverlay`, using GTK GL composition. Parent, lower UI, game, system and Steam environments stay unchanged. Empty input region, no focus, overlay properties, appearance and local redraw remain.
+
+In the confirmed card viewer, run original → GL → GL → original, each with about 0.8 seconds warmup and 8 seconds sampling:
+
+| Path | Focus-query P95, ms | Maximum query, ms |
 | --- | --- | --- |
-| 原路径，第一轮 | 32.95 | 34.22 |
-| GL，第一轮 | 0.90 | 1.88 |
-| GL，第二轮 | 0.93 | 1.89 |
-| 原路径，第二轮 | 33.18 | 33.45 |
+| Original, first | 32.95 | 34.22 |
+| GL, first | 0.90 | 1.88 |
+| GL, second | 0.93 | 1.89 |
+| Original, second | 33.18 | 33.45 |
 
-这是独立只读查询的耗时，不是物理触摸到显示的端到端延迟，也不等于 CPU/GPU 占用或游戏 FPS。短测中没有 GL 超时，不能外推为长期完全无卡顿。焦点 200ms、圆环心跳 1.2 秒、路由 750ms 有效期和 250ms 路由检查周期均不变，实际发送仍经过全部保护。正常面板在每轮结束后恢复，个人配置、自启动保持原样。
+These are independent read-only query times, not physical touch-to-display latency, CPU/GPU utilization or game FPS. No GL timeout occurred briefly; that does not establish permanent freedom from stutter. Focus 200ms, heartbeat 1.2 seconds, route 750ms and route-check 250ms limits remain, with all checks before sends. Each round restored the panel, config and autostart.
 
-最终候选通过 Thor 的 463 项 Python 检查；Mac 同样执行 463 项，其中 87 项 Linux 检查跳过，其余通过，另有 15 项 JavaScript 检查通过。按离线包清单校验后安装，确认正式圆环进程的 `GDK_GL=always` 生效，游戏 / Steam / 上下屏官方会话原进程未重启。安装与测试前后全部个人配置文件哈希一致，自启动仍关闭。
+463 Python checks passed on Thor. Mac ran the same 463 with 87 Linux skips; other checks plus 15 JavaScript checks passed. After manifest verification/installation, the live marker had `GDK_GL=always`; original game/Steam/official upper/lower processes were not restarted. All personal config hashes matched and autostart stayed off.
 
-安装后，在用户确认的查看牌界面再记录约 51 秒，其中约 20 秒有连续单指移动：收到 1,125 次移动更新，焦点查询 P95 1.07ms、最大 34.45ms，未出现重新识别。GTK 触摸处理最大约 1.56ms，源事件仍有少量超过 50ms 的间隔，不将此次修复描述为消除了所有输入链路抖动。随后用户明确反馈「已经顺畅，也没有重新识别」，本场景短时交互验收通过；长期游戏、其他界面和休眠恢复仍需观察。
+After installation, about 51 seconds were recorded in the confirmed card viewer, including about 20 seconds of continuous one-finger movement: 1,125 updates, focus P95 1.07ms, maximum 34.45ms, no re-identification. Maximum GTK touch processing was about 1.56ms; a few source gaps exceeded 50ms, so not all input jitter was eliminated. The user confirmed smooth operation without re-identification. This passes short interaction acceptance for that scene; long sessions, other scenes and suspend/resume remain observations to make.
 
-## 2026-10-21：圆环与 Steam 性能叠加显示共存
+<a id="2026-10-21圆环与-steam-性能叠加显示共存"></a>
 
-用户反馈触屏页会隐藏《杀戮尖塔2》的 FPS，触控板页正常。只读现场确认 `mangoapp overlay window` 与旧圆环均注册为 `GAMESCOPE_EXTERNAL_OVERLAY`；本机版本的这条路径只选择一个外部叠加窗口。调透明度或反复提高堆叠位置只会改变选中者，不能让二者同时显示。
+## 2026-10-21: coexistence with Steam's performance overlay
 
-候选改为同一应用的被动装饰窗口：在已验证属于同一上屏 Gamescope 的目标 XWayland 中创建自己的 override-redirect 窗口，设置自身的应用 ID、透明 / 不交互样式及 transient 关联；不设置 `GAMESCOPE_EXTERNAL_OVERLAY` 或 `STEAM_OVERLAY`。原空输入区域、拒绝焦点、GL 合成和局部刷新保留。对 mangoapp、Steam、游戏窗口和系统服务不作写入。
+Touchscreen hid Slay the Spire 2 FPS while Touchpad did not. Read-only inspection found both `mangoapp overlay window` and the old marker registered as `GAMESCOPE_EXTERNAL_OVERLAY`; the local path selects one external overlay. Opacity/stacking changes select a different winner, not coexistence.
 
-绑定包含应用、窗口、显示服务器、尺寸及原点。窗口移动也使已有输入许可失效；圆环按应用画布绘制，报告的源尺寸仍为物理上屏，保留完整画面 / 匹配宽高比限制。前台改变时先释放旧触点、退出旧圆环，再等待新目标稳定和全部抬手；同一窗口内已验证的子控件切换不会重建。圆环自己的 XID 在映射前通过有界 IPC 上报，不能作为新应用目标；已退出的圆环后台完成回收后不再累积于控制器中。
+The candidate became a passive decoration of the same app: create an override-redirect window in the verified upper target XWayland, with its own app ID, transparent/noninteractive style and transient association; set neither `GAMESCOPE_EXTERNAL_OVERLAY` nor `STEAM_OVERLAY`. Keep empty input, no focus, GL and local redraw. No writes to mangoapp, Steam, game windows or services.
 
-实机原型只自动移动自己的圆环，不创建输入设备、不向游戏发输入，持续约 20 秒，1,228 次焦点检查未发现目标或输入焦点变化。用户明确确认「FPS 和圆环同时显示」。本次按用户说明在游戏任意画面验证共存，不要求查看牌界面；不能把它当作该界面性能回归测试。原型退出后恢复原面板，配置字节、自启动及安装清单均不变。
+Binding includes app/window/server/size/origin. Window movement invalidates permission. The ring uses the app canvas but reports the physical upper source size, retaining complete-image/matching-aspect limits. Foreground changes release contacts, end the marker and wait for a stable new target/all-up; verified child-control changes in the same window do not rebuild it. Bounded IPC reports the marker's XID before mapping so it cannot become a new target; exited workers are reaped instead of accumulating.
 
-正式整合版本通过 Thor 的 475 项 Python 检查；Mac 同一套检查跳过 87 项 Linux 检查，其余通过，另有 15 项 JavaScript 检查通过。离线包校验与测试源码逐文件比对通过后安装，bundle ID 为 `e4b632d44b115e47`。运行中确认圆环使用目标 `:1`、`GDK_GL=always`，自身窗口不带外部或 Steam 覆盖层标记；前台目标、游戏 / Steam / Gamescope / 官方下屏原进程、全部个人配置哈希、应用运行与自启动状态均保持不变。
+A roughly 20-second prototype moved only its own ring, without input devices/game input. 1,228 focus checks found no target/focus change. The user confirmed FPS and ring together. As requested, this was any game scene, not specifically the card viewer, and cannot count as its performance regression. It restored the panel, config bytes, autostart and manifest.
 
-安装后请用户检查当前游戏画面的触屏移动、点击和 Steam 快速访问菜单往返，用户明确反馈「同时显示，触屏操作也正常」。本机正式整合版本的短时共存与交互验收通过。该路径依赖当前 Thor 的 Gamescope 装饰窗口支持，其他构建需另行验证；真实直接多指、长期运行、休眠恢复和查看牌界面的本轮性能回归未单独验证。之前 GL 修复的短时流畅度结论保留，不外推为本轮已完成全部性能测试。当前候选只安装到本机，尚未发布。
+The integrated build passed all 475 Thor Python checks. Mac skipped 87 Linux checks with the rest and 15 JavaScript checks passing. Manifest and per-file source comparison preceded installation, bundle `e4b632d44b115e47`. The live marker used target `:1`, `GDK_GL=always` and neither external nor Steam overlay flags. Foreground, original game/Steam/Gamescope/lower processes, config hashes, app running state and autostart were unchanged.
 
-## 2026-10-21：圆环位置的事件驱动发送
+The user tested movement, clicks and a quick-access-menu round trip, confirming simultaneous display and normal touch. This is short coexistence/interaction acceptance on this device. Other Gamescope builds need validation; real direct multi-touch, long sessions, suspend/resume and this round's card-viewer performance were not separately tested. Earlier GL acceptance retains its own scope. At this stage the candidate was installed locally but unreleased.
 
-前一版在触摸回调中只更新 `MarkerOverlay.pending`，由面板的 16ms 健康检查定时器调用 `poll()` 才发送。坐标已知后仍可能等待下次定时器；忙时等待还可能变长。改为更新时安排一个优先级为 `GLib.PRIORITY_DEFAULT` 的单次主循环回调，同一批变化只保留最新位置，非阻塞发送后自动移除。原定时器继续检查健康、处理就绪和重试背压；不会因背压不停安排重试。普通发送不延长子进程心跳的有效期。
+<a id="2026-10-21圆环位置的事件驱动发送"></a>
 
-关闭先取消未运行的发送回调；即使迟到回调被调用，也不能向已关闭通道发送。异步发送错误使标识健康检查失效，由控制器原有释放 / 重连路径处理，不从 GTK 回调抛出并打断清理。圆环 GL / 被动装饰窗口、绘制时序、防跳点、真实输入和所有焦点 / 路由检查均未修改。
+## 2026-10-21: event-driven marker delivery
 
-自动检查增加批量合并、直接触屏清空、等待就绪、定时器兜底不重复发送、背压不忙重试、异步错误恢复、关闭及真实 GLib 派发覆盖。Thor 的 484 项 Python 检查全部通过；Mac 同一套跳过 88 项 Linux / GLib 检查，其余通过，15 项 JavaScript 检查通过。
+Previously touch callbacks only updated `MarkerOverlay.pending`; the 16ms health timer sent it through `poll()`. Known coordinates could wait for the next timer or longer under load. Updates now schedule one `GLib.PRIORITY_DEFAULT` main-loop callback, coalesce to the newest state and remove themselves after nonblocking delivery. The timer retains health/readiness/backpressure retry duties; congestion does not create busy retries. Ordinary sends never extend the worker heartbeat.
 
-`tools/marker_delivery_bench.py` 在 Thor 的真实 GLib 主循环与本地 datagram socket 上比较安装中的旧代码和候选代码。每种源周期按「旧 → 新 → 新 → 旧」运行，每段预热 0.5 秒、记录 5 秒。接收器代替圆环子进程；不创建窗口、输入设备或向游戏发送输入，不停用正式面板。下表为各版本两轮的对应指标均值：
+Close cancels pending delivery; even a late callback cannot use a closed channel. Async failure invalidates health for normal release/reconnect instead of escaping the GTK callback and interrupting cleanup. GL/passive decoration, drawing schedule, jump guard, real input and focus/route checks remain unchanged.
 
-| 源更新周期 | 实现 | 回调至接收 P50，ms | P95，ms | P99，ms | 接收更新 / 秒 |
+New checks cover coalescing, direct-touch clearing, readiness, no duplicate timer send, backpressure, asynchronous recovery, close and real GLib dispatch. All 484 Thor Python checks passed; Mac skipped 88 Linux/GLib checks, with the rest and 15 JavaScript checks passing.
+
+`tools/marker_delivery_bench.py` compared installed and candidate code on real Thor GLib/local datagram sockets. Each source period ran old → new → new → old, with 0.5 seconds warmup and 5 seconds recording. A receiver replaced the marker worker: no windows/input devices/game input, and the official panel stayed running. Means of each version's two rounds:
+
+| Source period | Implementation | Callback-to-receiver P50, ms | P95, ms | P99, ms | Received updates/s |
 | --- | --- | --- | --- | --- | --- |
-| 17ms，约 59 次 / 秒 | 定时发送 | 8.13 | 15.40 | 16.05 | 58.4 |
-| 17ms | 事件驱动 | 0.17 | 0.47 | 0.58 | 58.4 |
-| 8ms，约 124 次 / 秒 | 定时发送 | 4.79 | 7.87 | 8.24 | 62.2 |
-| 8ms | 事件驱动 | 0.09 | 0.32 | 0.47 | 123.8 |
+| 17ms, about 59/s | Timer | 8.13 | 15.40 | 16.05 | 58.4 |
+| 17ms | Event-driven | 0.17 | 0.47 | 0.58 | 58.4 |
+| 8ms, about 124/s | Timer | 4.79 | 7.87 | 8.24 | 62.2 |
+| 8ms | Event-driven | 0.09 | 0.32 | 0.47 | 123.8 |
 
-这测量的是位置更新回调到测试接收器，不是物理手指到屏幕可见位置的端到端延迟，也不代表显示 FPS。旧实现的高频样本被合并，不能只按已接收样本的延迟评价丢弃的中间位置。测试进程包含生成器 / 接收器：单核 CPU 平均占用在 17ms 组为 1.53% → 1.92%，8ms 组为 1.71% → 2.68%；没有单独测正式应用总 CPU、GPU、功耗或游戏帧时间，不能据此宣称资源占用降低。
+This measures callback-to-test-receiver delay, not physical touch-to-visible-position latency or display FPS. Old high-rate samples were merged; received-only latency cannot evaluate discarded positions. Generator/receiver CPU means were 1.53% → 1.92% of one core at 17ms and 1.71% → 2.68% at 8ms. Full app CPU, GPU, power and game frame times were not measured, so reduced resource use cannot be claimed.
 
-候选离线包 `20a0f27decf7c8a7` 已在本机安装，校验清单与测试源码一致。安装后确认圆环仍在目标 `:1` 使用 GL、被动装饰窗口且不占用 FPS 的外部覆盖层；前台游戏 / Steam / Gamescope / 官方下屏进程和个人配置哈希均不变，自启动保持关闭。首次安装校验错误地要求触控板页也存在圆环，已自动回退；修正校验以尊重当前页签后完成安装。
+Bundle `20a0f27decf7c8a7` was installed after matching manifest/source checks. The marker still used `:1`, GL and passive decoration without the FPS overlay slot. Foreground/original game/Steam/Gamescope/lower processes, config hashes and disabled autostart remained. An initial install check mistakenly required a marker on Touchpad and rolled back; respecting the selected page fixed the check and installation completed.
 
-随后请用户在「触屏 → 定位」缓慢画圈、快速来回移动和拖动约 30 秒，并检查 FPS 共存；用户明确反馈「更跟手，停止稳定，FPS 正常」。本轮短时跟手度和停止稳定性通过用户验收，保留当前候选；未给出具体游戏界面，不能扩展为查看牌界面、长期运行、休眠恢复或所有应用均已验证。该反馈与上述隔离发送基准分别记录，不据此推算物理端到端延迟。
+The user then tried slow circles, fast reversals and dragging for about 30 seconds in Touchscreen → Positioning, checking FPS. Feedback: more responsive, stable stopping, normal FPS. This accepts short responsiveness/stopping, not any specific card-viewer scene, long sessions, suspend/resume or every app. It is separate from the delivery benchmark and cannot infer physical end-to-end latency.
 
-## 2026-10-21：实测圆环绘制仍为约 60FPS
+<a id="2026-10-21实测圆环绘制仍为约-60fps"></a>
 
-事件驱动发送通过用户验收后，进一步区分位置更新、GTK 绘制和最终显示。只读查询得到上屏 Gamescope XWayland 的 GDK monitor 刷新率为 `119930mHz`，下屏 Wayland 为 `60000mHz`；这些是应用收到的显示信息，不是对物理扫描输出的独立测量。
+## 2026-10-21: measured marker drawing still near 60FPS
 
-先对原有圆环和前台窗口订阅 X Present 通知，并为观察器创建独立的 X Damage 资源，结束后移除订阅 / 资源；不修改窗口或根属性，不读取图片、不创建输入设备。人工连续单指移动记录约 35 秒，这一轮实际前台为 Steam 首页（appid 769）。圆环内容变化通知的短间隔中位数 17ms，主界面 Pixmap 呈现间隔中位数 8.44ms。圆环收到的 Present 事件均为 `NotifyMSC`，并非 Pixmap 完成；不能把其通知次数当成实际绘制帧数。
+After event delivery acceptance, position updates, GTK drawing and final display were separated. GDK reported upper Gamescope XWayland `119930mHz` and lower Wayland `60000mHz`; these are reported information, not independent scanout measurements.
 
-为排除触摸事件不足，临时停止自己的 `thor-panel.service`，以当前安装包的 `MarkerOverlay` / `marker_worker` 代码运行约 8 秒的纯圆环测试。只在临时子进程包装自身 GTK `draw` / `after-paint` 回调及读取帧时钟；每约 4ms 提供新位置，不创建原生输入设备、不向游戏发送输入。本轮前台为《杀戮尖塔2》（appid 2868840）；并非同场景前后性能对比。
+Read-only observation subscribed to X Present on existing marker/foreground windows and created a separate X Damage resource, removing both afterward. No property writes, images or input devices. About 35 seconds of manual motion actually occurred on Steam Home (appid 769). Short marker-content-change intervals had median 17ms; main-interface Pixmap presentation median was 8.44ms. Marker Present events were all `NotifyMSC`, not Pixmap completion, so their count is not a render-frame count.
 
-| 指标 | 结果 |
+To rule out insufficient touch samples, only `thor-panel.service` was temporarily stopped for an approximately 8-second ring-only run using installed `MarkerOverlay` / `marker_worker`. Temporary child wrappers observed GTK `draw`, `after-paint` and frame-clock data. New positions arrived about every 4ms; no native device/game input. This round's foreground was Slay the Spire 2 (appid 2868840), so it is not a same-scene performance comparison.
+
+| Metric | Result |
 | --- | --- |
-| 提供位置的平均间隔 | 4.11ms，约 243 次 / 秒 |
-| 圆环 GTK `draw` 平均间隔（跳过最初 1 秒） | 16.667ms，约 60.00 次 / 秒 |
-| `draw` 间隔 P50 / P95 / P99 | 16.68 / 17.41 / 17.64ms |
-| `draw` 回调耗时 P50 / P95 | 0.136 / 0.388ms，不含 GPU 完成与扫描输出 |
-| GTK 帧时钟类型 | `GdkFrameClockIdle` |
-| `get_refresh_info()` 返回的刷新间隔 | 全部为 16667µs |
-| 已完成帧历史的刷新间隔 | 全部为 0，缺少有效刷新信息 |
+| Average supplied-position interval | 4.11ms, about 243/s |
+| GTK `draw` average after the first 1 second | 16.667ms, about 60.00/s |
+| Draw interval P50 / P95 / P99 | 16.68 / 17.41 / 17.64ms |
+| Draw callback duration P50 / P95 | 0.136 / 0.388ms, excluding GPU completion/scanout |
+| GTK frame clock | `GdkFrameClockIdle` |
+| `get_refresh_info()` refresh interval | Always 16667µs |
+| Completed-frame history refresh interval | Always 0; valid refresh information absent |
 
-当前圆环实际绘制仍按约 60Hz 调度，即使位置源超过 120 次 / 秒也未提高。结合帧历史缺失与 `16667µs` 返回值，证据指向 GTK 的默认刷新间隔；[GTK 官方接口说明](https://docs.gtk.org/gdk3/method.FrameClock.get_refresh_info.html)及[帧时钟实现](https://github.com/GNOME/gtk/blob/gtk-3-24/gdk/gdkframeclockidle.c)支持这一解释。先前“应用未写死 60FPS”描述的是应用自身没有帧率常量，不能用来推断 GTK 实际已按 120Hz 绘制。
+Drawing remained near 60Hz despite a >120/s source. Missing history and `16667µs` point to GTK's fallback interval, supported by [the API](https://docs.gtk.org/gdk3/method.FrameClock.get_refresh_info.html) and [frame-clock implementation](https://github.com/GNOME/gtk/blob/gtk-3-24/gdk/gdkframeclockidle.c). Earlier statements that the app did not hardcode 60FPS described its own constants, not measured GTK 120Hz drawing.
 
-本轮没有更换绘制后端、修改帧时钟或部署新的应用代码；结束后原面板运行状态、配置字节、安装清单、自启动选择、前台目标及游戏 / Steam / Gamescope / 官方下屏进程均恢复或保持原样。仍未测物理手指到屏幕的完整延迟、扫描输出的独立帧率或正式应用的 GPU 占用。下一步若验证 120Hz，应仅调整圆环的绘制调度，再分别测渲染间隔、输入来源频率、资源开销和 FPS 共存；不能仅将位置发送频率当作结果。
+No backend/frame-clock/new-code change was deployed in this round. Original running state, config bytes, manifest, autostart, foreground and original game/Steam/Gamescope/lower processes were restored or preserved. Physical end-to-end latency, independently verified scanout FPS and production app GPU use remain unmeasured. A 120Hz experiment must separately measure scheduling, input rate, resources and FPS coexistence rather than equating delivery frequency with drawing.
 
-## 2026-10-21：按上屏刷新率调度及帧率设置
+<a id="2026-10-21按上屏刷新率调度及帧率设置"></a>
 
-在上述约 60FPS 记录之后，最初候选把圆环的移动绘制请求改为独立的单次调度：读取上屏 GDK monitor 的 mHz 刷新率，按绝对时序保留 119.93Hz 的小数周期；同一批位置只绘制最新状态，迟到跳过旧时隙，不补播积压坐标。最初直接通过公开的 `Gdk.Window.begin_draw_frame()` / `end_draw_frame()` 提交有限的脏区域，后因 GL 多缓冲残影回退，下方记录修正过程。未修改 GTK 私有内存、WM 时序属性或游戏设置，保留 GL 合成、空输入区域及同应用的被动装饰窗口。
+## 2026-10-21: upper-screen scheduling and frame-cap settings
 
-仅替换调度时，在游戏内仍测到约 59 次绘制每秒，单次完整绘制 / 提交约 16.5ms，而 Cairo 回调通常不足 0.3ms。临时只给圆环子进程设置 Mesa `vblank_mode=0` 后，一轮达到约 119 次每秒；后续交替测试又出现约 62–70 次每秒，等待主要在 `end_draw_frame()`。查询该子进程自身 GLX drawable，swap interval 已为 0。因此额外 swap 等待并不能解释所有波动，不能宣称 GTK / Gamescope / 驱动的全部等待已解决；没有修改 Steam 游戏限帧或合成器来追求数值。
+The initial candidate replaced motion paint requests with independent one-shot scheduling. It reads GDK monitor mHz, preserves the fractional 119.93Hz period, draws only the latest state and skips late slots without replay. Initially it submitted bounded dirty regions through public `Gdk.Window.begin_draw_frame()` / `end_draw_frame()`; GL multi-buffer ghosts later required the correction below. No GTK private-memory/WM-timing/game changes; GL, empty input and passive same-app decoration remain.
 
-设置 → 触屏新增“圆环帧率上限”，点击右侧按钮循环选择 **跟随屏幕 / 120 / 60 / 30 FPS**，保存后生效，默认跟随屏幕。跟随项显示最近检测的上屏刷新率，119930mHz 显示为 120Hz；未知时不虚构数值。固定档位最高不超过屏幕刷新率，显示信息无效时保守回落至 60Hz。两种触屏模式共用该设置；触摸发送节奏、定位倍率、游戏限帧和所有焦点 / 路由有效期不变。打开设置会按原流程释放输入与停止圆环，保存后再次进入触屏页时使用所选档位；放弃修改 / 分组恢复默认及升级保留遵循原设置机制。
+Scheduling alone still yielded about 59 draws/s in game: complete draw/submit about 16.5ms versus usually <0.3ms in Cairo. Child-only Mesa `vblank_mode=0` reached about 119/s once; alternating repeats later reached about 62–70/s, waiting mainly in `end_draw_frame()`. Its own GLX drawable already had swap interval 0. Extra swap waiting therefore does not explain every fluctuation; no claim that all GTK/Gamescope/driver waits are fixed, and no Steam cap/compositor changes to chase a number.
 
-同一《杀戮尖塔2》前台目标下，按“旧版 → 120 → 60 → 30 → 跟随 → 旧版”顺序进行自动纯圆环测试，每段预热约 1 秒、运动记录约 4 秒、静止约 1 秒；约每 4ms 提供最新位置，但不创建输入设备、不向游戏发送输入。上屏报告 119930mHz，候选 swap interval 为 0。以下是**后来因残影回退的首个候选**的原始数据，保留作排查记录，不能作为最终方案的验收结果：
+Settings → Touchscreen adds Ring frame-rate cap, cycling **Follow screen / 120 / 60 / 30 FPS** and applying on save; default Follow screen. The follow label shows the latest detected upper rate: 119930mHz displays 120Hz, unknown remains unknown. Fixed caps never exceed the screen; invalid screen information conservatively falls back to 60Hz. Both touch submodes share it; send pacing, positioning scale, game cap and focus/route lifetimes stay unchanged. Settings releases input/stops the ring as before, using the selected cap on re-entry; discard/group defaults/upgrade preservation follow existing settings behavior.
 
-| 档位 | 实际绘制 / 秒 | 间隔 P95 / P99，ms | 圆环 CPU，单核 % | 圆环 DRM GPU engine busy，ms / 约 4 秒 |
+With the same Slay the Spire 2 target, automatic ring-only trials ran old → 120 → 60 → 30 → follow → old, each about 1 second warmup, 4 seconds motion and 1 second idle. Latest positions arrived about every 4ms without input devices/game input. Upper reported 119930mHz; candidate swap interval was 0. These are raw results from **the first candidate later rolled back for ghosts**, not final acceptance:
+
+| Cap | Draws/s | Interval P95 / P99, ms | Marker CPU, one-core % | Marker DRM engine busy, ms / about 4 seconds |
 | --- | --- | --- | --- | --- |
-| 旧版，前段 | 59.99 | 17.40 / 17.62 | 17.78 | 19.17 |
+| Old, before | 59.99 | 17.40 / 17.62 | 17.78 | 19.17 |
 | 120 | 119.60 | 10.72 / 11.84 | 24.28 | 7.72 |
 | 60 | 59.76 | 17.37 / 17.51 | 16.79 | 4.09 |
 | 30 | 30.00 | 34.03 / 34.34 | 11.78 | 1.68 |
-| 跟随屏幕 | 118.42 | 10.97 / 12.15 | 24.06 | 7.83 |
-| 旧版，后段 | 59.23 | 17.60 / 24.22 | 14.28 | 5.01 |
+| Follow screen | 118.42 | 10.97 / 12.15 | 24.06 | 7.83 |
+| Old, after | 59.23 | 17.60 / 24.22 | 14.28 | 5.01 |
 
-各档位静止稳定后的绘制次数均为 0，仍有原有健康检查；不等于整个进程零 CPU。120Hz 两段的最大绘制间隔约 23.65 / 27.73ms，也不是每帧均为 8.3ms。CPU 只统计圆环子进程，100% 表示占满一个核心；GPU 来自该进程去重后的 DRM engine 时间计数，不是整个 GPU 利用率、频率或功耗。旧版两段 GPU 时间本身差异明显，因此不能据此宣称 GPU 开销下降。高帧率需要更多 CPU，30 / 60 档供资源取舍；没有测游戏帧时间、物理扫描输出或完整触摸到显示延迟。
+All caps reached 0 draws once stationary, with existing health checks—not zero process CPU. The two high-rate runs had maximum intervals about 23.65 / 27.73ms, not every frame at 8.3ms. CPU counts only the marker, 100% = one core. GPU uses deduplicated per-process DRM engine time, not whole-GPU utilization/frequency/power. Old-run GPU times vary substantially; they cannot establish a GPU reduction. Higher rates cost CPU; 30/60 offer tradeoffs. Game frame times, physical scanout and full touch-to-display latency were not measured.
 
-507 项 Python 检查在 Thor 全部通过；Mac 同一套跳过 91 项 Linux / GLib / Cairo 检查，其余通过，另有 15 项 JavaScript 检查通过。新增覆盖帧率档位、屏幕变化、分数周期、积压跳帧、关闭 / 异常清理、脏区域与透明像素、配置验证和保存 / 放弃路径。增量 / 全量 Cairo 像素比较只容许抗锯齿边缘最多 1/255 的舍入差异；参考全透明像素必须精确清零，不能留下旧圆环。
+All 507 Python checks passed on Thor. Mac skipped 91 Linux/GLib/Cairo checks with the rest and 15 JavaScript checks passing. Added coverage includes caps, screen changes, fractional periods, skipping backlog, close/failure cleanup, dirty regions/transparency, config validation and save/discard. Incremental/full Cairo pixels permit at most 1/255 rounding at antialiased edges; reference-transparent pixels must clear exactly.
 
-测试结束原面板恢复，配置字节、自启动选择、安装清单、前台目标和游戏 / Steam / Gamescope / 官方下屏原进程均保持。该轮验证的是临时候选，最终安装及新的真实手势 / FPS 共存验收另行记录；先前版本的用户验收不自动扩展到本轮。
+The panel/config/autostart/manifest/foreground/original protected processes were restored or preserved. This was temporary-candidate validation; final installation, real gestures and FPS coexistence require their own record, not inherited acceptance.
 
-首个离线候选 `14c52f27a919e532` 校验与安装检查通过后，用户反馈“屏幕上显示很多圆环”。立即回退到已验收的 `20a0f27decf7c8a7`，保留个人配置；不能把首次安装通过当成视觉验收通过。
+After offline candidate `14c52f27a919e532` passed manifest/install checks, the user saw many rings. It immediately rolled back to accepted `20a0f27decf7c8a7`, retaining personal configuration. Installation success is not visual acceptance.
 
-### 多缓冲残影修正
+<a id="多缓冲残影修正"></a>
 
-之前的离屏像素比较只使用持续保留内容的单一 Cairo 画布，未覆盖实际交换缓冲区。GL 返回的后台缓冲可能保留更早的帧；直接局部 `begin_draw_frame()` 未执行 GDK 正常更新路径中的 buffer-age 修复，单纯清除上一次圆环位置不足。实际读取自己圆环窗口的 RGBA 像素，在第 20 / 40 / 80 / 120 / 180 帧发现非透明区域从 2,511 增至 15,324 像素，包围范围达数百像素，五次均不符合一个圆环。
+### Multi-buffer ghost correction
 
-试验中每帧全幅清理可消除旧圆环，但 CPU / GPU 成本增加，未安装。最终改为只对自己的窗口调用公开 `invalidate_region()` 和 `process_updates(False)`，由 GDK 正常更新路径维护 GL 缓冲年龄、扩展所需脏区域并触发原 `draw` 回调。应用仍按所选帧率单次调度，不依赖 60Hz 的默认 paint 请求，不调用 GTK 私有函数或写内部字段。`process_updates()` 是当前 GTK 3.24 保留但已弃用的公开 API，后续 GTK 4 迁移需重新适配，不能宣称所有工具包版本均支持。
+Earlier offscreen comparisons used one retained Cairo surface, not real swapped buffers. GL back buffers can contain older frames; direct partial `begin_draw_frame()` bypassed GDK's normal buffer-age repair, so clearing only the previous location was insufficient. RGBA reads of the app's own marker at frames 20 / 40 / 80 / 120 / 180 found nontransparent pixels growing from 2,511 to 15,324 across hundreds of pixels; all five failed the one-ring check.
 
-修正后同样在实际圆环窗口第 20 / 40 / 80 / 120 / 180 帧读取像素，均只有一个约 30×30 像素的圆环、非透明像素约 463–468，无旧位置残留。读取仅涉及本应用窗口，不截取游戏内容。像素读取会同步 GPU 并增加耗时，因此这一轮只判断图像正确性，**不使用其帧率 / CPU 作为性能数据**。
+Full-surface clearing removed ghosts but raised CPU/GPU cost and was not installed. The adopted fix calls public `invalidate_region()` and `process_updates(False)` only on its own window. GDK's normal path maintains buffer age, expands required dirty regions and invokes the original draw callback. One-shot selected-rate scheduling remains independent of default 60Hz paint; no private GTK calls/fields. `process_updates()` is retained but deprecated in GTK 3.24, requiring redesign for GTK 4 rather than a universal toolkit claim.
 
-按用户要求，最终性能对比移至 Steam 库界面（appid 769，`:0`），重新执行相同六段档位顺序，期间不读取像素。它与前述游戏场景分开，不外推为游戏内性能已验收：
+Reads at the same five frames then showed one approximately 30×30 ring and about 463–468 nontransparent pixels without residue. Only the app's window was read, not game content. GPU-synchronous reads add overhead: this run establishes pixel correctness, **not performance**.
 
-| 档位 | 实际绘制 / 秒 | 间隔 P95 / P99，ms | 圆环 CPU，单核 % | DRM GPU engine busy，ms / 约 4 秒 |
+At the user's request, final comparison moved to Steam Library (appid 769, `:0`), repeating all six caps without pixel reads. This is separate from the earlier game scene:
+
+| Cap | Draws/s | Interval P95 / P99, ms | Marker CPU, one-core % | DRM engine busy, ms / about 4 seconds |
 | --- | --- | --- | --- | --- |
-| 旧版，前段 | 59.74 | 17.40 / 17.99 | 19.05 | 17.84 |
+| Old, before | 59.74 | 17.40 / 17.99 | 19.05 | 17.84 |
 | 120 | 119.93 | 9.10 / 9.37 | 30.05 | 24.16 |
 | 60 | 60.00 | 17.39 / 17.68 | 19.31 | 17.76 |
 | 30 | 30.00 | 34.05 / 34.44 | 12.03 | 2.21 |
-| 跟随屏幕 | 119.91 | 9.09 / 9.40 | 30.06 | 24.09 |
-| 旧版，后段 | 60.04 | 17.35 / 17.76 | 18.78 | 18.67 |
+| Follow screen | 119.91 | 9.09 / 9.40 | 30.06 | 24.09 |
+| Old, after | 60.04 | 17.35 / 17.76 | 18.78 | 18.67 |
 
-各档位静止稳定后的绘制次数均为 0；120 / 跟随两段最大绘制间隔为 10.40 / 11.22ms。独立焦点查询 P95 为 1.64–2.11ms、全轮最大约 21.32ms，未达到输入许可的 200ms 过期时间。数值仍只对应此次短时 Steam 界面测试；120 档比 60 档消耗更多 CPU / GPU，不是免费提升。全部 507 项掌机检查、Mac 同套 91 项跳过之外的检查及 15 项 JavaScript 检查通过。测试结束恢复原面板，个人配置、自启动、安装清单和受保护进程保持；前台检查在测试圆环关闭、恢复原面板之前完成，测试助手未向游戏发送输入。早先因目标 / 输入显示不一致而中止的测试不计作有效前后对比。
+All stationary runs reached 0 draws. Maximum 120/follow intervals were 10.40 / 11.22ms. Independent focus-query P95 was 1.64–2.11ms, whole-run maximum about 21.32ms, below the 200ms permission lifetime. These are short Steam-scene results; 120 costs more CPU/GPU than 60. All 507 Thor checks, Mac checks except 91 Linux skips, and 15 JavaScript checks passed. Panel, personal config, autostart, manifest and protected processes were preserved. Foreground was checked before closing the test marker/restoring the panel; helpers sent no game input. An earlier abort for target/input-display mismatch is not a valid comparison.
 
-随后在 Steam 界面追加实际窗口像素验证，五帧均只有约 30×30 像素的一个圆环、非透明像素为 462–465。按相同离线构建及逐文件源码校验流程安装修正版 `2d883b128a4e70f6`，个人配置、自启动、前台目标及受保护进程均保持；正式圆环在 `:0` 使用 GL、仅子进程 `vblank_mode=0`，仍为不占用 FPS 外部覆盖层槽位的被动装饰窗口。
+Five additional real-window pixel checks on Steam showed one approximately 30×30 ring with 462–465 nontransparent pixels. Corrected bundle `2d883b128a4e70f6` was built offline, source-compared and installed, preserving config/autostart/foreground/protected processes. The production `:0` marker used GL and child-only `vblank_mode=0`, still outside the FPS external-overlay slot.
 
-用户在 Steam 界面进行连续画圈、快速往返及设置检查后，明确反馈「只有一个圆环，四档可选，操作正常」。本轮残影修正、档位可用性与短时操作验收通过，保留此版本。最终修正版的游戏内帧率 / FPS 同显、真实直接多指、长期使用及休眠恢复未在本轮复测；前述版本的游戏共存验收仍是历史结果。本轮只安装到本机，未提交、推送或发布。
+After circles, fast reversals and settings checks, the user confirmed one ring, four selectable caps and normal operation. Ghost correction, cap availability and short interaction passed. Game FPS/coexistence, real direct multi-touch, long use and suspend/resume were not retested here; previous game coexistence remains historical. At that point this was local-only, not committed/pushed/released.
 
-验收后归档日志时 SSH 断开，最终批量复制和远端临时目录清理未完成，状态记录在本轮本地诊断输出；全部测试已结束，正式应用使用独立安装目录，不依赖临时测试源码。重新连通后只需核对没有进程引用该次临时目录，再清理诊断文件，不需重新安装或改个人配置。
+SSH disconnected during log archival, leaving final bulk copy/remote temporary cleanup incomplete as recorded in local diagnostics. Tests were finished; the installed app has its own directory, independent of temporary sources. On reconnection, verify no process references the temporary path before deleting diagnostics; no reinstall/config changes are needed.
 
-实现依据：[GDK 同步更新接口](https://docs.gtk.org/gdk3/method.Window.process_updates.html)、[GDK 更新及旧脏区域维护](https://github.com/GNOME/gtk/blob/gtk-3-24/gdk/gdkwindow.c)、[GTK X11 GL 缓冲年龄及提交逻辑](https://github.com/GNOME/gtk/blob/gtk-3-24/gdk/x11/gdkglcontext-x11.c)、[Mesa vblank 选项定义](https://cgit.freedesktop.org/mesa/mesa/tree/src/util/driconf.h?id=90994e4db7000951be058a956813e4a828f862c9)。
+Implementation references: [GDK synchronous updates](https://docs.gtk.org/gdk3/method.Window.process_updates.html), [GDK dirty-region maintenance](https://github.com/GNOME/gtk/blob/gtk-3-24/gdk/gdkwindow.c), [X11 GL buffer age/submission](https://github.com/GNOME/gtk/blob/gtk-3-24/gdk/x11/gdkglcontext-x11.c), [Mesa vblank options](https://cgit.freedesktop.org/mesa/mesa/tree/src/util/driconf.h?id=90994e4db7000951be058a956813e4a828f862c9).
 
-## 2026-10-22：圆环视觉跟随平滑（新分支候选）
+<a id="2026-10-22圆环视觉跟随平滑新分支候选"></a>
 
-先将此前 GL 绘制、FPS 同显、IPC 发送和帧率上限的改动保存为 `bf6863a`，再在
-`feat/marker-visual-smoothing` 实现本候选。它尚未安装、推送或发布；旧版本的手感与游戏验收不扩展到此候选。
+## 2026-10-22: visual ring smoothing (new-branch candidate)
 
-### 目标与实现
+Earlier GL/FPS/IPC/cap work was saved as `bf6863a`, then this candidate was implemented on `feat/marker-visual-smoothing`.
+Initially it was not installed, pushed or released; earlier version acceptance does not automatically cover it.
 
-只改变圆环子进程中的视觉轨迹。物理输入采样、原生触摸坐标 / 事件、点击和释放顺序、焦点保护、下屏驱动、游戏限帧及个人配置均保持。
-真实上报约 58Hz 时，原本需求驱动的圆环不会仅因选择 120 FPS 就产生更多中间位置；本候选允许视觉位置按已有帧率上限继续收敛。
+<a id="目标与实现"></a>
 
-- `marker_motion.py` 用连续时间的一阶跟随，时间常数 8ms；新样本到达前先推进旧目标，避免每个输入包重开缓动。位置始终在当前视觉点与最新确认点之间，不作外推预测。
-- 上次目标变化 40ms 后或误差小于 0.2 像素时，精确落到确认位置并停止后续动画请求。40ms 是模型收敛期限；最终显示还需等待所选绘制档位与事件循环，不承诺物理显示在 40ms 内完成。
-- 新指、按压变化、抬手、模式切换及重连直接对齐；异常大位移、过旧样本或渲染停顿不回放积压路径。多指使用稳定触点 ID，不能按数组下标把已移除手指的路径分配给另一指。
-- 视觉 IPC 增加单调时间、触点身份、活动状态与立即对齐标记。父进程保留被合并 / 背压覆盖的生命周期标记，子进程也保留同批次标记；原有不带元数据的测试 / 旧协议样本按即时方式处理。
-- 保留 `MarkerFrames` 的 30 / 60 / 120 / 跟随上屏上限、GL 子进程、公开 GDK 脏区域更新与缓冲年龄修复。不修改真实输入发送器，也不改 FPS 叠加层属性。
+### Goal and implementation
 
-代价是圆环在运动期间有少量视觉滞后，点击对齐时可能出现小幅位置校正；实际触摸仍在真实落点。
-当上屏以 120Hz 绘制、真实输入只有约 58Hz 时，运动期间的绘制可能接近翻倍，因此不能承诺 CPU/GPU 或功耗不变。
+Only the worker's visual trajectory changes. Physical samples, native coordinates/events, click/release order, focus protection, lower driver, game cap and personal config remain.
+At about 58Hz real input, demand-driven drawing cannot invent intermediate positions merely from selecting 120 FPS. This candidate keeps converging visually within the existing cap.
 
-### 离线轨迹回放
+- `marker_motion.py` uses a continuous-time first-order follower with an 8ms time constant. It advances the old target before accepting a new sample, avoiding restarted easing per packet. Position stays between the current visual point and latest confirmed target, without extrapolation.
+- At 40ms since the last target change, or error <0.2 pixels, snap exactly to the confirmed point and stop animation requests. 40ms is a model convergence bound; actual display still waits for scheduling/event-loop time, not a physical 40ms guarantee.
+- New fingers, press changes, release, mode switches and reconnection snap directly. Large jumps, stale samples and render stalls never replay backlog. Stable contact IDs prevent reassigning a removed finger's trajectory by array index.
+- Visual IPC carries monotonic time, contact identity/activity and snap flags. Parent and child retain lifecycle flags through batching/backpressure; old/test messages without metadata apply immediately.
+- Keep `MarkerFrames` 30 / 60 / 120 / follow-upper caps, GL child, public GDK dirty updates and buffer-age repair. No real-input sender or FPS-overlay property changes.
 
-可复现命令：`python3 -B tools/marker_smoothing_bench.py --output /tmp/marker-smoothing.json`。
-该程序不读取设备、不创建窗口、不写入原生输入。使用 1920×1080 画布、57.7144Hz 理想样本，比较恒速直线、停止、反向与圆周轨迹；渲染采样档位为 120 / 60 / 30Hz。
+The tradeoff is small visual lag during motion and possible small alignment corrections on click; actual touch stays at the real coordinate.
+At 120Hz drawing with about 58Hz input, motion drawing may nearly double. CPU/GPU/power cannot be promised unchanged.
 
-恒速直线为 600 像素/秒，稳定区间 0.15–0.95 秒的模型结果：
+<a id="离线轨迹回放"></a>
 
-| 渲染采样档位 | 即时 / 平滑视觉位置变化每秒 | 即时 / 平滑帧间步长变异系数 | 平滑增加的平均等效视觉滞后 |
+### Offline trajectory replay
+
+Reproduce with `python3 -B tools/marker_smoothing_bench.py --output /tmp/marker-smoothing.json`.
+No device reads, windows or native input writes. A 1920×1080 canvas and ideal 57.7144Hz samples compare constant-speed lines, stop, reversal and circles at 120 / 60 / 30Hz rendering samples.
+
+For a 600 pixels/s line, model results in the steady 0.15–0.95-second interval:
+
+| Render sample rate | Immediate / smoothed position changes/s | Immediate / smoothed step coefficient of variation | Added mean equivalent visual lag |
 | --- | --- | --- | --- |
 | 120Hz | 57.5 / 120.0 | 1.043 / 0.318 | 7.93ms |
 | 60Hz | 57.5 / 60.0 | 0.209 / 0.023 | 8.38ms |
 | 30Hz | 30.0 / 30.0 | 0.147 / 0.022 | 8.83ms |
 
-变异系数只表示该恒速轨迹在等间隔渲染采样下的步长均匀程度，不是用户手感评分。120Hz 情况下，相对于最新确认位置的视觉偏差 P50 / P95 / 最大值为 3.94 / 10.37 / 11.50 像素；“等效滞后”仅用该偏差除以已知模拟速度，不能当作实际触摸到显示延迟。四种轨迹在三个档位结束时均精确回到最终确认位置、模型不再动画。
+Variation describes equal-time step uniformity for that line, not a feel score. At 120Hz, visual error against the latest confirmed point had P50 / P95 / maximum 3.94 / 10.37 / 11.50 pixels. Equivalent lag divides that error by known synthetic speed; it is not measured physical latency. All four trajectories at all three rates ended exactly at the confirmed endpoint without animation.
 
-### 隔离检查与边界
+<a id="隔离检查与边界"></a>
 
-535 项 Python 检查在 Thor 全部通过，使用与正式应用相同的 GtkLayerShell 依赖路径；未加载该依赖路径的首次测试因缺少命名空间失败，不计作通过。Mac 同套跳过 92 项 Linux / Cairo / GLib 检查，其余通过，另有 15 项 JavaScript 检查通过。
-新增覆盖连续时间轨迹、离散按压 / 抬手、静止结束、积压跳过、触点身份与顺序变化、IPC 背压合并标记以及原生事件保持即时。Linux Cairo 对 180 个动画帧逐帧比较局部重绘与全帧参考，透明区域必须清零；它仍不是实际 GL 交换缓冲验证。
+### Isolated checks and boundaries
 
-以上模型与隔离检查不是实机 120 FPS 测量，也没有测 GPU、合成器、扫描输出或游戏帧时间；后续安装、用户反馈及独立的真实绘制器测量如下。
+535 Thor Python checks passed using the production GtkLayerShell dependency path. An earlier run without it failed namespace loading and is not a pass. Mac skipped 92 Linux/Cairo/GLib checks, with remaining checks and 15 JavaScript checks passing.
+Coverage includes continuous-time motion, press/release, stopping, backlog skipping, contact identity/order, IPC flags and immediate native events. Linux Cairo compared partial/full rendering for 180 animation frames with exact transparent clearing; this still is not real GL swapped-buffer validation.
 
-### 真实窗口安装、用户反馈与八轮资源对比
+Models/checks do not measure device 120 FPS, GPU/compositor/scanout or game frames. Later installation, feedback and real-renderer measurements follow.
 
-2026-10-22，离线候选 `77518bcf59af9a23`（应用源码 `51570f5`）通过清单和逐文件源码校验后安装到 Thor。安装前后配置文件哈希、自启动关闭状态、下屏触摸上报参数及 Steam / 游戏 / Gamescope / 官方下屏原进程均保持。用户随后明确反馈「确实更顺畅了」。这是用户短时体验，未提供特定游戏界面，不能扩展为所有游戏或长期无卡顿。
+<a id="真实窗口安装用户反馈与八轮资源对比"></a>
 
-随后在 Steam 首页进行无需用户操作的八轮自动对比。使用上述实际安装版本的 GTK / GL 圆环绘制器，在自己的被动窗口中运行合成轨迹；原面板始终运行，不接收或生成原生输入，不向 Steam / 游戏发送输入。以此前下屏测得的约 57.7144Hz 生成已确认坐标，沿 600 像素/秒的直线每秒反向；60 与 120 FPS 各按「即时 → 平滑 → 平滑 → 即时」顺序运行，每轮 13 秒，运动计量段为 8 秒，最后 3 秒为静置段。两次整应用静置计量各 10 秒，位于八轮之前及之后。
+### Real-window installation, feedback and eight resource trials
 
-即时组与平滑组使用同一份安装代码、GL 后端及输入轨迹函数；即时组只将每个合成坐标标记为立即定位，从而隔离视觉平滑的增量，而不是重新安装旧版本。120 FPS 只传给测试子进程；用户当前保存的 60 FPS 设置没有改变。以下为各组两轮均值：
+On 2026-10-22, bundle `77518bcf59af9a23` (source `51570f5`) passed manifest/per-file checks and was installed. Config hashes, disabled autostart, physical touch-report parameters and original Steam/game/Gamescope/lower processes were unchanged. The user reported noticeably smoother motion. This is short subjective acceptance without a specific game scene, not every game or long-session proof.
 
-| 圆环上限与方式 | 实际绘制次数 / 秒 | 重建帧间步长变异系数 | 圆环 CPU，单核 % | 圆环 GPU 引擎忙时，ms / 秒 |
+Eight automatic no-user-action trials then ran on Steam Home. The installed GTK/GL renderer drew synthetic trajectories in its own passive window; the normal panel stayed running, and no native input was read/generated or sent to Steam/games. Confirmed coordinates arrived at about 57.7144Hz, tracing a 600 pixels/s line reversing every second. At each of 60 and 120 FPS, order was immediate → smooth → smooth → immediate: each round 13 seconds, with 8 seconds measured motion and 3 final idle seconds. Two whole-app idle samples of 10 seconds bracketed the eight rounds.
+
+Both groups used the same installed code, GL and trajectory function; immediate marked synthetic coordinates as snap-only to isolate smoothing cost rather than reinstalling an old version. 120 FPS applied only to test children; the user's saved 60 FPS stayed unchanged. Two-round means:
+
+| Cap and behavior | Actual draws/s | Reconstructed step variation | Marker CPU, one-core % | Marker GPU engine busy, ms/s |
 | --- | --- | --- | --- | --- |
-| 60 FPS，即时 | 57.75 | 0.205 | 11.25 | 2.33 |
-| 60 FPS，平滑 | 60.00 | 0.049 | 13.44 | 4.12 |
-| 120 FPS，即时 | 57.75 | 1.041 | 12.81 | 3.98 |
-| 120 FPS，平滑 | 119.81 | 0.253 | 24.25 | 8.49 |
+| 60 FPS, immediate | 57.75 | 0.205 | 11.25 | 2.33 |
+| 60 FPS, smooth | 60.00 | 0.049 | 13.44 | 4.12 |
+| 120 FPS, immediate | 57.75 | 1.041 | 12.81 | 3.98 |
+| 120 FPS, smooth | 119.81 | 0.253 | 24.25 | 8.49 |
 
-实际绘制次数来自绘制回调，不等于已确认的物理呈现帧率。步长变异系数用实际绘制回调的圆心位置，在固定 60 / 119.93Hz 网格上保持最后位置重建，排除反向附近 80ms；它是标准差 / 均值，越小越均匀，不是光学扫描输出测量。两档的步长波动均降低约 76%，支持上述体验，但不能由此断言整游戏帧率或输入频率提高。
+Draw counts come from callbacks, not verified physical presentation. Step variation reconstructs held positions from actual callback centers on fixed 60 / 119.93Hz grids, excluding 80ms around reversals; it is standard deviation/mean, lower = more even, not optical scanout. Both caps reduced variation about 76%, supporting the reported feel without raising game FPS or physical input rate.
 
-相对最新已收到坐标的视觉偏移，按本次 600 像素/秒折算，平均为 8.49ms / 9.13ms；它不是物理触摸到屏幕的总延迟。平滑组急停后平均约 38.13ms / 35.45ms 精确回到终点，无越过终点，所有组最终位置均精确匹配。各轮最后 3 秒共 24 秒内，绘制次数为 0；测试圆环静置 CPU 平均约 0.17% 单核，GPU 引擎忙时增量为 0，仍存在原有健康检查。
+Error from the latest received position, divided by 600 pixels/s, averaged 8.49ms / 9.13ms; this is not total physical latency. Smoothed stops reached the exact endpoint in about 38.13ms / 35.45ms without overshoot; all final positions matched. Across all final 3-second segments (24 seconds), draws were 0. Idle test-marker CPU averaged about 0.17% of one core and GPU engine delta 0, with existing health checks retained.
 
-CPU 100% 表示一个核心。GPU 来自圆环进程去重后的 DRM engine 时间，不能视为整机 GPU 占用率、功耗或 Gamescope / KWin 合成费用。原应用整个 service cgroup 的前后静置 CPU 为 16.44% / 15.14% 单核，包含下屏 UI、监督进程、原圆环及短时子进程；原圆环自身约 0.10% 单核。下屏 UI 未暴露可用的独立 DRM engine 计数，因此未测得整应用 GPU 总消耗。测试未驱动正式下屏键盘 / 鼠标事件，不将「静置应用 + 测试圆环」的相加估算称为真实连续操作的整应用消耗。
+CPU 100% = one core. GPU is deduplicated per-marker DRM engine time, not whole-device GPU utilization, power or Gamescope/KWin composition. The original service cgroup's before/after idle CPU was 16.44% / 15.14% of one core, including lower UI, supervisor, original marker and short-lived children; the original marker itself was about 0.10%. The lower UI exposed no usable independent DRM engine counter, so total app GPU use was not measured. These trials did not drive production lower keyboard/mouse events; adding idle-app and test-marker numbers is not a real continuous-operation total.
 
-独立焦点查询 P95 / P99 / 最大约 1.52 / 2.45 / 13.66ms，未发生目标变化。测试前后服务状态、安装清单、配置字节、触摸上报参数及原进程保持；自己的测试窗口退出后清理临时文件。没有自动关闭面板、重启游戏、修改游戏限帧或物理输入参数。此次并未重新验收新版的 FPS 同显、真实多指手势、长期或休眠恢复；早先版本相应短时验收仍按各自记录解释。
+Independent focus-query P95 / P99 / maximum were about 1.52 / 2.45 / 13.66ms with no target change. Service, manifest, config bytes, touch parameters and original processes stayed unchanged; temporary files were removed after test windows exited. No panel/game restart, game-cap or physical-input changes. New-version FPS coexistence, real multi-touch, long use and suspend/resume were not reaccepted here; earlier short tests retain their own scope.
 
-## 2026-10-20 初版自动实测（移除镜像之前）
+<a id="2026-10-20-初版自动实测移除镜像之前"></a>
 
-- Thor 的 333 项 Python 检查全部通过；Mac 同样运行 333 项，其中 41 项 Linux GTK 检查跳过。Steam 键盘联动的 15 项 JavaScript 检查通过。
-- 标识单独显示期间，145 次目标检查均未改变 Steam 前台目标；关闭后标识进程退出。
-- 集成生命周期检查覆盖自动启用、纯定位、手动暂停 / 恢复、收起停止、展开恢复、切回键鼠和退出。
-  纯定位上屏触摸发送数为 0，镜像捕获始终为 None；结束后触摸节点与标识进程均为零，个人配置字节未改变。
-- 专用上屏窗口检查：纯定位后新增触摸事件 0、鼠标移动事件 0；确认后收到 2 次按下、1 次移动、2 次抬起、0 次取消。
-  坐标与预期匹配，来源均为 touchscreen；其中一次在触点保持时关闭，触点仍正常释放。没有向游戏发送自动测试输入。
-- 最近一轮约 5 秒连续模拟定位：面板约占单核 18.47%，标识进程约占单核 4.20%。
-  测量包含检查器和采样开销，不含 Gamescope / XWayland 合成开销；未做同一游戏负载下的开关对照，不能据此认定总功耗或游戏帧率改善。
-- 全进程描述符扫描的只读微基准每实现各 5 次：旧遍历约 11.72ms CPU / 次，scandir 约 4.91ms CPU / 次。
-  这是该次扫描负载的测量，不代表所有机器或所有工作负载的固定比例。
-- 下屏界面已做离屏图像检查，中文、四个页签和按钮均显示完整。
+## 2026-10-20 initial automated device tests (before mirror removal)
 
-专用输入测试要求 Steam 首页处于原生触摸模式 4，会临时显示自己的上屏窗口并自动关闭；前台不符时拒绝发送。
-不要在游戏中运行，也不要与正式面板同时运行。无需 sudo：
+- All 333 Thor Python checks passed. Mac ran 333 with 41 Linux GTK skips. All 15 Steam-guard JavaScript checks passed.
+- During marker-only display, 145 target checks left Steam's foreground unchanged; closing ended the marker process.
+- Integrated lifecycle checks covered auto-enable, positioning only, manual pause/resume, collapse/expand, returning to split and exit. Positioning sent 0 upper touches, capture stayed None, final touch nodes/marker processes were zero and config bytes were unchanged.
+- Dedicated upper-window checks: positioning added 0 touches/0 mouse moves; confirmation received 2 presses, 1 motion, 2 releases, 0 cancels. Coordinates matched, all sources were touchscreen. Closing during a held contact released it. No automatic game input.
+- A roughly 5-second synthetic positioning run used about 18.47% of one core in the panel and 4.20% in the marker. This includes checker/sampler overhead and excludes Gamescope/XWayland composition. No same-game on/off comparison; no total-power/game-FPS inference.
+- Read-only descriptor-scan microbenchmarks, 5 runs per implementation: old traversal about 11.72ms CPU/scan; scandir about 4.91ms. This is workload-specific, not a universal ratio.
+- Offscreen lower-UI checks showed complete Chinese labels, four tabs and buttons.
+
+The dedicated input test requires Steam Home in native touch mode 4, briefly shows its own upper window, then closes. It refuses a mismatched foreground. Do not run in a game or alongside the production panel. No sudo:
 
 ```bash
 PYTHONPATH=src python3 -B tools/position_input_smoke.py
 ```
 
-测试依赖与应用相同的 GTK / 私有运行库环境；源码目录测试时需先准备该环境。
+Use the same GTK/private-runtime environment as the app; prepare that environment before source-directory tests.
 
-## 移除同屏触摸
+<a id="移除同屏触摸"></a>
 
-2026-10-20 按用户要求删除镜像页、捕获源、图像绘制与刷新定时器、鼠标兼容后端及独立镜像预览。
-保留本模式所需的目标验证、临时原生触屏和圆环；旧 `mirror` 配置回退到键鼠。
-上述初版验收中的 333 项检查和四页布局属于删除前的历史结果，不代表当前测试数量或当前界面。
+## Mirror touch removal
 
-删除后，Thor 上 250 项 Python 回归检查全部通过；Mac 同一套检查跳过 36 项 Linux GTK 检查，其余通过。
-Steam 键盘联动的 15 项 JavaScript 检查通过。三种模式的顶部按钮已做离屏绘制检查，24 个标签无缺字且未超出按钮边界。
-这些检查未向上屏游戏发送输入，不替代用户交互验收。旧 `mirror` 配置回退和原配置不被读取过程改写已有回归覆盖。
+On 2026-10-20, the mirror page, capture sources, image rendering/refresh timers, mouse-compatibility backend and standalone mirror preview were removed at the user's request.
+Target validation, temporary native touch and marker remain; old `mirror` falls back to split.
+The initial 333-check/four-page result above predates removal, not the current test count/layout.
 
-## 待验证与回退
+After removal, all 250 Thor Python regressions passed. Mac skipped 36 Linux GTK checks with the rest passing; all 15 Steam-guard JavaScript checks passed. Three-mode offscreen header checks found 24 labels without missing glyphs/overflow.
+No game input was sent, so these are not user-interaction acceptance. Legacy-mode fallback and no config mutation on reads have regression coverage.
 
-首轮用户确认圆环可见，但反馈单指移动会停住，抬手后仍可能不恢复。
-聚合诊断显示：GDK 与逻辑移动事件仍在增加，焦点、标识心跳和原生路由有效；
-手势已失去第一指、仍保留第二指，`blocked=true`，定位坐标与标识绘制计数停止增加。
-旧实现要求剩余序列全部结束后才接受新的定位手指，残留 / 延迟结束的接触使后续新落指也被忽略。
-修正为不提升旧手指角色，新的 begin 可以开始一次不产生应用输入的定位；旧接触的移动、结束均不能确认或释放新的触摸。
-真实触摸仍须另一根新落下的手指确认。新增回归覆盖单个 / 多个残留接触、新定位无触摸输出及旧抬起不释放新确认。
-这定位了程序状态机的阻塞条件。用户随后确认单指移动、重新落指、两指拖动和分别抬指均正常；同时落下仍偶尔不识别，另反馈圆环漂移及偶发抬起后保持橙色。
+<a id="待验证与回退"></a>
 
-### 同时落指、残留触点：早期底层诊断
+## Pending validation and rollback
 
-分发前后的有界诊断中，收到的 BEGIN / END 均进入应用回调；当两个 BEGIN 均到达时，包括源时间相同的两个 BEGIN，确认均能按下。
-部分尝试在 GTK 分发前便只有一个 BEGIN；两指分开约 3–5 厘米后仍能复现。不能把这些漏事件全部归为应用双指判定失败。
+The initial user saw the ring but reported stopped one-finger motion, sometimes not recovering after lift.
+Aggregate diagnostics showed GDK/logical moves increasing, valid focus/heartbeat/route, but a lost first finger with the second retained, `blocked=true`, and no position/draw progress.
+The old state machine required every remaining sequence to end before accepting another positioning finger; stale/delayed contacts also blocked new begins.
+The fix never promotes old roles, but permits a new begin to position without app input. Old movement/end cannot confirm or release new touch; a fresh second begin is still required.
+Regression coverage includes single/multiple stale contacts, new positioning without output and old ends not releasing new confirmation.
+This identifies an app state-machine block. The user then confirmed movement, recontact, dragging and separate releases; simultaneous begin sometimes still missed, with drift and occasional orange-after-lift.
 
-另发现并修正一个应用错误：实际 GTK 事件的 `event.touch.emulating_pointer` 能正确标出首指，但 `get_pointer_emulated()` 在同一批事件中始终为 false。
-改读公开的 EventTouch 字段。定位模式遇到可信的新手势边界时，先释放旧原生接触并清理旧逻辑手指，保留当前标识位置与已验证的发送后端；不会把取消变成新点击，也不会提升旧手指。
-回归覆盖私有标志丢失、旧 END 缺失、释放不跳位，以及迟到的旧抬指不影响新手势。
+<a id="同时落指残留触点早期底层诊断"></a>
 
-额外的私有诊断只读查询物理下屏的 `EVIOCGMTSLOTS` 与 `EVIOCGKEY` 状态，不读取事件队列、不独占、不写输入、不记录坐标或追踪 ID。
-用户确认所有手指移开后，物理设备仍持续报告一个 active slot，且 `BTN_TOUCH=true`；这发生在 GTK 和应用逻辑之前。
-实机下屏为 `focaltech,ft5452` / `edt_ft5x06`，内核 `7.2.6`。正式面板仍不读取物理输入设备；诊断过程不修改驱动或设备树。
+### Simultaneous begin and stale contacts: early physical diagnosis
 
-Armada 该版本的下屏设备树启用了 `no-regmap-bulk-read`。对应补丁逐字节读取触摸帧并在特定错误时重试；上游驱动则依赖按触点 ID 收到的 UP 来清理槽。
-这些实现可解释需要重点检查的路径，但**尚未证明**残留源于逐字节读取、IRQ 丢失、控制器固件还是其他驱动行为。
-尤其不能把程序静止超时当成真实抬手：正常长按也可静止。当前不会通过猜测补第二指或强制超时释放来掩盖缺失事件。
+Bounded before/after dispatch records showed received BEGIN/END reached callbacks. When both BEGINs arrived—even with equal source time—confirmation pressed correctly.
+Some attempts had only one BEGIN before GTK dispatch, even with fingers 3–5cm apart. These cannot all be called app two-finger failures.
 
-下一轮应将物理触摸上报作为独立变量验证，再决定是否需要系统补丁。尚未部署内核 / 设备树试验，不能宣称双指漏识别、漂移和偶发未释放已彻底修好。
+One app bug was also fixed: real `event.touch.emulating_pointer` identified the first finger, while `get_pointer_emulated()` remained false throughout the batch. Reading the public EventTouch field fixes this. On a trusted new-gesture boundary, Positioning releases the old native contact and logical fingers, preserving marker location/verified backend. Cancellation never becomes a click and old roles never promote.
+Regressions cover missing private flags, absent old END, no jump on release and late old ends not affecting a new gesture.
 
-后续已找到另一个 Thor Linux 项目针对漏 UP、旧槽残留的直接内核补丁，并准备了仅匹配下屏 FT5452 的 Armada 候选。它与当前源码无模糊匹配通过；内核构建在完成前已按用户要求停止，未上机。
-诊断及候选 diff 已提交 [ArmadaOS Issue #757](https://github.com/armada-os/armada/issues/757)，等待上游评估，不将候选视为已验证修复。
-详细来源、证据、适用性及试验边界见[触点生命周期与内核候选](thor-ft5452-contact-lifecycle.md)。这比先前对逐字节读取的怀疑更直接，不应据此继续猜测调整应用灵敏度。
+Separate private diagnostics queried physical `EVIOCGMTSLOTS` / `EVIOCGKEY` read-only: no queue reads, grabs, writes, coordinate/ID logs.
+After all fingers lifted, the device still reported one active slot and `BTN_TOUCH=true`, before GTK/app logic. The physical device was `focaltech,ft5452` / `edt_ft5x06`, kernel `7.2.6`. The normal panel still does not read physical devices; diagnostics changed no driver/DT.
 
-后续改用独立驱动模块，在不替换启动内核的条件下完成 90 秒实机测试及自动回退。用户确认第二指抬起立即释放、拖动正常，物理接触状态恢复为零；两指同时落下、长期与休眠恢复仍待验证。上述未部署描述保留的是早期阶段，最新结果及可选模块回退方式见[后续独立模块记录](thor-ft5452-contact-lifecycle.md#后续独立模块路线)。应用安装不包含此驱动实验。
+Armada's DT enabled `no-regmap-bulk-read`, whose patch reads frames bytewise with retries on specific errors; upstream cleans slots by explicit contact-ID UP.
+These identify paths to inspect but **do not prove** bytewise reads, lost IRQs, firmware or another driver behavior caused residue.
+Inactivity cannot establish release: valid long holds can be stationary. No guessed second fingers or forced timed releases hide missing events.
 
-参考：[EventTouch 的公开字段](https://docs.gtk.org/gdk3/struct.EventTouch.html)、[Armada 的读取兼容补丁](https://github.com/armada-os/armada/blob/c3d178c/packages/kernel/patches/0029-Input-edt-ft5x06-add-no_regmap_bulk_read-option.patch)、[该版本 Thor 设备树](https://github.com/armada-os/armada/blob/c3d178c/packages/kernel/dts/qcs8550-ayn-thor.dts)、[上游 edt-ft5x06 实现](https://github.com/torvalds/linux/blob/master/drivers/input/touchscreen/edt-ft5x06.c)。
+Physical reporting should be the next independent variable before deciding on system patches. At this early stage no kernel/DT experiment was deployed; missed two-finger begin, drift and stale release were not declared fully fixed.
 
-### 单指移动同样出现突跳：应用侧保护及本轮验收
+Another Thor Linux project's UP/stale-slot patch was subsequently found and narrowed to Armada's lower FT5452. It applied without fuzzy matching, but the user stopped the kernel build before completion/deployment.
+Diagnostics/diff went to [ArmadaOS Issue #757](https://github.com/armada-os/armada/issues/757) for evaluation, not as a validated fix. See [contact lifecycle and candidate](thor-ft5452-contact-lifecycle.md). This is more directly relevant than read-path suspicion; it does not justify guessing sensitivity changes.
 
-用户进一步确认：保留第一指反复点第二指也会抽搐，单指移动时同样偶发。因此不再将该现象限定为双指点击防抖问题。
-有界诊断捕捉到定位指原始单步位移约 535–536 个逻辑单位，对应圆环约 738–745 个上屏像素；其中源事件间隔约 195–293ms，发生时没有原生触点保持。
-第二指自身的大步更新未移动圆环，说明原有角色隔离仍在生效。这些记录证明异常距离被作为定位增量应用，但不能独立确定控制器 / 驱动产生它的原因。
+A later standalone module, without replacing the boot kernel, passed 90 seconds and automatic rollback. The user confirmed immediate second-finger release and normal dragging, with physical contacts returning to zero. Simultaneous begin, long use and sleep remain pending. Earlier nondeployment statements describe that earlier phase; see [later module results](thor-ft5452-contact-lifecycle.md#后续独立模块路线) for current recorded status/rollback. App installation excludes the experiment.
 
-增加 `PositionMotion`，仅在定位模式使用 ToolkitTouch 提供的源采样间隔，不修改键鼠模式、灵敏度、系统或游戏配置：
+References: [public EventTouch fields](https://docs.gtk.org/gdk3/struct.EventTouch.html), [Armada read compatibility patch](https://github.com/armada-os/armada/blob/c3d178c/packages/kernel/patches/0029-Input-edt-ft5x06-add-no_regmap_bulk_read-option.patch), [versioned Thor DT](https://github.com/armada-os/armada/blob/c3d178c/packages/kernel/dts/qcs8550-ayn-thor.dts), [upstream edt-ft5x06](https://github.com/torvalds/linux/blob/master/drivers/input/touchscreen/edt-ft5x06.c).
 
-- 正常移动立即传递，不统一增加平滑、定时等待或降低采样率。
-- 大步判定底值为操作区短边的 18%；连续移动时按近期速度放宽，源间隔超过 120ms 不延用旧速度预测。
-- 异常步暂存而不移动标识。下一样本回到旧位置或稳定在新位置附近时，只重新锚定，不补发异常距离，也不产生反向补跳。
-- 连续、方向一致的快速运动可以继续，丢弃最初无法确认的一步，避免整个快速滑动一直被阻塞。
-- 原生触点保持时同样可隔离异常移动，保留同一个触点；按下与抬起不因此延迟、增加或超时释放。
-- 抬指、取消及新定位手指均清理运动恢复状态；非采样的开发调用保持原行为。
+<a id="单指移动同样出现突跳应用侧保护及本轮验收"></a>
 
-新增回归覆盖单指、孤立尖峰、稳定的新基准、反复往返坏点、快速连续滑动、长事件间隙、保持原生触点期间的坏点及新手势隔离。
-333 项检查通过后已部署，临时跳点日志模块已移除，个人配置字节及手动启动状态不变。
-部署后用户按单指移动、保持第一指反复点第二指及拖动的验证请求测试，反馈「不再跳位，拖动也正常」。本轮实机验收通过，未给出具体应用，不能扩展成所有游戏或长时间使用均已验证。
-这是坐标保护，**不是底层触点丢失的根治**。极快移动的第一步若与坏点无法区分，可能被丢弃，不能宣称所有速度下完全无影响。
+### Single-finger jumps: application guard and acceptance
 
-该轮尚未验证真实 Steam 操作、《杀戮尖塔2》拖牌手感、休眠恢复、上屏物理触摸 / 手柄共存及长时间资源占用；后续查看牌和菜单往返的短时结果见上方记录，不能替代其余项目。
-当时尚未确认圆环与性能面板同显；后续已改为被动装饰窗口，并在本机通过短时共存验收，见[圆环与 Steam 性能叠加显示共存](#2026-10-21圆环与-steam-性能叠加显示共存)。
-本功能不停止或重写系统性能覆盖层。若标识不可见，先停止该模式检查实际合成选择，不以移动系统鼠标作为静默替代。
+The user confirmed twitching both while holding the first finger and repeatedly tapping the second and during one-finger movement; this was not limited to two-finger click debounce.
+Diagnostics captured raw one-step displacement about 535–536 logical units, corresponding to about 738–745 upper pixels, source intervals about 195–293ms, without a native contact held.
+Large second-finger movement did not move the ring, so role isolation remained. Abnormal distances were being applied as deltas, but the records do not independently identify controller/driver cause.
 
-切回“键鼠”或“触控板”即可关闭标识与原生触摸设备；右上角“关闭”退出整个面板。
-仍使用原桌面快捷方式和手动用户服务，默认不启用开机 / 登录自启动。
-部署前备份应用目录和个人配置，回退时先停止 `thor-panel.service`，恢复该备份后再手动打开。
+`PositionMotion` uses ToolkitTouch source sample intervals only in Positioning, without changing split mode, sensitivity, system or game configuration:
+
+- Normal motion passes immediately, without a universal smoothing delay or reduced input rate.
+- Base large-step threshold is 18% of the area's short side; recent speed relaxes it during continuous motion. Source gaps over 120ms discard old speed prediction.
+- A suspect step is held without moving the ring. A return to the old point or stable samples near the new one only reanchors, never replays the bad distance or adds a reverse jump.
+- Continuous same-direction fast movement may proceed after dropping the first unconfirmed step, avoiding an indefinitely blocked fast swipe.
+- The guard also applies while a native contact is held, preserving that contact. Press/release is neither delayed, added nor timed out.
+- Lift, cancel and a new positioning finger clear recovery state; nonsampled developer calls retain previous behavior.
+
+Regressions cover one-finger motion, isolated spikes, stable new baselines, alternating bad points, fast swipes, long gaps, bad held-contact motion and new-gesture isolation.
+After 333 checks passed, deployment removed temporary jump logging, preserving config bytes/manual launch.
+The user tested motion, repeated second-finger taps and dragging and confirmed no more jumps/normal drag. This is short device acceptance without a named app, not all games/long sessions.
+It is a coordinate guard, **not a cure for missing physical contacts**. The first step of very fast motion may be dropped if indistinguishable from a spike; zero effect at every speed is not claimed.
+
+That round did not validate real Steam operation, Slay the Spire 2 card-drag feel, sleep, physical upper-touch/controller coexistence or long resource use. Later card-viewer/menu results above cover only their stated scope.
+Ring/performance coexistence was unconfirmed then; passive decoration later passed a short local test, recorded under [coexistence](#2026-10-21圆环与-steam-性能叠加显示共存).
+The feature never stops/rewrites the system overlay. If the marker is invisible, stop that mode and inspect composition selection; do not silently substitute system-pointer motion.
+
+Return to split or Touchpad to close marker/native touch; upper-right Close exits the panel.
+The same desktop shortcut/manual user service remain, with boot/login autostart disabled by default.
+Before deployment, back up app/config. To roll back, stop `thor-panel.service`, restore that backup and reopen manually.

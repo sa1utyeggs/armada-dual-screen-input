@@ -1,62 +1,66 @@
-# 兼容范围与已知问题
+English · [简体中文](zh-CN/compatibility.md)
 
-| 项目 | 当前范围 |
+<a id="兼容范围与已知问题"></a>
+
+# Compatibility and known issues
+
+| Item | Current scope |
 | --- | --- |
-| 实机 | AYN Thor，16GB / 512GB，Armada 安装在内部存储 |
-| 已测试系统 | Armada `20261010.c3d178c`、Fedora 44 基础、Linux 7.2.6、aarch64 |
-| 显示模式 | Steam Game Mode；使用官方 `armada-plasma-bottom` 会话 |
-| Desktop Mode | 默认关闭；桌面图标可启动后台等待 Game Mode |
-| 其他双屏设备 | 项目目标，但尚未实测，不承诺直接可用 |
-| 实验触摸驱动 | 不属于应用安装内容；只在维护者当前 Thor 上测试 |
+| Tested hardware | AYN Thor, 16GB / 512GB, Armada installed on internal storage |
+| Tested system | Armada `20261010.c3d178c`, Fedora 44 base, Linux 7.2.6, aarch64 |
+| Display mode | Steam Game Mode, using the official `armada-plasma-bottom` session |
+| Desktop Mode | Disabled by default; the desktop shortcut can start the background supervisor while it waits for Game Mode |
+| Other dual-screen devices | A project goal, but untested; out-of-the-box compatibility is not promised |
+| Experimental touch driver | Separate from app installation; tested only on the maintainer's current Thor |
 
-安装器默认检查 Armada、aarch64、Fedora 44 基础和 Thor 设备树。其他 Armada 双屏设备可在阅读限制后显式使用 `--allow-untested` 参与开发；该选项不会赋予 root 权限，也不会适配未知的屏幕尺寸或方向。
+The installer checks for Armada, aarch64, a Fedora 44 base and the Thor device tree. Developers on other Armada dual-screen devices may explicitly use `--allow-untested` after reading the limitations. This grants no root privileges and does not adapt unknown screen sizes or orientations.
 
-应用当前仍有 Thor 的屏幕尺寸、输出选择和设备监控假设。新机型应先收集显示会话/尺寸与输入路由，再新增适配及实机结果，不应通过改名称宣称通用。
+The app still assumes Thor screen dimensions, output selection and telemetry sources. For another device, collect display-session geometry and input-route evidence, then add an adapter and device results. Renaming a target does not establish general compatibility.
 
-- 触屏页：自动启用，提供“定位”和“直接触屏”两种子模式。前者第一指移动圆环、第二指确认一个上屏触点；后者每根手指按绝对位置独立发送，编码容量为 10 个触点，实际数量受下屏硬件 / 工具包 / 应用限制。子模式切换与目标变化均先释放旧触点，等待焦点稳定及全部抬手后恢复。
-- 游戏模式的部分触摸策略会把原生触摸转换为鼠标左键；不承诺所有游戏接收原生多点触摸。
-- 已验证 Steam 右侧菜单关闭后的圆环自动恢复，用户确认移除正常切换的额外 1.5 秒等待后明显更快且操作正常。
-- 《杀戮尖塔2》早期时间线间歇重连尚不能视为全部解决。后续查看牌场景捕获到圆环绘制 / GPU 同步导致焦点查询超时；单独对圆环启用 GL 后通过短时用户验收，详见定位触摸记录。
-- 圆环改为当前应用的被动装饰窗口，与 Steam FPS / mangoapp 共存；需要当前 Thor Gamescope 构建支持该路径。正式接入后，用户确认 FPS 与圆环同时显示，触屏操作及 Steam 快速访问菜单往返正常；真实直接多指、长期和休眠恢复仍待验证。不修改 mangoapp、Steam 或系统合成器。
-- 圆环支持 30 / 60 / 120 FPS / 跟随屏幕的绘制上限，默认跟随上屏。首个候选出现 GL 多缓冲残影，已回退；修正为 GDK 管理缓冲历史后通过实际窗口像素检查。最终 Steam 库界面的档位测试约为 30 / 60 / 119.9 次绘制每秒，不能外推为游戏内、长期或所有场景锁定 120。游戏限帧、刷新率和触摸输入频率不变；更高档位有更多资源消耗。详见[帧率证据与资源成本](position-touch.md#2026-10-21按上屏刷新率调度及帧率设置)。
-- Thor 原厂 FT5452 曾出现物理触点残留，独立候选模块通过一次 90 秒释放/拖动与回退测试。长期、同时落指、休眠恢复仍待验证；[Issue #757 的进展](https://github.com/armada-os/armada/issues/757#issuecomment-6284200266)。安装应用不代表已修复物理驱动。
-- Steam 键盘联动依赖客户端内部接口；不可用时保留原生键盘，切页/收起/退出后恢复。Steam 更新可能需要重新验证。
-- 中文字体使用系统 Pango/Noto CJK，未打包个人配置或字体缓存。
+- The Touchscreen page enables input automatically and offers Position and Direct touch. Position uses one finger to aim and a second to confirm one upper-screen contact. Direct touch sends each finger independently at absolute coordinates. The encoder supports 10 contacts; actual capacity depends on the lower-screen hardware, toolkit and receiving app. Mode or target changes release old contacts, then wait for stable focus and all fingers to lift.
+- Some Game Mode touch policies convert native touch to a left mouse button. Native multi-touch reception is not guaranteed in every game.
+- Automatic ring recovery after closing Steam's right-side menu has been verified. The user confirmed that removing the extra 1.5-second delay on normal switches made recovery noticeably faster while operation remained correct.
+- The early intermittent reconnection issue on the *Slay the Spire 2* timeline cannot be considered fully resolved. A later card-viewer investigation captured focus-query timeouts caused by ring rendering / GPU synchronization. Enabling GL only for the ring passed a short user test; see the positioning record.
+- The ring is a passive decoration window attached to the current app, allowing coexistence with Steam FPS / mangoapp. This requires support in the current Thor Gamescope build. After integration, the user confirmed simultaneous FPS and ring display, working touch input and Steam quick-access menu round trips. Real direct multi-touch, long sessions and suspend/resume remain unverified. mangoapp, Steam and the system compositor are not modified.
+- Ring rendering supports 30 / 60 / 120 FPS / Follow display, defaulting to the upper display. The first candidate produced GL multi-buffer trails and was rolled back. GDK-managed buffer history fixed the issue and passed real-window pixel checks. Final Steam-library measurements were approximately 30 / 60 / 119.9 draws per second. These do not establish a sustained 120 FPS in games, long sessions or every scene. Game limits, display refresh and touch input frequency remain unchanged; higher caps cost more resources. See [frame-rate evidence and resource costs](position-touch.md#2026-10-21按上屏刷新率调度及帧率设置).
+- The stock Thor FT5452 driver has shown stuck physical contacts. A separate candidate module passed one 90-second release/drag test and rollback. Long sessions, simultaneous finger-down and suspend/resume remain unverified. See [Issue #757 progress](https://github.com/armada-os/armada/issues/757#issuecomment-6284200266). Installing this app does not fix the physical driver.
+- Steam keyboard integration depends on internal client interfaces. If unavailable, the native keyboard remains enabled; switching pages, collapsing or exiting restores it. Steam updates may require revalidation.
+- Chinese text uses system Pango/Noto CJK. Personal configuration and font caches are not bundled.
 
-## 圆环视觉平滑（2026-10-22）
+<a id="圆环视觉平滑2026-10-22"></a>
 
-圆环视觉跟随平滑使用连续时间滤波，不预测真实落点、不生成中间触摸事件；只在运动及短暂收敛期间请求绘制。已安装到 Thor，用户反馈更顺畅，代码纳入 v0.1.3。八轮真实绘制器的合成轨迹对比支持移动步长更均匀，但同时增加 CPU / GPU 开销；这些数据不代表物理触摸到屏幕的总延迟或游戏帧率。新版的独立 FPS 同显、多指、长期及休眠恢复未由本轮重新验收。详见[视觉平滑实现](position-touch.md#2026-10-22圆环视觉跟随平滑新分支候选)与[真实窗口测量](position-touch.md#真实窗口安装用户反馈与八轮资源对比)。
+## Visual ring smoothing (2026-10-22)
 
-## 触屏双模式（2026-10-21）
+Visual following uses a continuous-time filter, without predicting physical positions or generating intermediate touch events. It requests draws only during motion and a short settling period. It was installed on the Thor, the user reported smoother motion, and the code is included in v0.1.3. Eight synthetic-trajectory trials through the actual renderer support more even movement steps, with additional CPU / GPU cost. These figures are neither physical touch-to-display latency nor game frame rate. Separate FPS coexistence, multi-touch, long-session and suspend/resume acceptance were not repeated for this revision. See [implementation](position-touch.md#2026-10-22圆环视觉跟随平滑新分支候选) and [real-window measurements](position-touch.md#真实窗口安装用户反馈与八轮资源对比).
 
-圆环配色补充（2026-10-22）：设置中可分别选择未触摸 / 触摸中的颜色，提供八种色板，默认描边颜色保持原蓝色 / 橙色及黑色外边。新配置的验证、保存 / 放弃 / 恢复默认、两种触屏模式向绘制子进程传递配色、Cairo 的独立状态颜色 / 透明中心 / 黑边和色板选中高亮已通过 Thor 的 546 项 Python 检查；Mac 同套跳过 95 项 Linux 检查，其余通过，15 项 JavaScript 检查通过。
+<a id="触屏双模式2026-10-21"></a>
 
-随后将包含配色的 main 提交 `9c1501b` 构建为本机安装包 `c40274f7bcb73251`，校验源码及清单后安装，应用代码与 v0.1.3 相同。临时配置中的白色 / 绿色保存、重载、放弃及恢复默认通过；自己的真实 GL 圆环窗口像素读回确认两种颜色、透明中心和黑色描边正确。只读取本应用窗口，不截取游戏内容或发送原生输入。设置页已用 Thor 的字体和绘制环境离屏检查；个人配置哈希、60 FPS、自启动关闭状态、物理上报参数及原 Steam / 游戏 / 官方下屏进程均保持。真实用户逐项点选、长期及休眠恢复仍待验证，不改变此前视觉平滑实测的版本范围。
+## Two touch modes (2026-10-21)
 
-新增子模式的独立触点、清理、原生槽编码和圆环 IPC 已通过隔离检查；顶部下拉框的选择、外部收起、展开时阻止自动启用、菜单触摸隔离与恢复原操作区高度也已检查。Mac 367 项 Python 检查中 66 项 Linux 检查跳过，Thor 367 项 Python 检查通过。15 项 JavaScript 检查在 Mac 通过；Thor 未安装 Node，本轮未在掌机运行 JavaScript 检查。没有向游戏发送自动测试输入。直接触屏的真实手势、上屏多指识别与长期使用仍待用户验收。
+Ring colors, added 2026-10-22: settings offer independent idle / touching colors with eight swatches. Defaults retain the original blue / orange strokes and black outer border. Validation, save / discard / defaults, passing colors to the renderer in both touch modes, Cairo state colors / transparent center / black border and selected-swatch highlighting passed 546 Python checks on Thor. On Mac, 95 Linux checks were skipped and the remainder passed; 15 JavaScript checks passed.
 
-## 多语言键盘原型（2026-10-20）
+The color-enabled main commit `9c1501b` was then built as local bundle `c40274f7bcb73251`, verified against source and manifest, and installed. Its application code matches v0.1.3. Temporary white / green preferences passed save, reload, discard and defaults checks. Pixel readback from the app's own real GL ring window confirmed both colors, a transparent center and black outline. Only the app's window was read; no game capture or native input was sent. The settings page was checked offscreen with Thor's actual fonts and rendering environment. The personal-config hash, 60 FPS cap, disabled autostart, physical report settings and original Steam / game / official lower-session processes were preserved. Manual acceptance of individual palette controls, long sessions and suspend/resume remain pending; this does not extend the revision range of the earlier smoothing measurements.
 
-英文 US 与简体中文全拼面板已实现。当前 Thor 的系统 libxkbcommon、
-libpinyin/词库已验证，专用上屏 GTK 窗口中的 Unicode、候选选择、独立
-worker 与隐藏时取消检查通过。用户确认候选显示正常，中英文均能输入；
-用户确认恢复后的键帽大小合适；随后反馈触控板变小。已按建议将 Win
-改为语言切换键、移除常驻栏，恢复完整触控板，候选改为临时浮层，取消
-放大键盘功能。用户复测确认语言切换、输入和大小均正常。
+Independent contacts, cleanup, native slot encoding and ring IPC for the added mode passed isolated checks. Dropdown selection, outside dismissal, blocking auto-enable while open, menu-touch isolation and preserving the original input-area height were also checked. Of 367 Python checks on Mac, 66 Linux checks were skipped; all 367 passed on Thor. The 15 JavaScript checks passed on Mac. Node was not installed on Thor, so JavaScript checks were not run there in this round. No automated input was sent to games. Real direct gestures, upper-screen multi-touch recognition and long-term use still require user acceptance.
 
-Game Mode 的文字提交使用隔离的 Gamescope 私有协议适配器，不能视为
-通用 Wayland API；Desktop Mode 中文暂不启用。Steam、Chrome、原生游戏
-和 Proton 内文字框的支持情况必须分别验证，详见
-[多语言键盘说明](multilingual-keyboard.md)。
+<a id="多语言键盘原型2026-10-20"></a>
 
-## 设置页实机验收（2026-10-20）
+## Multilingual keyboard prototype (2026-10-20)
 
-测试版本为 PR #4 的应用提交 `5e127ed`，在上述 Thor / Armada / Game Mode 环境通过用户目录离线包升级。检查确认 72 个文件与清单一致、依赖可用，安装前后配置字节一致，开机自启保持禁用，并保留旧版作为回退入口。
+English US and Simplified Chinese full-pinyin input are implemented. The current Thor's system libxkbcommon, libpinyin and dictionary were verified. Unicode, candidate selection, the separate worker and cancellation on hide passed checks in a dedicated upper-screen GTK window. The user confirmed correct candidates, input in both languages and suitable restored key sizes, then reported a smaller touchpad. Win was replaced with a language key, the permanent strip was removed, the full touchpad restored and candidates moved to a transient overlay. Keyboard enlargement was removed. The user then confirmed language switching, input and sizing.
 
-- 用户确认鼠标、定位触摸和键盘选项均可调整、保存，界面显示正常。
-- 重开虚拟键鼠后，检查确认配置文件字节不变；用户确认界面数值保留，鼠标移动、定位触摸和英文键盘操作正常。按用户选择保留其调整后的数值。
-- 检查确认面板正常运行且无异常自动重启，Steam、Gamescope 和官方下屏会话进程保持原样。
+Game Mode text submission uses an isolated private Gamescope protocol adapter; it is not a general Wayland API. Chinese input in Desktop Mode is not enabled. Steam, Chrome, native-game and Proton text fields must be validated separately. See [multilingual keyboard](multilingual-keyboard.md).
 
-这是单台 Thor 的短时交互验收；其他设备、Desktop Mode、长期与休眠恢复仍未由本轮验证。恢复默认、放弃编辑与保存失败保护由隔离检查覆盖，本轮未要求用户逐项复测。
+<a id="设置页实机验收2026-10-20"></a>
 
-完整历史证据见源码仓库的 [定位触摸记录](https://github.com/sa1utyeggs/armada-dual-screen-input/blob/main/docs/position-touch.md)、[驱动研究](https://github.com/sa1utyeggs/armada-dual-screen-input/blob/main/docs/thor-ft5452-contact-lifecycle.md)和[历史汇总](https://github.com/sa1utyeggs/armada-dual-screen-input/blob/main/docs/history.md)。短时用户验收不等同于长期稳定性验证。
+## Device acceptance of settings (2026-10-20)
+
+Application commit `5e127ed` from PR #4 was installed through an offline per-user upgrade in the Thor / Armada / Game Mode environment above. All 72 files matched the manifest, dependencies were available, configuration bytes matched before and after installation, autostart remained disabled and the previous version was retained for rollback.
+
+- The user confirmed that mouse, position-touch and keyboard options could be adjusted and saved, and the UI displayed correctly.
+- After reopening, configuration bytes remained identical. The user confirmed retained values and working pointer movement, position touch and English input. Their adjusted values were kept at their request.
+- The panel ran without unexpected automatic restarts. Steam, Gamescope and official lower-session processes remained unchanged.
+
+This was short interactive acceptance on one Thor. Other hardware, Desktop Mode, long sessions and suspend/resume were not verified. Isolated checks cover defaults, discard and save-failure protection; users were not asked to repeat each of those cases.
+
+Full historical evidence is in the repository's [position-touch record](https://github.com/sa1utyeggs/armada-dual-screen-input/blob/main/docs/position-touch.md), [driver investigation](https://github.com/sa1utyeggs/armada-dual-screen-input/blob/main/docs/thor-ft5452-contact-lifecycle.md) and [history](https://github.com/sa1utyeggs/armada-dual-screen-input/blob/main/docs/history.md). Short user acceptance is not evidence of long-term stability.

@@ -1,76 +1,66 @@
-# 原生触摸路由验证
+English · [简体中文](zh-CN/native-touch-routing.md)
 
-历史验证日期：2026-10-19；接入状态更新：2026-10-20。范围：AYN Thor、ArmadaOS `20261010.c3d178c`、Steam Game Mode。
+<a id="原生触摸路由验证"></a>
 
-## 结论
+# Native touch-route validation
 
-**已验证临时虚拟触摸屏能将真正的触摸事件送到上屏专用测试窗口，下屏没有收到这些事件。**
-后续已接入独立镜像界面，用户确认 Steam 单指滑动 / 点按，以及《杀戮尖塔2》选牌 / 拖牌 / 菜单正常。
-原生模式按用户要求不模拟双指滚轮、不设置双指判定延迟，直接传递最多两个独立触点。
-上述内容为初次路由验证的历史结果。2026-10-20 已按用户要求移除镜像功能，原生路由仍供[定位触摸](position-touch.md)使用；没有改动 Steam 设置、物理触屏、udev 规则、官方下屏服务和自启动规则。
+Historical validation: 2026-10-19; integration update: 2026-10-20. Scope: AYN Thor, ArmadaOS `20261010.c3d178c`, Steam Game Mode.
 
-## 为什么可以这样路由
+<a id="结论"></a>
 
-当前上屏 Gamescope 通过 libinput 读取输入设备；其参数包含
-`--ignore-touch-device bottom_touchscreen`、`--force-orientation right` 和 `--default-touch-mode 4`。
-路由测试及 Steam 界面中 `STEAM_TOUCH_CLICK_MODE=4`，对应触摸透传。
-《杀戮尖塔2》中观测为 1（触摸映射为左键），沿用这个游戏已有的策略，不写入或覆盖该属性。
-因此应用收到的事件可能是原生触摸，也可能经 Gamescope 转成鼠标，与直接触摸物理上屏相同。
+## Conclusion
 
-Armada 的 DRM lease 补丁将匹配物理下屏名称的触摸经 lease socket 转交下屏。
-下屏 Gamescope 没有直接打开 `/dev/input/event*`；新建且不匹配物理下屏名称的触摸屏可进入上屏路径。
-该结论来自此版本源码、设备描述符检查和实际输入测试，不推定其他机型或更新后的路由相同。
+**A temporary virtual touchscreen was verified to deliver real touch events to a dedicated upper-screen test window; the lower screen received none.** It was later integrated with a separate mirroring UI. The user confirmed Steam single-finger swipes/taps and *Slay the Spire 2* card selection/dragging/menus. At the user's request, native mode emulated no two-finger scrolling and imposed no two-finger classification delay, forwarding up to two independent contacts.
 
-## 隔离检查与实测
+Those are historical results of the first route test. Mirroring was removed at the user's request on 2026-10-20; the native route remains for [position touch](position-touch.md). Steam settings, physical touchscreens, udev rules, the official lower service and autostart rules were unchanged.
 
-依赖：系统 `libevdev-1.13.7-1.fc44.aarch64`，通过 ctypes 调用；无需安装 Python evdev。
-Gamescope 包：`terra-gamescope-3.16.31^1-1.100601.fc44.armada.aarch64`。
+<a id="为什么可以这样路由"></a>
 
-1. 用 libevdev 创建名为 `Armada native touch probe <pid>` 的临时 Type B 多点触摸设备。
-   声明 `INPUT_PROP_DIRECT`、两个槽、触点追踪 ID、绝对坐标及 `BTN_TOUCH`，不声明鼠标左键。
-2. 先不发送任何接触事件。udev 将其分类为 `ID_INPUT_TOUCHSCREEN=1`；描述符检查只有上屏 Gamescope 打开它。
-   关闭后设备节点消失。
-3. 打开程序自己的上屏全屏测试窗口，以及只计数、不转发输入的下屏观察窗口。
-   每次发送前检查：上屏仍是本程序窗口、触摸模式仍为透传、设备仍只由同一 Gamescope 打开。
-4. 发送一组单指移动和一组双指接触。结果如下：
+## Why the route works
 
-| 检查 | 实测 |
+Upper Gamescope reads input through libinput, with `--ignore-touch-device bottom_touchscreen`, `--force-orientation right` and `--default-touch-mode 4`. The route test and Steam UI had `STEAM_TOUCH_CLICK_MODE=4`, touch passthrough. *Slay the Spire 2* showed 1, mapping touch to left mouse. That existing policy is retained rather than overwritten. Apps may therefore receive native touch or Gamescope-converted mouse events, as with the physical upper touchscreen.
+
+Armada's DRM-lease patch forwards touch matching the physical lower-screen name through the lease socket. Lower Gamescope does not open `/dev/input/event*` directly. A new touchscreen with a different name can enter the upper route. This follows this source revision, descriptor inspection and real input checks, not an assumption about other hardware or updated routes.
+
+<a id="隔离检查与实测"></a>
+
+## Isolated checks and device test
+
+Dependency: system `libevdev-1.13.7-1.fc44.aarch64` via ctypes; no Python evdev installation. Gamescope: `terra-gamescope-3.16.31^1-1.100601.fc44.armada.aarch64`.
+
+1. libevdev created temporary Type B multi-touch device `Armada native touch probe <pid>`, declaring `INPUT_PROP_DIRECT`, two slots, tracking IDs, absolute coordinates and `BTN_TOUCH`, but no left mouse button.
+2. No contacts were sent initially. udev classified it as `ID_INPUT_TOUCHSCREEN=1`; descriptors showed only upper Gamescope opened it. Closing removed the device node.
+3. The app opened its own full-screen upper test window and a lower observer that only counted, never forwarded input. Each send checked that its own upper window remained focused, policy remained passthrough, and only the same Gamescope held the device.
+4. A single-finger sequence and a two-finger contact sequence gave:
+
+| Check | Observed |
 | --- | --- |
-| 上屏原生触摸源 | GDK `touchscreen` |
-| 按下 / 移动 / 抬起 | 3 / 4 / 3 |
-| 同时接触数 | 2 |
-| 目标坐标匹配 | 通过，误差不超过 3 个窗口像素 |
-| 下屏按下 / 移动 / 抬起 / 取消 | 0 / 0 / 0 / 0 |
-| 退出后虚拟设备 | 已移除 |
+| Upper native source | GDK `touchscreen` |
+| Down / move / up | 3 / 4 / 3 |
+| Simultaneous contacts | 2 |
+| Coordinates | Matched within 3 window pixels |
+| Lower down / move / up / cancel | 0 / 0 / 0 / 0 |
+| Virtual device after exit | Removed |
 
-测试坐标只作用于本程序自己的窗口；未向 Steam 页面或游戏发送触点。
-XWayland / GTK 内部可能另有触摸到指针的兼容事件；本次原生触摸结论依据实际收到的 TOUCH 序列，
-不能只凭鼠标位置变化作判断。
+Coordinates acted only on the app's own windows. No contacts were sent to Steam or games. XWayland/GTK may additionally produce pointer-compatibility events. Native-touch evidence comes from received TOUCH sequences, not pointer movement alone.
 
-### 坐标的重要区别
+<a id="坐标的重要区别"></a>
 
-第一次按物理屏的 `right` 旋转逆变换发送时，触摸路由成功，但坐标不匹配。
-实际收到的是未旋转的虚拟设备坐标，说明该虚拟设备没有继承物理屏的输出关联旋转。
-改为 `normal`、直接使用上屏逻辑归一化坐标后通过。
+### Important coordinate distinction
 
-示例：逻辑目标 `(0.25, 0.30)`、`(0.75, 0.70)` 在 1920×1080 测试窗口中实际落点为
-`(480, 323)`、`(1439, 755)`。不能将 Thor 物理屏方向直接复用为虚拟设备方向。
+The first send inverted physical `right` rotation. Routing worked but coordinates did not match. The received coordinates were unrotated, showing the virtual device did not inherit the physical output association/rotation. Using `normal` with upper logical normalized coordinates passed.
 
-## 开发检查入口
+Example: logical `(0.25, 0.30)` and `(0.75, 0.70)` arrived at `(480, 323)` and `(1439, 755)` in a 1920×1080 test window. Thor's physical orientation must not be copied directly to the virtual device.
 
-`native_touch.py`：无 I/O 的接触编码，以及探测 / 定位触摸共用的 libevdev 临时设备。
-`native_touch_probe.py`：有时间上限的双窗口路由检查。
-`test_native_touch.py`：编码、双指槽、释放、路由检查失败和写入失败清理测试。
-`native_input.py`：定位触摸使用的原生发送后端及后台路由检查。
-`gamescope_target.py`、`touch_intent.py`：独立的目标身份检查与输入意图，不依赖捕获源。
+<a id="开发检查入口"></a>
 
-本轮 9 项原生触摸单元测试在 Mac 和 Thor 通过；Thor 连同此前镜像相关测试共 85 项通过。
-实机 GUI 路由验证单独执行，不能用单元测试结果替代。
-后续接入直接触摸后，Mac / Thor 的镜像和原生相关测试各 104 项通过。
-早期接入后端的专用窗口检查还通过了“触点保持时关闭”，正常抬起并移除设备。
-最终直接触摸版本在游戏中实测后退出，确认捕获停止、进程退出、无残留虚拟触屏。
+## Developer check entry points
 
-在已确认 Steam 首页、无游戏运行的开发环境执行：
+`native_touch.py`: I/O-free contact encoding and the libevdev temporary device shared by probe/position touch. `native_touch_probe.py`: bounded two-window route check. `test_native_touch.py`: encoding, two-finger slots, release, route-failure and write-failure cleanup. `native_input.py`: positioning sender/backend route inspection. `gamescope_target.py` / `touch_intent.py`: separate target identity and input intent, independent of capture sources.
+
+All 9 native-touch unit tests passed on Mac and Thor; Thor had 85 passes including earlier mirroring checks. GUI routing was tested separately and is not established by unit tests. After direct-touch integration, 104 related mirror/native checks passed on each platform. An early backend test also closed while holding a contact, correctly releasing it/removing the device. After a real game test of the final direct-touch revision, capture stopped, processes exited and no virtual touchscreen remained.
+
+In an explicitly confirmed development session with Steam home and no game:
 
 ```bash
 PYTHONPATH=src python3 -B tools/native_touch_probe.py --x-display :0 --rotation normal \
@@ -78,75 +68,83 @@ PYTHONPATH=src python3 -B tools/native_touch_probe.py --x-display :0 --rotation 
   --report /tmp/native-touch-route.json
 ```
 
-测试会短暂显示自有窗口，结束后自动关闭。运行时不要触摸设备，以免污染下屏观察计数。
-报告中的坐标属于专用测试窗口内的生成触点，不记录文字、游戏画面、IP 或凭据。
-不需要 sudo；探测不打开或读取物理 evdev，不独占触摸屏。
+The test briefly displays its own windows and closes them automatically. Do not touch the device during it, to avoid contaminating observer counts. Report coordinates are generated contacts in the dedicated window. No text, game imagery, IP or credentials are recorded. No sudo, physical evdev reads or exclusive touchscreen grab is needed.
 
-## 当前接入与待验证
+<a id="当前接入与待验证"></a>
 
-- 当前日常入口为原面板的“定位触摸”：第一指相对定位，第二指确认，最多向上屏保持一个原生触点；不传输画面。
-- 目标稳定并抬手后按需创建临时触屏；暂停、离页、收起或关闭时释放并销毁。沿用原手动入口，不新增自启动。
-- 镜像页、独立预览、镜像专用鼠标后端和相应捕获运行库设置已移除。旧版本测试结果保留为路由来源，不代表这些功能仍受支持。
-- **异常释放当前表现为抬起，不是真正的 touch cancel**；可能提交已经开始的应用动作。其他游戏、休眠与长期共存仍需验证。
-- 下屏漏落指 / 漏抬指仍作为独立问题追踪，见 [ArmadaOS Issue #757](https://github.com/armada-os/armada/issues/757)。
+## Integration status and pending validation
 
-## 2026-10-21：消除发送路径中的重复校验
+- At this integration stage, the daily entry was Position touch: first finger aims relatively, second confirms, at most one held upper native contact; no image transmission.
+- A temporary screen is created after a stable target/all-fingers-up. Pause, page exit, collapse or close releases/destroys it. The existing manual launch is retained, with no new autostart.
+- The mirror page, separate preview, mirror-specific mouse backend and capture-runtime settings were removed. Old results remain route provenance, not currently supported features.
+- **Abnormal cleanup currently appears as up, not a true touch cancel**, potentially committing an already started app action. Other games, suspend and long coexistence need validation.
+- Missing lower down/up remains a separate issue: [ArmadaOS #757](https://github.com/armada-os/armada/issues/757).
 
-在[绘制优化](keyboard-latency.md#第五轮组件裁剪触屏静态层和遗漏的按键结束刷新)之后，只修改 `native_input.py` 的校验调用链；不合并触点帧，不改输入频率、路由扫描周期、过期时间、灵敏度或个人设置。
+<a id="2026-10-21消除发送路径中的重复校验"></a>
 
-原发送路径依次进入 `poll()`、`ready` 和 `VirtualTouchProbe.contact()`，其中 `poll()` 又调用一次 `ready`；一个触点实际写入前，目标、焦点和路由分别被检查 4 次。现在直接保留 `contact()` 内最后一次完整检查；独立的 `poll()` 每项检查一次。每个新事件仍重新检查，不复用上一个事件的许可。取消可在目标失效后释放触点；最后检查失败时释放已持有的触点并清理后端记录。
+## 2026-10-21: remove duplicate sender validation
 
-受控编码检查使用真实 Type B 编码器，只替换内核写出，不创建输入设备。五指各移动一次时，每项检查由 20 次变为 5 次；前后编码出的触摸事件完全一致，仍有 5 个独立 `SYN_REPORT`。这表示重复检查减少 75%，不能直接推定 CPU 减少 75%。自动检查同时覆盖两次发送之间目标/焦点/路由失效、取消、关闭及释放，保留最后检查的保护作用。
+After [drawing optimization](keyboard-latency.md#第五轮组件裁剪触屏静态层和遗漏的按键结束刷新), only the `native_input.py` validation chain changed. Contact frames, input frequency, route-scan period, expiry, sensitivity and preferences remained unchanged.
 
-同机 A/B 实测基线为已完成绘制优化的 `a845f7d`，两个测试包的应用代码仅 `native_input.py` 不同。Steam 首页空闲；各模式先预热 4 秒，再采样 10 秒，共两轮，第二轮顺序反转。输入由独立进程发送，只作用于专用上屏接收窗口；面板仍经过真实路由、编码器和虚拟输入设备。驱动及只读采样器的 CPU 单独统计，不计入应用进程树。每场景保留约 18 秒不跨阶段的有效 CPU/GPU 样本。
+The old send entered `poll()`, `ready` and `VirtualTouchProbe.contact()`; `poll()` called `ready` again. Target/focus/route were each checked 4 times before a write. The final full check inside `contact()` is now retained directly; standalone `poll()` checks each once. Every new event revalidates, never reuses permission from a previous event. Cancel may release contacts after target expiry; failure of the last check releases held contacts and clears backend state.
 
-| 场景 | 应用 CPU 平均，单核 %，前 / 后 | 平均 CPU 降幅 | 触点处理 P95，ms，前 / 后 | 显示场景 GPU 满频等效 %，前 / 后 |
+A real Type B encoder with only kernel output replaced created no device. Moving each of five fingers once reduced each check from 20 to 5 calls. Encoded events were identical, with 5 separate `SYN_REPORT`s. This is 75% fewer duplicate checks, not proof of 75% less CPU. Tests cover target/focus/route loss between sends, cancel, close and release.
+
+Same-device A/B baseline `a845f7d` already had drawing optimization. Only `native_input.py` differed between bundles. Steam home was idle; each mode warmed for 4 seconds and sampled for 10, over two reversed-order rounds. A separate process generated input only for a dedicated upper receiver. Real route checks, encoder and virtual device remained active. Driver/sampler CPU was separate from app-tree CPU. Each scene retained about 18 seconds of non-overlapping valid CPU/GPU samples.
+
+| Scene | Mean app CPU, one-core %, before / after | Mean CPU reduction | Contact handling p95, ms, before / after | Display GPU full-frequency equivalent %, before / after |
 | --- | --- | --- | --- | --- |
-| 直接触屏静置 | 18.44 / 16.39 | 11.1% | 无输入 | 0.096 / 0.096 |
-| 定位拖动 | 33.67 / 23.66 | 29.7% | 4.95 / 1.90 | 0.337 / 0.337 |
-| 直接触屏：双指 | 58.41 / 51.25 | 12.3% | 1.52 / 0.76 | 5.209 / 5.196 |
-| 直接触屏：五指 | 60.89 / 58.55 | 3.8% | 1.21 / 0.55 | 5.460 / 5.432 |
+| Direct touch idle | 18.44 / 16.39 | 11.1% | No input | 0.096 / 0.096 |
+| Position drag | 33.67 / 23.66 | 29.7% | 4.95 / 1.90 | 0.337 / 0.337 |
+| Direct touch: two fingers | 58.41 / 51.25 | 12.3% | 1.52 / 0.76 | 5.209 / 5.196 |
+| Direct touch: five fingers | 60.89 / 58.55 | 3.8% | 1.21 / 0.55 | 5.460 / 5.432 |
 
-定位拖动和双指的 CPU 在两轮都下降；五指总 CPU 收益有限，第一轮仅下降约 0.5 个单核百分点。静置第一轮几乎一致，不能把两轮均值的 11.1% 当作稳定降幅。输入事件速率前后分别约为定位 54.47 / 54.12、双指 110.21 / 109.07、五指 277.06 / 276.93 次/秒，最大偏差约 1.1%；没有通过降低触点频率获得上述结果。GPU 基本一致，这次优化的主要收益在 CPU 发送路径；剩余开销不能仅凭此测试归因为某一个函数。
+Position drag and two-finger CPU fell in both rounds. Five-finger gains were limited, only about 0.5 one-core percentage point in round one. The first idle round was almost unchanged; its 11.1% mean is not a stable guaranteed reduction. Event rates were position 54.47 / 54.12, two fingers 110.21 / 109.07 and five fingers 277.06 / 276.93 per second, maximum deviation about 1.1%. Frequency was not reduced to get these results. GPU was essentially unchanged. The main gain was in the CPU send path; remaining work cannot be attributed to one function from this test alone.
 
-CPU 100% 表示一颗逻辑核。GPU 来自被采样的显示场景，包含上下屏合成，以 680 MHz 归一化；应用没有独立 DRM 客户端。触点处理 P95 是面板处理合成事件的回调耗时，不是物理触摸到画面显示的延迟。应用进程树 PSS 从约 107–113 MiB 到 110–117 MiB，本次没有新增缓存结构，此短测不足判断长期内存差异。没有进行游戏 FPS、续航、休眠或物理多指体验验收。
+CPU 100% means one logical core. GPU covers the display scene including both-screen composition, normalized to 680 MHz; the app has no independent DRM client. Contact handling p95 is a synthetic-event callback, not physical touch-to-image latency. App-tree PSS changed about 107–113 MiB to 110–117 MiB without a new cache; short samples cannot establish long-term memory differences. No game-FPS, battery, suspend or physical multi-touch acceptance was performed.
 
-Thor 443 项 Python 检查全部通过；Mac 443 项中 86 项 Linux 检查跳过，其余通过，另有 15 项 JavaScript 检查通过。Thor 没有 Node，未在设备重复执行 JavaScript 检查。测试结束后，确认全部临时进程和虚拟触屏退出、Steam / Gamescope / 下屏会话原进程仍在，正式 v0.1.2 安装文件校验通过且未替换；个人配置、自启动和 CPU/GPU 策略与测试前一致。正式安装仍为 `8f4e8d5`，本节结果来自临时测试包。
+All 443 Python checks passed on Thor. On Mac, 86 of 443 Linux checks were skipped and the remainder passed, plus 15 JavaScript checks. Node was absent on Thor. After tests, temporary processes/screens were gone, original Steam/Gamescope/lower-session processes remained, installed v0.1.2 files verified unchanged, and configuration/autostart/CPU-GPU policy matched the baseline. The actual install stayed `8f4e8d5`; these figures came from temporary bundles.
 
-## 2026-10-21：降低单次目标身份校验成本
+<a id="2026-10-21降低单次目标身份校验成本"></a>
 
-基线为上一轮校验去重后的 `1658774`。这一轮只精简 `GamescopeTarget.resolve()` 内部的重复工作：运行目录每次重新解析并检查一次；两个端点仍各自解析别名并验证未越出目录；两条路径解析完成后，再分别读取 Socket 的类型、所有者和设备号 / inode，用本次元数据构建身份。`is_current()` 的每次调用仍执行全部检查，不跨事件缓存许可。触点编码、提交次数、检查周期、过期时间、绘制和个人设置保持原样。
+## 2026-10-21: reduce per-call target identity cost
 
-先在 Thor 的真实运行目录和现有 Gamescope 别名上做只读测量，不连接图形 Socket，也不打开输入设备。独立于分析器的三轮、每轮 2,000 次调用，目标校验平均 CPU 时间由 75.09 微秒降到 51.84 微秒，约下降 31%。另行统计单次调用的元数据操作，`stat` 由 8 次变为 3 次，`lstat` 由 18 次变为 12 次，`readlink` 仍为 1 次；这些次数针对本机 Python 版本和别名结构，不推定其他环境相同。分析器单独运行，不把其附加开销作为上述计时结果。
+Baseline `1658774` had the previous deduplication. Only repeated work inside `GamescopeTarget.resolve()` was simplified: each invocation resolves/checks the runtime directory once; both endpoint aliases still resolve within it; after both paths resolve, socket type, owner and device/inode are reread to form identity. Every `is_current()` call still performs all checks, with no cross-event authorization cache. Encoding, commits, periods, expiry, drawing and preferences remain unchanged.
 
-新增检查使用临时 Unix Socket，覆盖正常直连与目录别名、每次重定向、两个端点在原路径被替换、消失或变为普通文件、别名越出运行目录、原运行目录被重定向或变为文件，以及目录 / 两个端点的当前所有者和读取失败。特别覆盖主端点在另一个端点路径解析期间被替换的情况：最终身份必须使用新读取的元数据，不能授权旧端点。
+Read-only timing used real Thor runtime paths/aliases, without connecting graphical sockets or opening input devices. Three profiler-independent rounds of 2,000 calls reduced mean validation CPU time from 75.09 to 51.84 microseconds, about 31%. Separate operation counting found `stat` 8 → 3, `lstat` 18 → 12 and `readlink` still 1. Counts depend on this Python/alias setup, not every environment. Profiling ran separately and its overhead was not included in timing.
 
-随后使用同机专用窗口实测。两个密封测试包的应用代码仅 `gamescope_probe.py` 和 `gamescope_target.py` 不同；每场景预热 4 秒、采样 10 秒，两轮反向顺序，约 18 秒有效 CPU/GPU 记录。独立输入驱动与只读采样器不计入应用 CPU；真实路由及触点编码保持启用。
+New temporary Unix-socket tests cover direct/directory aliases, retargeting each call, endpoint replacement/disappearance/regular files, escaping aliases, redirected/file runtime directories, owner changes and read failures for directory/both endpoints. In particular, replacing the primary endpoint while resolving the other path must use freshly read identity, never authorize the old endpoint.
 
-| 场景 | 应用 CPU 平均，单核 %，前 / 后 | 平均 CPU 降幅 | 触点处理 P95，ms，前 / 后 | 显示场景 GPU 满频等效 %，前 / 后 |
+A dedicated real-window test followed. Only `gamescope_probe.py` and `gamescope_target.py` differed between sealed bundles. Each scene warmed 4 seconds, sampled 10, over two reversed-order rounds, retaining about 18 seconds of CPU/GPU data. Separate input/sampling processes were excluded from app CPU; real routing/encoding remained enabled.
+
+| Scene | Mean app CPU, one-core %, before / after | Mean CPU reduction | Contact handling p95, ms, before / after | Display GPU full-frequency equivalent %, before / after |
 | --- | --- | --- | --- | --- |
-| 直接触屏静置 | 15.72 / 14.05 | 10.6% | 无输入 | 0.116 / 0.096 |
-| 定位拖动 | 24.55 / 23.10 | 5.9% | 1.67 / 1.29 | 0.335 / 0.357 |
-| 直接触屏：双指 | 52.59 / 50.58 | 3.8% | 0.67 / 0.55 | 5.181 / 5.199 |
-| 直接触屏：五指 | 60.58 / 58.01 | 4.2% | 0.53 / 0.47 | 5.460 / 5.418 |
+| Direct touch idle | 15.72 / 14.05 | 10.6% | No input | 0.116 / 0.096 |
+| Position drag | 24.55 / 23.10 | 5.9% | 1.67 / 1.29 | 0.335 / 0.357 |
+| Direct touch: two fingers | 52.59 / 50.58 | 3.8% | 0.67 / 0.55 | 5.181 / 5.199 |
+| Direct touch: five fingers | 60.58 / 58.01 | 4.2% | 0.53 / 0.47 | 5.460 / 5.418 |
 
-双指和五指两轮均下降，但应用总 CPU 改善幅度有限，不能套用局部检查下降 31% 的比例。定位第一轮几乎不变，静置第二轮也几乎一致，不能将其均值降幅视为稳定收益。输入事件速率前后为定位约 54.12 / 53.72、双指 109.50 / 109.46、五指 273.87 / 271.99 次/秒，最大偏差小于 0.8%；没有调整输入频率。GPU 没有一致下降，五指候选仍约占单核 58%，剩余开销尚需另行定位。
+Two/five-finger CPU fell in both rounds, but total gains were limited and cannot inherit the local 31% reduction. Position round one and idle round two were almost unchanged; their means are not stable guarantees. Event rates were about 54.12 / 53.72, 109.50 / 109.46 and 273.87 / 271.99 per second, maximum deviation below 0.8%, with no frequency change. GPU showed no consistent reduction. Five-finger candidate CPU remained about 58% of one core; the rest needs separate investigation.
 
-本轮 CPU 100% 仍表示一颗逻辑核；GPU 为包含上下屏合成的显示场景，满频等效按 680 MHz 计算。触点处理 P95 不代表物理触摸到画面的延迟；没有做游戏、续航、休眠或物理触摸体验验收。应用进程树 PSS 两版本约为 110–117 MiB 和 111–114 MiB，没有新增缓存结构，短测差值不作为长期内存结论。
+CPU 100% again means one logical core; GPU includes both-screen composition normalized to 680 MHz. Callback p95 is not physical touch-to-image latency. No game/battery/suspend/physical-touch acceptance was done. App-tree PSS was about 110–117 MiB and 111–114 MiB, with no new cache. Short differences are not long-term memory conclusions.
 
-Thor 453 项 Python 检查全部通过；Mac 453 项中 86 项 Linux 检查跳过，其余通过，15 项 JavaScript 检查通过。设备没有 Node，JavaScript 未在 Thor 重复执行。准备测试时，用户表示已关闭面板但服务仍在后台运行，已正常停止本应用服务以隔离测试；结束后保持关闭，自启动仍为 disabled。确认正式 v0.1.2 的 bundle / 文件清单、个人配置、CPU/GPU 策略保持不变，Steam / Gamescope / 下屏会话原进程仍在，测试进程和虚拟触屏均已退出。正式安装未替换，仍为 `8f4e8d5`。
+Thor passed 453 Python checks. Mac skipped 86 of 453 Linux checks and passed the remainder plus 15 JavaScript checks. Node was absent on Thor. Although the user had closed the panel, its service was still running during preparation; this app's service was normally stopped to isolate tests and left stopped afterward, with autostart disabled. Installed v0.1.2 bundle/manifest, personal configuration and CPU/GPU policy stayed unchanged; original Steam/Gamescope/lower-session processes remained and temporary processes/screens exited. The install remained `8f4e8d5`.
 
-## 2026-10-21：触点圆环仅在上屏显示（未发布）
+<a id="2026-10-21触点圆环仅在上屏显示未发布"></a>
 
-根据用户要求移除直接触屏的下屏圆环，并移除触点位置和按压状态对下屏绘制的触发；操作区保留静态说明，状态 / 模式 / 菜单变化仍正常刷新。上屏圆环、触点状态机、路由及焦点检查、触点发送和周期巡检保持原样。下屏不再读取圆环列表来判断重绘；原下屏圆环脏区域辅助函数随之删除。
+## 2026-10-21: contact rings on the upper screen only (unreleased at the time)
 
-Thor 的离屏检查确认，多指落下、移动、分别抬起和全部抬起时，下屏像素在正常与双设备倍率下均与无触点画面一致；周期巡检仍被调用，触点变化不请求下屏完整或局部重绘，状态提示改变仍请求刷新。Thor 453 项 Python 检查通过；Mac 453 项中 87 项 Linux 检查跳过，其余通过，15 项 JavaScript 检查通过。本轮没有创建窗口或输入设备，未重新测量 CPU/GPU；前述性能表来自仍绘制下屏圆环的版本，不能直接作为此次调整后的数据。正式安装未替换。
+At the user's request, lower direct-touch rings and contact-position/pressed-triggered lower redraws were removed. The area retains static instructions; state/mode/menu changes still refresh. Upper rings, gesture state machine, route/focus checks, contact sends and periodic health checks remain unchanged. Lower repaint decisions no longer inspect the ring list; its lower-ring damage helper was removed.
 
-## 参考
+Thor offscreen checks found identical lower pixels with no contacts versus multi-finger down/move/independent up/all up, at normal/double device scale. Periodic health checks still ran. Contact changes requested no lower full/partial repaint, while status changes still did. Thor passed 453 Python checks; Mac skipped 87 of 453 Linux checks and passed the rest plus 15 JavaScript checks. No window/input device or new CPU/GPU measurement was used. Earlier tables describe revisions still drawing lower rings and cannot be treated as measurements of this change. The actual install was not replaced.
+
+<a id="参考"></a>
+
+## References
 
 - [Linux uinput](https://docs.kernel.org/input/uinput.html)
-- [Linux 多点触摸 Type B 协议](https://docs.kernel.org/input/multi-touch-protocol.html)
+- [Linux multi-touch Type B](https://docs.kernel.org/input/multi-touch-protocol.html)
 - [libevdev uinput](https://www.freedesktop.org/software/libevdev/doc/latest/group__uinput.html)
-- [Armada DRM lease 触摸转发补丁](https://github.com/armada-os/armada/blob/c3d178c/packages/gamescope/patches/0013-feat-drm-run-a-compositor-from-the-leased-output.patch)
-- [Armada 下屏触摸隔离补丁](https://github.com/armada-os/armada/blob/c3d178c/packages/gamescope/patches/0014-wlserver-always-swallow-ignored-touch-device.patch)
-- [当前定位触摸](position-touch.md)
+- [Armada DRM-lease touch forwarding](https://github.com/armada-os/armada/blob/c3d178c/packages/gamescope/patches/0013-feat-drm-run-a-compositor-from-the-leased-output.patch)
+- [Armada ignored lower-touch isolation](https://github.com/armada-os/armada/blob/c3d178c/packages/gamescope/patches/0014-wlserver-always-swallow-ignored-touch-device.patch)
+- [Current position touch](position-touch.md)

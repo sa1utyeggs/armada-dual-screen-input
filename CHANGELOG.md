@@ -1,67 +1,70 @@
+English · [简体中文](CHANGELOG.zh-CN.md)
+
 # Changelog
 
 ## Unreleased
 
+- Make English the default README and documentation language, with aligned Simplified Chinese guides, reciprocal links and preserved historical anchors. Include both editions in offline bundles. Generate future GitHub Release notes in English then Chinese, refusing missing, empty or duplicate translations; translate existing release bodies without changing tags or assets.
+
 ## 0.1.3 · 2026-10-22
 
-- 设置 → 触屏新增圆环“未触摸 / 触摸中”两种独立配色，提供八种可点选的色板及圆环预览；默认保留原蓝色 / 橙色与黑色描边。保存后用于定位及直接触屏，重启保留，支持放弃修改和恢复触屏页默认。颜色在绘制子进程启动时校验及解析，不改变原生触摸、视觉平滑或帧率设置。
-- 圆环新增独立的视觉跟随平滑：按既有绘制上限在真实坐标之间持续靠近最新目标，不预测、不生成原生输入。点击、抬手、切模式及重连对齐真实位置，多指按稳定身份跟踪；停稳后结束绘制。已安装到 Thor，用户反馈更顺畅；真实绘制器的八轮合成轨迹对比中，60 / 120 FPS 的重建步长波动均降低约 76%，增加少量视觉滞后与运动期间 CPU / GPU 开销。模型、实际绘制和用户反馈的验证边界见 `docs/position-touch.md`。
-- 设置 → 触屏新增圆环绘制上限：30 / 60 / 120 FPS 或跟随上屏刷新率，默认跟随屏幕，保存后用于两种触屏模式。采用单次、按需绘制调度和公开 GDK 绘制接口，保留 GL 与 FPS 共存；仅圆环子进程禁用额外的 Mesa swap 等待，静止不持续绘制。实际帧率受提交等待与系统负载影响，不修改游戏限帧、刷新率或输入频率；实机数据与限制见 `docs/position-touch.md`。
-- 圆环位置更新通过单个 GLib 事件源合并发送，减少等待 16ms 健康检查定时器的延迟；通道繁忙时只保留最新位置，关闭取消待发送回调，发送失败通过原有保护路径恢复。绘制、输入、焦点 / 路由检查和个人设置不变；隔离发送延迟对比见 `docs/position-touch.md`。
-- 触屏圆环改为绑定当前应用的被动装饰窗口，不再占用 mangoapp 的外部叠加层，使 Steam 性能叠加显示可与圆环共存。切换应用 / 窗口 / 显示服务器或几何位置时释放旧触点并重建圆环，保留 GL 绘制、原生输入检查与个人设置；详见 `docs/position-touch.md`。
-- 上屏圆环子进程单独启用 GTK GL 合成，避开 Thor 在《杀戮尖塔2》查看牌界面中观测到的 XRender / GPU 同步等待；下屏、游戏和全局环境不变。焦点查询合并独立请求，保留目标、策略、路由和过期检查；短时对比与验证边界见 `docs/position-touch.md`。
-- 触屏页不再在下屏绘制触点圆圈，也不再为触点位置和按压反馈单独请求下屏重绘；状态和模式变化仍正常刷新。保留上屏定位圆圈、触摸输入与焦点 / 路由检查。
-- 目标身份校验在单次调用内共享运行目录解析及端点元数据，两个端点路径解析后再读取 Socket 类型、所有者和身份；每次发送仍重新校验，不跨事件缓存许可。补充端点替换、别名越界、所有者变化和检查期间替换的回归验证；详见 `docs/native-touch-routing.md`。
-- 原生触屏发送路径移除重复的目标、焦点和路由校验；每次实际写入前仍执行完整检查，不跨事件缓存许可。保留触点提交频率、路由扫描周期和过期时间，取消或校验失败时释放触点；自动检查与专用窗口实测见 `docs/native-touch-routing.md`。
-- 绘制按 GTK 的实际脏区域跳过无关组件和键帽；直接触屏仅更新圆圈的新旧边界，复用有上限的静态背景缓存。缩放、设备倍率和字体状态变化时重建缓存；保留键帽反馈、中文候选、输入节奏和焦点/路由检查；补齐父类按键结束路径的局部刷新钩子，详见 `docs/keyboard-latency.md`。
-- 安装、升级、回退和卸载后尝试刷新用户图标及应用菜单缓存，并通知包括游戏模式下屏在内的实际 KDE 会话；工具缺失或刷新失败只提示，不撤销成功的安装。不为刷新图标自动重启官方桌面、下屏或 Steam。
-- 回退同步恢复旧版本的安装器管理图标和入口，失败时恢复原文件及状态；保留个人配置、自启动选择和移动主屏布局。移动主屏中已绘制的旧图像可能需要下次重新进入游戏模式后更新。
+- Add separate idle/pressed ring colors under Settings → Touchscreen, with eight palettes and previews; defaults retain blue/orange with black outlines. Saved colors apply to Positioning and Direct touch, survive restarts, and support discard/group defaults. The worker validates/parses colors on startup without changing native touch, smoothing or frame caps.
+- Add independent visual ring smoothing: confirmed coordinates converge toward the latest target within the existing drawing cap, without prediction or native input generation. Click/release/mode/reconnect snap to real coordinates, multi-touch uses stable identities, and settled motion stops drawing. Installed on Thor with smoother motion reported by the user. Eight actual-renderer synthetic trials reduced reconstructed step variation about 76% at 60/120 FPS, at the cost of small visual lag and increased motion CPU/GPU use. See [methods and limits](docs/position-touch.md).
+- Add ring caps of 30 / 60 / 120 FPS or Follow screen, defaulting to Follow screen and shared by both touch modes. One-shot demand-driven scheduling and public GDK updates retain GL/FPS coexistence; extra Mesa swap waiting is disabled only in the marker child, with no continuous stationary drawing. Actual rates depend on submit waits/load. Game caps, display refresh and input rate are unchanged; see [device results](docs/position-touch.md).
+- Coalesce marker updates through one GLib source instead of waiting for the 16ms health timer. Backpressure retains only the latest position; close cancels pending callbacks and send failures use existing recovery. Drawing, input, focus/route checks and preferences remain unchanged; see [delivery comparison](docs/position-touch.md).
+- Bind the marker as a passive decoration of the current app, freeing mangoapp's external-overlay slot so Steam FPS and ring can coexist. App/window/server/geometry changes release old contacts and rebuild the marker, preserving GL, native-input checks and preferences. See [coexistence](docs/position-touch.md).
+- Enable GTK GL composition only in the upper-marker child to avoid observed XRender/GPU waits in the Slay the Spire 2 card viewer. Lower UI, games and global environment are unchanged. Batch independent focus queries while retaining target/policy/route/expiry checks. See [short comparisons and limits](docs/position-touch.md).
+- Remove lower-screen contact circles and redraw requests solely for contact motion/press/release. Status/mode changes still refresh. Upper rings, touch and focus/route checks remain.
+- Share runtime-directory resolution and endpoint metadata within one target-identity check, resolving both paths before socket type/owner/identity checks. Every send revalidates; permission is not cached across events. Regressions cover endpoint replacement, escaping aliases, owner changes and replacement during checks; see [native routing](docs/native-touch-routing.md).
+- Remove duplicated target/focus/route checks from native touch sending while retaining full checks immediately before every write. No cross-event permission cache; contact cadence, route-scan period/expiry and release on cancellation/failure remain. See [automated and dedicated-window tests](docs/native-touch-routing.md).
+- Skip unrelated components/keycaps using GTK's actual dirty region. Direct touch updates only old/new ring bounds with a bounded static-background cache, rebuilt on scale/font changes. Keep key feedback, Chinese candidates, input cadence and focus/route checks; fix the inherited key-end path's missing partial-refresh hook. See [keyboard performance](docs/keyboard-latency.md).
+- After install/upgrade/rollback/uninstall, refresh user icon/menu caches and notify actual KDE sessions, including the Game Mode lower screen, where possible. Missing tools/failures warn without undoing a successful install. Official desktop/lower/Steam sessions are never restarted automatically for icons.
+- Rollback restores installer-managed old icons/entries and recovers original files/state on failure, preserving config, autostart choice and mobile-home layout. Already-painted mobile-home images may update only after re-entering Game Mode.
 
 ## 0.1.2 · 2026-10-21
 
-- 更新检测区分 GitHub 查询限流与其他 HTTP 错误：额度用完时明确提示稍后重试，避免误报为普通网络故障；不自动重复请求。
-- 新增完整英文 README 与中英文切换入口；两份首页同步功能、安装方式和兼容限制，离线包同时包含中英文 README。
-- 整理 GitHub 首页：增加功能与界面预览、快速安装和文档导航，统一应用图标与分享预览素材；详细验证结论仍见原兼容与排查记录。
-- 重新设计应用图标：淡化置于后方的 Armada 船帆、居中的一体式键盘和触控板、双触点圆环，采用深色与蓝色高光的矢量图形；保留原图标名称及桌面入口。
+- Distinguish GitHub rate limiting from other HTTP errors: exhausted limits ask the user to retry later rather than reporting a generic network fault. No automatic repeated requests.
+- Add a complete English README and reciprocal language navigation, aligning features, installation and support limits. Offline bundles include both editions.
+- Reorganize the GitHub landing page with feature/previews, quick installation, navigation and consistent app/social artwork. Detailed conclusions remain in compatibility/investigation records.
+- Redesign the vector icon with a faded Armada sail behind a centered combined keyboard/touchpad and two touch rings, dark styling and blue highlights. Existing icon names/desktop entry remain.
 
 ## 0.1.1 · 2026-10-21
 
-- 设置新增“更新”页：手动检查 GitHub 最新正式版本，确认后下载并校验 ARM64 安装包，复用原安装器保留个人配置、自启动选择和旧版本回退入口。独立用户任务在面板重启期间继续运行，页面显示检查/下载/安装/失败结果；未保存的设置会阻止开始更新。
-- 检查更新超过 45 秒后恢复为可重试状态，过期的网络结果不会覆盖新一轮检查；不在启动时自动联网，不自动安装更新。
-- 下载前验证官方发布来源、版本及附件大小，下载后校验 SHA-256 和包内文件清单；拒绝不安全的解包路径，并在安装失败时复用原安装器回退。
+- Add Settings → Update: manually check the latest stable GitHub release, then confirm download/verification of the ARM64 bundle. Reuse the installer, retaining config, autostart and rollback. A detached user task survives panel restarts; the page reports checking/downloading/installing/failure. Unsaved settings block update start.
+- Restore retry after a 45-second check timeout; stale network results cannot overwrite newer checks. No startup network check or automatic installation.
+- Before downloading, validate official origin, version and asset size; then verify SHA-256 and package manifest. Reject unsafe extraction paths and reuse installer rollback on failure.
 
 ## 0.1.0 · 2026-10-21
 
-- 首个正式版本，汇总下屏触控板、双指滚轮、中英文键盘、输入设置和触屏双模式；默认手动启动，升级保留个人配置。
-- 主要支持 AYN Thor / ArmadaOS Steam Game Mode。Desktop Mode 默认关闭；其他机型、直接触屏的真实多指交互及长期/休眠恢复仍待进一步验证，详见 [兼容范围](docs/compatibility.md)。
-- 推送与 `VERSION` 一致的版本 tag 后，GitHub CI 自动检查、构建校验并发布 ARM64 离线包；预览版自动标记 Pre-release。保留只生成附件的手动构建入口。
-- 为文字绘制增加线程内、有上限的 Pango 布局缓存，减少键盘重绘对输入事件循环的占用；字体、缩放和渲染选项变化时重新布局，保留原键帽和中文字体回退。
-- 普通键帽和中文候选更新改为局部重绘，修复滑出按键后的高亮刷新；修饰键、模式和语言切换保留完整刷新。部分绘制沿用最近完整帧的 OLED 偏移，避免残影接缝。
-- 连续输入或长按期间，周期状态更新只重绘状态栏；暂停输入后下一次状态更新恢复完整刷新和 OLED 微移，减少周期重绘对点按的阻塞。
-- 快速点按的键帽高亮独立于实际按键持有状态，在绘出后保留约 60ms，避免同批按下/抬起尚未绘制就被清除；实际按键立即发送并按原逻辑释放，切页/取消/关闭清理视觉定时器。
-- 新增真实 GLib 时序、专用上屏窗口的按键接收与中文候选/提交延迟工具。实测常规重绘约从 14ms 降到 10ms；偶发长帧和中文提交等待尚未消除，见 [测试记录](docs/keyboard-latency.md)。
+- First stable release combines lower-screen touchpad, two-finger wheel, English/Chinese keyboard, input settings and two touch modes. Manual launch by default; upgrades retain configuration.
+- Primary target: AYN Thor / ArmadaOS Steam Game Mode. Desktop Mode is disabled by default; other devices, real direct multi-touch, long sessions and suspend/resume need further validation. See [compatibility](docs/compatibility.md).
+- A tag matching `VERSION` triggers GitHub CI checks, ARM64 offline packaging, verification and publication. Preview versions become prereleases; manual builds remain artifact-only.
+- Add bounded thread-local Pango layout caching to reduce keyboard paint work in the input loop. Font/scale/render-option changes relayout; existing keycaps and Chinese fallback remain.
+- Ordinary key/candidate changes redraw locally; fix highlights after sliding off keys. Modifier/mode/language changes keep full refresh. Partial paint reuses the last full frame's OLED offset to avoid seams.
+- During typing/hold-repeat, periodic status updates redraw only the status row. After input pauses, the next status update resumes full refresh/OLED micro-shifts, reducing periodic interference.
+- Separate rapid-tap highlights from physical key holding; retain feedback about 60ms after painting so a same-batch press/release remains visible. Keys still send immediately/release normally; page/cancel/close cleans timers.
+- Add real GLib timing, dedicated upper-window key reception and Chinese candidate/commit tools. Typical redraw fell from about 14ms to 10ms; occasional long frames and Chinese commit waits remain. See [measurements](docs/keyboard-latency.md).
 
 ## 0.1.0-preview.2 · 2026-10-21
 
-- 将“定位触摸”页签改为“触屏”，移除暂停 / 手动启用按钮；可见且目标、标识、路由稳定并抬手后自动启用。
-- 新增“直接触屏”子模式：绝对坐标、多触点独立按下 / 移动 / 抬起和逐触点圆环；保留原定位子模式、个人输入设置与中英文键盘。
-- “定位 / 直接触屏”使用顶部工具栏的下拉框切换，不增加第二行或占用操作区高度。菜单展开时暂停发送触点，选择或点外部收起后，等待抬手及目标稳定再自动恢复。
-- 切换触屏子模式、离页、收起、关闭或目标变化时释放旧触点；不复用旧手势，不修改游戏触摸策略或物理驱动。
-
-- 新增键盘语言切换与简体中文全拼候选条；复用系统 libxkbcommon、libpinyin 和词库，支持点选/翻页、空格选词、数字选词及回车提交原始拼音。
-- 中文引擎与原生文字通道在独立进程运行；Game Mode 的 Gamescope 私有接口隔离适配，目标变化/超时取消，离开键盘、收起与关闭时停止后端。Desktop Mode 中文与第三方应用兼容性仍待验证。
-- 新增中文“设置”页：鼠标移动、滚轮档位/倍率、轻点点击、惯性与阻力、定位触摸移动倍率。
-- 新增键盘长按重复开关，提供重复等待、间隔及 Shift 双击间隔设置。
-- 设置保存后即时生效，支持按分组恢复默认、放弃编辑，原子写入用户配置并保留未知字段。进入设置释放旧输入，重启保留原输入模式，默认不开机自启。
+- Rename Positioning touch to Touchscreen; remove pause/manual enable. A visible page automatically enables after target/marker/route readiness and all fingers lifted.
+- Add Direct touch with absolute coordinates, independent multi-contact begin/move/end and per-contact rings. Existing Positioning, preferences and bilingual keyboard remain.
+- Use a same-toolbar Positioning / Direct touch dropdown without another row or reduced input height. Opening it pauses contact sending; selection/dismissal waits for lift and target stability before resuming.
+- Submode/page changes, collapse, close or target changes release contacts. Never resume old gestures or alter game touch policy/physical drivers.
+- Add keyboard-language selection and Simplified Chinese full-pinyin candidates through system libxkbcommon/libpinyin/dictionaries. Support tap/paging, Space/number selection and Enter for raw pinyin.
+- Chinese engine/native text transport run separately. Isolate the private Gamescope Game Mode adapter; cancel on target changes/timeouts and stop on leaving keyboard/collapse/close. Desktop Chinese/third-party compatibility remains pending.
+- Add Chinese settings for pointer movement, wheel speed/scale, tap, inertia/resistance and positioning scale.
+- Add hold-repeat enable, delay/interval and Shift double-tap interval.
+- Apply settings on save with group defaults/discard, atomic config writes and unknown-field preservation. Entering settings releases old input; restart retains input mode; no default autostart.
 
 ## 0.1.0-preview.1
 
-- 整理为应用包、独立测试、打包模板、安装工具、资源和文档目录。
-- 新增普通用户安装/升级、配置保留、失败恢复、版本回退、诊断和卸载入口，默认手动启动。
-- 新增可单独下载执行的 `get.sh`：从 GitHub 自动获取指定提交并安装，无需 Git、SSH 密钥或手工解包。
-- 新增带固定 Fedora 私有运行库和文件清单的离线 aarch64 发布包；不包含实验驱动。
-- 保留定位触摸倍率、触点角色、点击与输入修复，集成已验收的 Steam 右侧菜单后圆环恢复和正常界面切换提速。
-- 项目自己的代码采用 MIT，第三方组件保留原许可证。
-- 已知限制：其他双屏机型、Desktop Mode、长期/休眠恢复仍待验证；《杀戮尖塔2》时间线间歇重连尚未定位。
+- Reorganize app source, independent tests, packaging templates, tools, assets and documentation.
+- Add normal-user installation/upgrades, config preservation, failure recovery, rollback, diagnostics and removal. Manual launch by default.
+- Add standalone `get.sh` to fetch/install a chosen GitHub commit without Git, SSH keys or manual extraction.
+- Add an offline aarch64 bundle with pinned private Fedora runtime and manifest, excluding experimental drivers.
+- Retain positioning scale/contact roles/click/input fixes; integrate accepted right-menu marker recovery and faster healthy transitions.
+- License project code under MIT while retaining dependency licenses.
+- Known limits: other models, Desktop Mode, long sessions and suspend/resume remain unverified; intermittent Slay the Spire 2 timeline reconnection remains unlocated in this record.
 
-历史行为和原始实测结论见 [docs/history.md](docs/history.md)。
+Historical behavior and original test conclusions: [docs/history.md](docs/history.md).

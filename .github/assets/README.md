@@ -1,3 +1,5 @@
+English · [简体中文](README.zh-CN.md)
+
 # Repository artwork
 
 - `social-preview.svg` / `social-preview.png`: GitHub sharing card. Uses the current application icon from `assets/icons/armada-dual-screen-input.svg`; the PNG is rendered with `rsvg-convert`. No Valve artwork is included. Armada mark provenance is recorded in `THIRD_PARTY.md`.

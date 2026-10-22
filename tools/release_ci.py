@@ -8,6 +8,43 @@ import subprocess
 from release import APP, PackageError, version
 
 
+REPOSITORY = 'https://github.com/sa1utyeggs/armada-dual-screen-input'
+
+
+def changelog_section(root, filename, value):
+    try:
+        changelog = (Path(root) / filename).read_text(encoding='utf-8')
+    except OSError as exc:
+        raise PackageError(filename + ' is required for bilingual release notes') from exc
+    sections = re.findall(r'^## ' + re.escape(value) + r'(?:[ \t]+[^\n]*)?\n(.*?)(?=^## |\Z)',
+                          changelog, re.MULTILINE | re.DOTALL)
+    if len(sections) != 1 or not sections[0].strip():
+        raise PackageError(filename + ' needs exactly one nonempty section for ' + value)
+    return sections[0].strip()
+
+
+def release_notes(root, value, *, ref=None):
+    """Read both editions; never publish a silently untranslated release."""
+    ref = ref or 'v' + value
+    blocks = []
+    for filename, heading in (('CHANGELOG.md', 'English'), ('CHANGELOG.zh-CN.md', '简体中文')):
+        section = changelog_section(root, filename, value)
+        # Release pages resolve relative links differently from repository files.
+        section = re.sub(r'(\]\()((?:docs/)[^\s)]+)(\))',
+                         lambda m: m[1] + REPOSITORY + '/blob/' + ref + '/' + m[2] + m[3], section)
+        if heading == 'English':
+            footer = (f'Package: `{APP}-{value}-aarch64.tar.gz`; checksums: `SHA256SUMS`.\n'
+                      'Download both assets, run `sha256sum -c SHA256SUMS`, extract the archive, '
+                      'then run `bash install.sh` as your regular user.\n'
+                      "GitHub-generated Source code archives do not replace the offline installer bundle.")
+        else:
+            footer = (f'安装包：`{APP}-{value}-aarch64.tar.gz`，校验文件：`SHA256SUMS`。\n'
+                      '下载两个附件后执行 `sha256sum -c SHA256SUMS`，再解压并以普通用户运行 `bash install.sh`。\n'
+                      'GitHub 自动生成的 Source code 压缩包不能替代离线安装包。')
+        blocks.append('## ' + heading + '\n\n' + section + '\n\n' + footer)
+    return '\n\n---\n\n'.join(blocks) + '\n'
+
+
 def metadata(root, tag=None):
     root = Path(root)
     value = version(root)
@@ -19,18 +56,9 @@ def metadata(root, tag=None):
     expected = 'v' + value
     if tag is not None and tag != expected:
         raise PackageError(f'Tag {tag!r} does not match VERSION ({expected})')
-    changelog = (root / 'CHANGELOG.md').read_text()
-    section = re.search(r'^## ' + re.escape(value) + r'(?:[ \t]+[^\n]*)?\n(.*?)(?=^## |\Z)',
-                        changelog, re.MULTILINE | re.DOTALL)
-    if section is None or not section[1].strip():
-        raise PackageError('CHANGELOG.md needs a nonempty section for ' + value)
     prerelease = '-' in value.split('+', 1)[0]
     values = {'version': value, 'tag': expected, 'prerelease': str(prerelease).lower()}
-    notes = section[1].strip() + '\n\n' + (
-        f'安装包：`{APP}-{value}-aarch64.tar.gz`，校验文件：`SHA256SUMS`。\n'
-        '下载两个附件后执行 `sha256sum -c SHA256SUMS`，再解压并运行 `bash install.sh`。\n'
-        'GitHub 自动生成的 Source code 压缩包不能替代离线安装包。\n')
-    return values, notes
+    return values, release_notes(root, value)
 
 
 def main():

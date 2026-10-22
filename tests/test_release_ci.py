@@ -10,7 +10,7 @@ import textwrap
 import unittest
 
 from release import PackageError
-from release_ci import metadata
+from release_ci import metadata, release_notes
 
 
 class ReleaseMetadataTests(unittest.TestCase):
@@ -24,6 +24,9 @@ class ReleaseMetadataTests(unittest.TestCase):
         (self.root / 'CHANGELOG.md').write_text(
             f'# Changelog\n\n## Unreleased\n\n- Future change.\n\n'
             f'## {value} · 2026-10-21\n\n{notes}\n\n## 0.0.1\n\n- Old change.\n')
+        (self.root / 'CHANGELOG.zh-CN.md').write_text(
+            f'# 更新日志\n\n## Unreleased\n\n- 未来。\n\n'
+            f'## {value} · 2026-10-21\n\n- 已验证修改。\n\n## 0.0.1\n\n- 旧修改。\n')
 
     def test_stable_and_prerelease_tags_and_build_metadata(self):
         for value, prerelease in [('1.2.3', 'false'), ('0.1.0-preview.3', 'true'),
@@ -66,6 +69,31 @@ class ReleaseMetadataTests(unittest.TestCase):
         (self.root / 'CHANGELOG.md').write_text('## 1.2.30\n\n- Different version.\n')
         with self.assertRaises(PackageError):
             metadata(self.root)
+
+    def test_both_languages_in_order_with_installation_instructions(self):
+        self.source('1.2.3')
+        notes = metadata(self.root)[1]
+        self.assertLess(notes.index('## English'), notes.index('## 简体中文'))
+        self.assertIn('Tested change.', notes)
+        self.assertIn('已验证修改。', notes)
+        self.assertEqual(notes.count('sha256sum -c SHA256SUMS'), 2)
+        self.assertNotIn('未来', notes)
+        self.assertNotIn('旧修改', notes)
+
+    def test_missing_empty_wrong_or_duplicate_translation_blocks_publication(self):
+        for content in (None, '## 1.2.3\n\n', '## 1.2.30\n\n- 错误版本。\n',
+                        '## 1.2.3\n\n- 一。\n## 1.2.3\n\n- 二。\n'):
+            with self.subTest(content=content):
+                self.source('1.2.3')
+                target = self.root / 'CHANGELOG.zh-CN.md'
+                target.unlink() if content is None else target.write_text(content)
+                with self.assertRaises(PackageError):
+                    metadata(self.root)
+
+    def test_release_links_use_tag_or_explicit_historical_docs_ref(self):
+        self.source('1.2.3', notes='- [Guide](docs/usage.md#controls)')
+        self.assertIn('/blob/v1.2.3/docs/usage.md#controls', metadata(self.root)[1])
+        self.assertIn('/blob/main/docs/usage.md#controls', release_notes(self.root, '1.2.3', ref='main'))
 
 
 class ReleasePublishTests(unittest.TestCase):

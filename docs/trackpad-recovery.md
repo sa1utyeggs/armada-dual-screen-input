@@ -1,39 +1,51 @@
-# 双指滚动后的触点恢复与指针隔离
+English · [简体中文](zh-CN/trackpad-recovery.md)
 
-状态：2026-10-19 第二轮修复已安装到 Thor；用户本轮短测确认单指移动与双指滚动后移动均正常。
+<a id="双指滚动后的触点恢复与指针隔离"></a>
 
-## 问题与证据
+# Contact recovery and pointer isolation after two-finger scrolling
 
-用户反馈连续双指滚动后指针向上跑，停止滚动、单指移动、全部抬手或刚开始滚动时都可能看到跳动；随后还会出现按钮可点击、指针无法移动。
+Status: the second fix was installed on Thor on 2026-10-19. In this round's short test, the user confirmed normal single-finger movement before and after two-finger scrolling.
 
-纯内存复现确认了一条漂移路径：两根手指先后抬起时，剩余手指的尾部移动被当成单指鼠标移动。连续 40 轮向上滚动，旧版产生累计 Y=-520 的指针移动；同一输入在多指隔离版产生 0 指针移动，保留 80 次滚轮输出。这不等于已经解释用户报告的每一种瞬间跳动。
+<a id="问题与证据"></a>
 
-一次设备快照中，应用和引擎各有一个触点、最大手指数为 2，触点已经约 24 秒未更新；keepalive 仍在刷新引擎存活时间。同轮内核只读元数据显示下屏还有一个活动槽和 BTN_TOUCH。该证据说明应用层的新组保护不足以覆盖现场，尚不能单凭快照证明用户手指已离开或判定驱动错误。后续抓取前面板已重新启动，不能把那次空状态清理声称为恢复了原故障。
+## Problem and evidence
 
-## 修复方式
+The user reported upward pointer movement after continuous two-finger scrolling. Jumps could occur at scroll start, when stopping, moving one finger or lifting everything. Later, panel buttons remained clickable while the pointer stopped moving.
 
-1. GTK Wayland 在真正从空触点集合开始时提供 pointer-emulating 标记。真实 TOUCH_BEGIN 带此标记时，先取消旧逻辑触点，再开始新组；不会用普通抬手触发点击。这项保护处理应用遗漏 END/CANCEL 的情况。
-2. 一组触摸只要出现过多指，剩下一指后仍属于该多指组，直到全部抬起。尾部移动不再输出指针移动或惯性；普通双指轻点仍可右击。滚动后想移动指针，应全部抬手后重新单指操作。
-3. 增加一个保守恢复后备：仅在触控板/键鼠页、旧组是多指、只余一个触控板触点、没有按住任何键/鼠标按钮或拖动，而且整组真实事件已经安静至少 3 秒时，新的不同序列触控板按下可取消旧逻辑组。keepalive 不计作真实活动；任何真实 UPDATE 或抬手都会重新计时。它不是周期性清理，也不会超时释放普通单指长按或键盘键。
-4. 后备恢复使用独立 cancel_previous 标志，不伪称 GTK 确认了全部抬手。恢复后的这一组禁止 tap/long-press，避免把真实静止的滚动锚点误恢复后产生左击或右击。下一组正常触摸恢复点击；移动和滚轮仍可使用。
-5. 需要自动启用原生触摸的物理序列集合只按可信 GTK 标记或真实 END/CANCEL 清理。启发式不宣称物理手指已离开，避免定位触摸在仍有手指时过早启用。
+An in-memory reproduction confirmed one drift path: as fingers lifted in succession, the remaining finger's tail motion became single-finger pointer movement. Forty upward-scroll cycles produced cumulative pointer Y=-520 in the old version. The same input produced zero pointer movement and retained 80 scroll outputs with multi-finger isolation. This does not explain every reported instantaneous jump.
 
-这项后备无法区分真实静止超过 3 秒的锚点和残留触点。因此，双指滚动后保留一指静止很久，再补上第二指，可能被重新分组；这一恢复组不会点击。若旧序列持续 UPDATE、所有新操作复用同一旧序列，后备不会触发，仍需要进一步现场诊断。它是应用层恢复措施，不是触屏驱动修复。
+In one device snapshot, both app and engine retained one contact, with a group maximum of 2 fingers. The contact had not updated for about 24 seconds, but keepalive still refreshed engine liveness. Read-only kernel metadata in the same round showed one active lower-screen slot and BTN_TOUCH. This establishes that new-group protection alone did not cover the observed state. The snapshot cannot prove the user's fingers had lifted or establish a driver fault. The panel restarted before later capture, so an empty state after cleanup cannot be claimed as recovery of the original failure.
 
-GTK 标记依据：[官方 Wayland 后端源码](https://github.com/GNOME/gtk/blob/gtk-3-24/gdk/wayland/gdkdevice-wayland.c#L2317)。滚轮输出另经内存捕获核对：竖滚仅输出 REL_WHEEL/REL_WHEEL_HI_RES，没有把滚轮编码成指针 REL_Y。
+<a id="修复方式"></a>
 
-## 验证与安装原则
+## Fix
 
-自动检查使用模拟事件和内存输出，不创建真实输入设备。覆盖连续滚动、不同抬手顺序、滚动后尾指移动、重新单指移动、丢失 END、真实事件静默计时、静止锚点反复滚动、3 秒暂停后的误点保护、长按和按键保持。
+1. GTK Wayland supplies a pointer-emulating marker when a group truly begins from no contacts. A real TOUCH_BEGIN with that marker cancels old logical contacts before starting the new group. Ordinary release does not synthesize a click. This protects against missed END/CANCEL in the app.
+2. Once a group has contained multiple fingers, its remaining single finger stays part of that group until all lift. Tail motion no longer sends pointer movement or inertia. A normal two-finger tap still right-clicks. Lift everything and start a fresh single-finger group to move after scrolling.
+3. A conservative fallback applies only on Touchpad/Keys+Pad: the old group was multi-finger, only one touchpad contact remains, no key/mouse button/drag is held, and the entire group's real events have been quiet for at least 3 seconds. A different new touchpad sequence may cancel that old logical group. Keepalive does not count as real activity; any real UPDATE/release restarts the timer. It is not periodic cleanup and does not time out ordinary single-finger holds or keyboard keys.
+4. Fallback uses a distinct `cancel_previous` flag rather than pretending GTK confirmed all fingers lifted. Tap/long-press is disabled for the recovered group to prevent false left/right clicks if a genuinely stationary scroll anchor was regrouped. Movement/scrolling remain available; normal clicking returns with the next group.
+5. Physical sequences used to gate automatic native touch are cleared only by trusted GTK markers or real END/CANCEL. The heuristic does not claim physical fingers are gone and cannot prematurely enable position touch with fingers still down.
 
-当时安装仅替换 panel_app.py、toolkit_touch.py、vendor/ratatoskr/bin/engine.py，并从设备当前版本适配 panel_app.py，保留了当时的同屏功能和其他近期 UI；同屏功能后来于 2026-10-20 单独移除。安装前备份、核对哈希；失败自动恢复。配置、滚轮灵敏度、键盘联动、快捷方式、自启动状态及其他应用文件保持原样。
+A genuinely stationary anchor for over 3 seconds is indistinguishable from a residual contact. Keeping one finger still after scrolling and later adding another may regroup input; that recovered group will not click. Continuous UPDATE or reuse of the same old sequence prevents the fallback, requiring further live diagnosis. This is app-level recovery, not a driver fix.
 
-本轮实机临时副本的 104 项相关回归全部通过；Mac 完整收集 161 项，其中 137 项通过、24 项 Linux 集成检查按平台跳过。安装验证确认其他应用文件、配置与 unit 哈希未变；服务正在运行，自启动仍禁用。备份位于 Thor `~/.local/state/thor-panel-scroll-drift-20261019-203529/`。本地安装回执保存在工作区 `outputs/thor-scroll-drift-20261019/verification.json`。
+GTK marker source: [official Wayland backend](https://github.com/GNOME/gtk/blob/gtk-3-24/gdk/wayland/gdkdevice-wayland.c#L2317). Separate in-memory output capture confirmed vertical scrolling sends only REL_WHEEL/REL_WHEEL_HI_RES, not pointer REL_Y.
 
-## 用户复测
+<a id="验证与安装原则"></a>
 
-2026-10-19，用户在安装第二轮修复后明确反馈“单指正常，滚动后也正常”。本轮短测通过；尚未据此确认所有场景或长期使用均不复发。
+## Validation and installation principles
 
-先全部抬手，再用单指移动；随后重复双指滚动、全部抬手、单指移动，观察是否还会上飘或无法移动。若再次卡住，全部离开下屏约 3 秒，再用新的一次单指按下并移动，确认后备能否恢复；恢复组首次轻点不会点击，需要下一次正常轻点。
+Automated checks use fake events/memory output, creating no real input device. They cover continuous scrolling, lift order, tail motion, new single-finger movement, missing END, real-event quiet timing, repeated stationary-anchor scrolling, false-click protection after a 3-second pause, long holds and held keys.
 
-模拟检查通过不代表设备上的偶发问题已解决，仍以用户实测为准；刚开始滚动的瞬间跳动若保留，需另行记录 pointer/glide 输出来源，不能直接宣称多指尾部隔离已经覆盖。
+At that time installation replaced only `panel_app.py`, `toolkit_touch.py` and `vendor/ratatoskr/bin/engine.py`. `panel_app.py` was adapted from the installed version, retaining the then-existing mirroring feature and other recent UI. Mirroring was separately removed on 2026-10-20. Files were backed up/hash-checked with automatic failure recovery. Configuration, scroll sensitivity, keyboard integration, shortcuts, autostart and other app files were preserved.
+
+All 104 related checks passed in a temporary device copy. Mac collected 161 checks: 137 passed and 24 Linux integration checks were skipped. Installation verification confirmed unchanged hashes for other app files, configuration and unit; the service was running with autostart still disabled. Thor backup: `~/.local/state/thor-panel-scroll-drift-20261019-203529/`. Local receipt: workspace `outputs/thor-scroll-drift-20261019/verification.json`.
+
+<a id="用户复测"></a>
+
+## User retest
+
+On 2026-10-19, after the second fix, the user explicitly reported that single-finger movement and movement after scrolling both worked. This short test passed; it does not establish no recurrence in every scene or long session.
+
+Lift all fingers, move with one, then repeat two-finger scroll → all up → single-finger movement. Watch for upward drift or a stuck pointer. If stuck, leave the lower screen for about 3 seconds, then begin a fresh single-finger press/move to check recovery. The recovered group's first tap will not click; the next normal tap can.
+
+Passing simulated checks does not establish resolution of the intermittent hardware experience. Any remaining scroll-start jump needs separate pointer/glide-source tracing rather than being attributed to multi-finger tail isolation without evidence.
