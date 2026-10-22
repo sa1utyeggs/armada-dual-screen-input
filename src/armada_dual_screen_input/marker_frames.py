@@ -5,10 +5,12 @@ state, compositor settings, input events or continuous idle animation.
 """
 from __future__ import annotations
 
+from .i18n import msg
+
 import math
 import time
 
-FRAME_RATES = {'auto': '跟随屏幕', '120': '120 FPS', '60': '60 FPS', '30': '30 FPS'}
+FRAME_RATES = {'auto': msg('choice.follow_screen'), '120': '120 FPS', '60': '60 FPS', '30': '30 FPS'}
 
 
 def read_frame_rate(value):

@@ -4,7 +4,7 @@ English · [简体中文](zh-CN/installation.md)
 
 # Installation, upgrades and removal
 
-The current stable release is `v0.1.3`. Device validation refers to AYN Thor / Armada `20261010.c3d178c` / Linux 7.2.6 / Steam Game Mode. See [compatibility](compatibility.md) for other devices and systems. Run the installer as your regular user, **without sudo**.
+The current stable release is `v0.1.4`. Device validation refers to AYN Thor / Armada `20261010.c3d178c` / Linux 7.2.6 / Steam Game Mode. See [compatibility](compatibility.md) for other devices and systems. Run the installer as your regular user, **without sudo**.
 
 <a id="一键在线安装推荐"></a>
 
@@ -123,11 +123,19 @@ Rollback restores the app version and managed icon, entry and service templates,
 
 ## Uninstall
 
+Open **Settings → General → Uninstall app**: select Uninstall app, review what is removed/kept, then select Confirm uninstall on the right. Cancel or another settings page clears an unsubmitted confirmation. Unsaved settings or an active update block removal.
+
+A separate regular-user task, `thor-panel-uninstall`, needs no sudo and continues after the panel's own service stops. Success closes the panel. On failure, a running panel displays an error and a desktop notification is attempted. Without a notification service, the durable record remains at `~/.local/state/thor-panel/uninstall.json` (respecting `XDG_STATE_HOME`), including phase, message and leftovers. Source runs and old manual installs cannot be removed by this button; inspect/use the command below.
+
+The action reuses the existing installer. It removes only this app and keeps personal configuration, logs, backups and local modifications. It does not manage Steam, Gamescope, the official lower-screen service or games.
+
 ```bash
 ~/.local/bin/armada-dual-screen-input uninstall
 ```
 
 Alternatively run `bash uninstall.sh` from the source/bundle directory. Removal stops/deletes this app's user service, managed shortcuts, icon, command and unmodified releases. Modified or unowned files are not forcibly deleted; the result lists leftovers. A modified service file needs manual inspection first. Personal configuration under `~/.config/thor-panel/`, logs under `~/.local/state/thor-panel/`, entry backups and old manual-install files remain.
+
+On 2026-10-22 the development branch passed 580 Python checks on Thor and 15 JavaScript checks on Mac. Removal tests used temporary user directories and fake services, covering confirmation/cancel, duplicate taps, update exclusion, retry, recording results after deleting release files, and preservation of local modifications. Actual Thor removal and interactive desktop notification acceptance have not been performed.
 
 <a id="路径与更新兼容"></a>
 

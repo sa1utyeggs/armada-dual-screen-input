@@ -1,6 +1,8 @@
 """Capture-free positioning controller with passive marker and native touch."""
 from __future__ import annotations
 
+from .i18n import msg, LocalizedState
+
 import os
 from pathlib import Path
 import time
@@ -19,9 +21,9 @@ from .marker_colors import DEFAULT_COLORS, MarkerColors
 TOUCH_MODES = ('position', 'direct')
 
 
-class PanelPosition:
+class PanelPosition(LocalizedState):
     pad = Rect(0, 124, 1240, 956)
-    hint = '第一指定位 · 第二指按住触摸 · 第一指移动可拖动 · 抬起第二指释放'
+    hint = msg('touch.hint')
 
     def __init__(self, *, runtime=None, resolve=None, focus_factory=FocusWatcher,
                  marker_factory=MarkerOverlay, native_factory=NativeTouchInput,
@@ -41,7 +43,7 @@ class PanelPosition:
         self.monitor_millihz = 0
         self.target = self.focus = self.marker = self.sender = self.expected = None
         self.active = self.armed = self.auto_requested = False
-        self.message = '触屏尚未打开'
+        self.message = msg('touch.not_open')
         self.last_error = None
         self.revision = 0
         self.position_gesture = PositionGesture(self.pad, sensitivity=sensitivity)
@@ -56,7 +58,7 @@ class PanelPosition:
 
     @property
     def enable_label(self):
-        return '暂停触摸' if self.armed else '连接中…' if self.auto_requested else '启用触摸'
+        return msg('touch.pause') if self.armed else msg('touch.pending') if self.auto_requested else msg('touch.enable')
 
     def _update_marker(self, now=None, *, snap=True):
         if not self.marker:
@@ -82,7 +84,7 @@ class PanelPosition:
         self.auto_requested = self.active
         self._retry_after = 0
         self._update_marker()
-        self.message = '模式已切换；抬起所有手指后自动启用'
+        self.message = msg('touch.switched')
         return True
 
     def start(self):
@@ -90,14 +92,14 @@ class PanelPosition:
             return
         self.active, self.auto_requested = True, True
         self._retry_after = 0
-        self.message = '正在连接上屏定位标识…'
+        self.message = msg('touch.connecting')
         try:
             self.target = self.resolve()
             self.focus = self.focus_factory(':0')
             self.focus.start()
         except (OSError, ValueError, InputUnavailable) as error:
             self.last_error = str(error)
-            self.message = '无法连接上屏；切换标签后重试'
+            self.message = msg('touch.connect_failed')
 
     def _close_sender(self):
         self.armed, self._pending_until = False, 0
@@ -117,7 +119,7 @@ class PanelPosition:
         if manual:
             self.auto_requested = False
         self._close_sender()
-        self.message = '触摸已暂停；点击「启用触摸」恢复'
+        self.message = msg('touch.paused')
 
     def stop(self):
         self.pause()
@@ -148,7 +150,7 @@ class PanelPosition:
         self._close_sender()
         self.gesture.center(self.clock())
         self._update_marker()
-        self.message = '定位已居中；抬手后恢复触摸' if self.auto_requested else '定位已居中；触摸保持暂停'
+        self.message = msg('touch.centered') if self.auto_requested else msg('touch.centered_paused')
 
     def _focus_current(self):
         state = self.focus.latest() if self.focus else None
@@ -180,7 +182,7 @@ class PanelPosition:
         # all-fingers-up and verified-route gates. Keep fault backoff for a
         # lost marker or an actual route/IPC failure.
         self._retry_after = now if focus_changed and healthy else now+1.5
-        self.message = '上屏目标或定位标识变化；抬手后自动恢复' if self.auto_requested else '定位触摸已暂停'
+        self.message = msg('touch.changed') if self.auto_requested else msg('touch.position_paused')
 
     def touch(self, phase, tid, now, x=0, y=0, *, motion_interval=None):
         if not self.active or not self.armed:
@@ -218,7 +220,7 @@ class PanelPosition:
             blocked = self._blocked_marker_focus
             if (blocked and now < blocked[2] and state.snapshot
                     and (state.snapshot.surface_display, state.snapshot.window) == blocked[:2]):
-                self.message = '正在等待应用窗口恢复；不连接圆环窗口'
+                self.message = msg('touch.wait_app')
                 return
             if self.marker:
                 self.marker.poll()
@@ -227,7 +229,7 @@ class PanelPosition:
                 try:
                     MarkerTarget.from_focus(state.snapshot)
                 except ValueError:
-                    self.message = '正在等待可用的上屏应用窗口'
+                    self.message = msg('touch.wait_window')
                     return
                 self.marker = self.marker_factory(target=state.snapshot, frame_rate=self.frame_rate,
                                                   colors=self.marker_colors)
@@ -251,13 +253,13 @@ class PanelPosition:
                 if self._pending_until:
                     if contacts_down:
                         self._close_sender()
-                        self.message = '请抬起所有手指；随后自动启用'
+                        self.message = msg('touch.lift')
                     elif self.sender.ready:
                         self.armed, self._pending_until = True, 0
-                        self.message = ('直接触屏已启用 · 每根手指独立触摸' if self.touch_mode == 'direct'
-                                        else '定位已启用 · 单指定位，第二指确认')
+                        self.message = (msg('touch.direct_enabled') if self.touch_mode == 'direct'
+                                        else msg('touch.position_enabled'))
                         if self.touch_mode == 'direct' and self.expected.touch_mode == 1:
-                            self.message += ' · 当前应用可能转换为鼠标'
+                            self.message = msg('touch.mouse_emulation', message=self._message)
                         self.revision += 1
                     elif now > self._pending_until:
                         raise InputUnavailable('native touch route did not become ready')
@@ -267,17 +269,17 @@ class PanelPosition:
             expected = state.snapshot
             if not (self.marker and self.marker.current(now) and expected
                     and state.matches(expected, now)):
-                self.message = '正在等待上屏定位标识与前台窗口'
+                self.message = msg('touch.wait_foreground')
                 self._candidate = self._candidate_since = self._clear_since = None
                 return
             if expected.touch_mode not in (1, 4) or not expected.compatible(self.marker.size):
-                self.message = '当前上屏触摸策略或画面比例暂不支持'
+                self.message = msg('touch.unsupported')
                 return
             if self._candidate is None or not self._candidate.same_target(expected):
                 self._candidate, self._candidate_since = expected, now
             if contacts_down:
                 self._clear_since = None
-                self.message = '请抬起所有手指；随后自动启用'
+                self.message = msg('touch.lift')
                 return
             if self._clear_since is None:
                 self._clear_since = now
@@ -288,6 +290,6 @@ class PanelPosition:
                 self.sender = self.native_factory(self.target, expected, focus_check=self._focus_current,
                                                   **options)
                 self._pending_until = now+2
-                self.message = '正在确认原生触摸路由…'
+                self.message = msg('touch.route')
         except (InputUnavailable, OSError, ValueError, RuntimeError) as error:
             self._retry(now, error)

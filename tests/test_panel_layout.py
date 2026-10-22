@@ -66,8 +66,8 @@ class CompactPanelLayoutTests(unittest.TestCase):
             self.assertGreaterEqual(x, 0)
             self.assertGreater(width, 0)
             self.assertLessEqual(x + width, self.panel.SCREEN_WIDTH)
-        self.assertEqual(self.app._header_button_look("split")[0], "键鼠")
-        self.assertEqual(self.app._header_button_look("position")[0], "触屏")
+        self.assertEqual(self.app._header_button_look("split")[0], "Keys+Pad")
+        self.assertEqual(self.app._header_button_look("position")[0], "Touchscreen")
 
     def test_header_mode_buttons_route_to_the_three_visible_modes(self):
         with patch.object(self.app, "set_mode") as select:

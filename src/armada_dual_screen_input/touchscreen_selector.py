@@ -1,11 +1,12 @@
 """Touch submode dropdown, drawn inside the existing panel without taking focus."""
+from .i18n import msg
 from .input_geometry import Rect
 
 BUTTON = Rect(572, 8, 212, 64)
 MENU = Rect(572, 82, 212, 140)
 OPTIONS = (
-    ('position', '定位', Rect(576, 86, 204, 64)),
-    ('direct', '直接触屏', Rect(576, 154, 204, 64)),
+    ('position', msg('touch.position'), Rect(576, 86, 204, 64)),
+    ('direct', msg('touch.direct'), Rect(576, 154, 204, 64)),
 )
 # The selector lives in the header, so it needs no second row or reserved pad area.
 PAD = Rect(0, 124, 1240, 956)

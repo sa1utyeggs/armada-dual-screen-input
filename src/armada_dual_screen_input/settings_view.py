@@ -1,44 +1,47 @@
 """Focus-free settings surface using the same logical hit rectangles as input."""
+from .i18n import msg
 from . import steam_style as s
 import math
 from .input_settings import BOOLEANS, CHOICES, NUMBERS, SETTINGS_PAGES, choice_caption, color_swatches
 from .marker_colors import COLOR_SETTINGS, COLOR_PRESETS, color_rgb
 
-TITLES = {"mouse": "鼠标", "position": "触屏", "keyboard": "键盘", "updates": "更新"}
+TITLES = {"mouse": msg('settings.mouse'), "position": msg('common.touch'), "keyboard": msg('settings.keyboard'), "updates": msg('settings.updates'),
+          "general": msg("settings.general")}
 TOGGLES = {
-    "tap_to_click": ("轻点点击", "单指轻点触控板，模拟鼠标左键"),
-    "glide": ("惯性滑行", "手指松开后，鼠标继续短暂滑动"),
-    "keyboard_repeat_enabled": ("长按重复输入", "按住字母、退格或方向键连续输入"),
+    "tap_to_click": (msg('settings.tap'), msg('settings.tap_note')),
+    "glide": (msg('settings.glide'), msg('settings.glide_note')),
+    "keyboard_repeat_enabled": (msg('settings.repeat'), msg('settings.repeat_note')),
 }
 CHOICE_LABELS = {
-    'keyboard_language': ('键盘语言', '点击切换 · 中文拼音目前用于 Game Mode'),
-    'marker_frame_rate': ('圆环帧率上限', '点击切换 · 静止时不持续刷新'),
+    "ui_language": (msg("settings.ui_language"), msg("settings.ui_language_note")),
+    'keyboard_language': (msg('settings.input_language'), msg('settings.input_language_note')),
+    'marker_frame_rate': (msg('settings.fps'), msg('settings.fps_note')),
 }
-COLOR_LABELS = {'marker_idle_color': '圆环颜色 · 未触摸',
-                'marker_pressed_color': '圆环颜色 · 触摸中'}
+COLOR_LABELS = {'marker_idle_color': msg('settings.idle_color'),
+                'marker_pressed_color': msg('settings.pressed_color')}
 
 
-def draw(cr, draft, updates=None, *, monitor_millihz=0):
+def draw(cr, draft, updates=None, *, monitor_millihz=0, uninstall=None):
     cr.set_source_rgb(*s.FG)
-    s.label(cr, "设置", 28, 150, 34, bold=True)
+    s.label(cr, msg('common.settings'), 28, 150, 34, bold=True)
     cr.set_source_rgb(*s.MUTED)
-    s.label(cr, "仅更新本应用 · 保留个人配置与自启动选择" if draft.section == 'updates'
-            else "仅影响虚拟键鼠 · 保存后生效 · 重启后保留", 28, 194, 22)
+    s.label(cr, msg('settings.update_instructions') if draft.section == 'updates'
+            else msg('settings.instructions'), 28, 194, 22)
     for index, section in enumerate(SETTINGS_PAGES):
         s.button(cr, 24 + index * 204, 220, 192, 60,
                  TITLES[section], draft.section == section, tab=True)
     if draft.section == 'updates':
-        draw_updates(cr, draft, updates)
+        draw_updates(cr, draft, updates, blocked=bool(uninstall and uninstall.busy))
         return
     for key, top in draft.rows():
         s.rounded(cr, 24, top, 1192, 88, 8, s.SURFACE)
         if key in COLOR_SETTINGS:
             value = draft.values[key]
-            caption = dict(COLOR_PRESETS).get(value, '自定义')
+            caption = dict(COLOR_PRESETS).get(value, msg('common.custom'))
             cr.set_source_rgb(*s.FG)
             s.label(cr, COLOR_LABELS[key], 44, top+12, 26, max_width=490)
             cr.set_source_rgb(*s.MUTED)
-            s.label(cr, f'{caption} {value} · 点击右侧色板选择', 44, top+55, 21, max_width=550)
+            s.label(cr, msg('settings.palette', caption=caption, value=value), 44, top+55, 21, max_width=550)
             for left, color, _ in color_swatches():
                 s.button(cr, left, top+14, 60, 60, '', value == color)
                 for width, rgb in ((6, (0,0,0)), (3, color_rgb(color))):
@@ -65,7 +68,7 @@ def draw(cr, draft, updates=None, *, monitor_millihz=0):
         s.label(cr, note, 44, top + 55, 21, max_width=490)
         value = draft.values[key]
         if key in BOOLEANS:
-            s.button(cr, 900, top + 12, 292, 64, "开启" if value else "关闭", value)
+            s.button(cr, 900, top + 12, 292, 64, msg('common.on') if value else msg('common.off'), value)
             continue
         s.button(cr, 552, top + 20, 60, 60, "−")
         s.button(cr, 1000, top + 20, 60, 60, "+")
@@ -75,48 +78,80 @@ def draw(cr, draft, updates=None, *, monitor_millihz=0):
         s.rounded(cr, 634 + 324 * ratio, top + 35, 20, 30, 9, s.FG)
         cr.set_source_rgb(*s.ACCENT)
         s.label(cr, spec.display(value), 1134, top + 49, 25, centered=True, max_width=126)
+    if draft.section == "general":
+        cr.set_source_rgb(*s.MUTED)
+        s.label(cr, msg("settings.general_note"), 44, 460, 25, max_width=1140)
+        draw_uninstall(cr, draft, uninstall, updates)
     if draft.section == "position":
         cr.set_source_rgb(*s.MUTED)
-        for text, y in (("未触摸：只移动定位圆环；触摸中：向上屏按下触点。", 730),
-                        ("第一指滑动定位，第二指按住触摸；抬起第二指释放。", 780),
-                        ("帧率和颜色适用于两种触屏模式，圆环保留黑色描边。", 830),
-                        ("定位速度仅影响定位子模式，不改变游戏限帧或输入频率。", 880)):
+        for text, y in ((msg('settings.touch_idle'), 730),
+                        (msg('settings.touch_gesture'), 780),
+                        (msg('settings.touch_style'), 830),
+                        (msg('settings.touch_scope'), 880)):
             s.label(cr, text, 44, y, 25, max_width=1140)
     cr.set_source_rgb(*(s.DANGER if draft.error else s.ACCENT if draft.dirty else s.MUTED))
     s.label(cr, draft.message, 28, 934, 24, max_width=1180)
-    s.button(cr, 24, 996, 270, 64, "恢复本页默认")
-    s.button(cr, 662, 996, 250, 64, "放弃修改")
-    s.button(cr, 936, 996, 280, 64, "保存设置", True)
+    s.button(cr, 24, 996, 270, 64, msg('settings.defaults'))
+    s.button(cr, 662, 996, 250, 64, msg('settings.discard'))
+    s.button(cr, 936, 996, 280, 64, msg('settings.save'), True)
 
 
-def draw_updates(cr, draft, updates):
+def draw_updates(cr, draft, updates, *, blocked=False):
     s.rounded(cr, 24, 310, 1192, 380, 8, s.SURFACE)
     cr.set_source_rgb(*s.FG)
-    s.label(cr, '虚拟键鼠', 44, 342, 34, bold=True)
+    s.label(cr, msg('app.name'), 44, 342, 34, bold=True)
     cr.set_source_rgb(*s.MUTED)
-    current = updates.current if updates else '未知'
-    latest = updates.latest.tag if updates and updates.latest else '尚未检查'
-    for text, y in ((f'当前版本：v{current}', 410), (f'最新正式版：{latest}', 465),
-                    ('更新来源：GitHub 官方仓库 · ARM64 正式安装包', 520)):
+    current = updates.current if updates else msg('common.unknown')
+    latest = updates.latest.tag if updates and updates.latest else msg('update.not_checked')
+    for text, y in ((msg('update.current_version', current=current), 410), (msg('update.latest_version', latest=latest), 465),
+                    (msg('update.source'), 520)):
         s.label(cr, text, 44, y, 26, max_width=1120)
-    message = updates.message if updates else '更新功能暂不可用'
+    message = updates.message if updates else msg('update.unavailable')
     cr.set_source_rgb(*(s.DANGER if updates and updates.phase == 'error' else s.ACCENT))
     s.label(cr, message, 44, 590, 25, max_width=1120)
     cr.set_source_rgb(*s.MUTED)
     if draft.dirty:
-        note = '有未保存的输入设置；请先切回原页保存或放弃修改。'
+        note = msg('update.unsaved')
     elif updates and not updates.managed:
-        note = '源码运行支持检查；更新需要先通过安装器安装应用。'
+        note = msg('update.source_only')
     elif updates and updates.confirming:
-        note = '确认后开始下载；安装时面板会短暂重新打开。'
+        note = msg('update.confirm_note')
     else:
-        note = '手动检查，不自动下载；失败后可重试，旧版本保留供回退。'
+        note = msg('update.manual_note')
     s.label(cr, note, 44, 708, 23, max_width=1140)
-    can_check = bool(updates and not updates.busy)
-    can_install = bool(updates and updates.available and not draft.dirty)
-    s.button(cr, 44, 760, 520, 76, '检查更新' if can_check else '正在处理…', can_check)
-    caption = ('确认更新并重启' if updates and updates.confirming else '更新至 ' + updates.latest.tag
-               if updates and updates.latest and can_install else '更新')
+    can_check = bool(updates and not updates.busy and not blocked)
+    can_install = bool(updates and updates.available and not draft.dirty and not blocked)
+    s.button(cr, 44, 760, 520, 76, msg('update.check') if can_check else msg('update.busy'), can_check)
+    caption = (msg('update.confirm') if updates and updates.confirming else msg('update.to', tag=updates.latest.tag)
+               if updates and updates.latest and can_install else msg('common.update'))
     s.button(cr, 620, 760, 572, 76, caption, can_install)
     if updates and updates.confirming:
-        s.button(cr, 620, 850, 572, 64, '取消')
+        s.button(cr, 620, 850, 572, 64, msg('common.cancel'))
+
+
+def draw_uninstall(cr, draft, uninstall, updates=None):
+    s.rounded(cr, 24, 520, 1192, 374, 8, s.SURFACE)
+    confirming = bool(uninstall and uninstall.confirming)
+    busy = bool(uninstall and uninstall.busy)
+    managed = bool(uninstall and uninstall.managed)
+    blocked = bool(draft.dirty or (updates and updates.busy))
+    enabled = managed and not busy and not blocked and uninstall.phase != 'success'
+    cr.set_source_rgb(*s.DANGER)
+    s.label(cr, msg('uninstall.confirm_title' if confirming else 'uninstall.title'),
+            44, 548, 30, bold=True, max_width=1120)
+    cr.set_source_rgb(*s.MUTED)
+    s.label(cr, msg('uninstall.scope'), 44, 600, 24, max_width=1120)
+    s.label(cr, msg('uninstall.keep'), 44, 644, 24, max_width=1120)
+    message = (msg('uninstall.managed_only') if not managed else
+               msg('uninstall.unsaved') if draft.dirty else
+               msg('uninstall.update_busy') if updates and updates.busy else uninstall.message)
+    cr.set_source_rgb(*(s.DANGER if uninstall and uninstall.phase == 'error' else s.MUTED))
+    s.label(cr, message, 44, 690, 22, max_width=1120)
+    if confirming:
+        s.button(cr, 44, 742, 520, 68, msg('common.cancel'))
+        s.button(cr, 620, 742, 572, 68, msg('uninstall.confirm'), enabled, danger=True)
+    else:
+        s.button(cr, 44, 742, 520, 68, msg('update.busy') if busy else msg('uninstall.title'),
+                 enabled, danger=True)
+    cr.set_source_rgb(*s.MUTED)
+    s.label(cr, msg('uninstall.record'), 44, 850, 20, max_width=1120)

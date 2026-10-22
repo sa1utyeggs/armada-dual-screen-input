@@ -31,6 +31,7 @@
 
 > **当前实测：AYN Thor · ArmadaOS · Steam Game Mode。** Desktop Mode 默认关闭，其他机型尚未实测。[系统版本与验证边界](docs/zh-CN/compatibility.md)
 
+界面支持中英切换，缺少语言配置时默认英文；与键盘输入语言独立。[语言设置与验证边界](docs/zh-CN/i18n.md)。通用设置另提供保留个人配置的[卸载入口](docs/zh-CN/installation.md#卸载)，需要二次确认。
 
 ## 能做什么
 

@@ -5,6 +5,7 @@ devices, so labels can also be checked on an offscreen image surface.
 """
 from __future__ import annotations
 
+from .i18n import active_language
 from collections import OrderedDict
 import threading
 
@@ -34,7 +35,7 @@ def _drawing_context(cr):
     # Cairo target/transform is still applied with update_layout on every hit.
     return (matrix.xx, matrix.yx, matrix.xy, matrix.yy,
             surface.get_device_scale(), options.hash(),
-            fontmap.get_serial(), fontmap.get_resolution())
+            fontmap.get_serial(), fontmap.get_resolution(), active_language())
 
 
 def _cached_layout(cr, text, size, bold, max_width):
@@ -58,9 +59,9 @@ def _cached_layout(cr, text, size, bold, max_width):
 
 def make_layout(cr, text: str, size: float, *, bold: bool = False, max_width: float | None = None):
     layout = PangoCairo.create_layout(cr)
-    layout.get_context().set_language(Pango.Language.from_string("zh-cn"))
+    layout.get_context().set_language(Pango.Language.from_string(active_language().replace("_", "-")))
     layout.set_single_paragraph_mode(True)
-    layout.set_text(text, -1)
+    layout.set_text(str(text), -1)
     font = Pango.FontDescription()
     font.set_family("Noto Sans CJK SC, Sans")
     font.set_weight(Pango.Weight.BOLD if bold else Pango.Weight.NORMAL)
@@ -77,7 +78,7 @@ def make_layout(cr, text: str, size: float, *, bold: bool = False, max_width: fl
 def draw_text(cr, text: str, x: float, y: float, size: float, *, bold: bool = False,
               max_width: float | None = None, centered: bool = False):
     """Draw using the current source colour, aligning by the actual ink box."""
-    layout, ink = _cached_layout(cr, text, size, bold, max_width)
+    layout, ink = _cached_layout(cr, str(text), size, bold, max_width)
     if centered:
         cr.move_to(x - ink.x - ink.width / 2.0, y - ink.y - ink.height / 2.0)
     else:

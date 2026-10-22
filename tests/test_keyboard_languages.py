@@ -1,4 +1,5 @@
 import unittest
+from armada_dual_screen_input.i18n import configure, active_language
 
 from armada_dual_screen_input.keyboard_languages import KeyboardLanguages, read_language
 from armada_dual_screen_input.keyboard_language_view import hit, visible, HEIGHT
@@ -29,6 +30,9 @@ class FakeXkb:
 
 class KeyboardLanguageTests(unittest.TestCase):
     def setUp(self):
+        previous = active_language()
+        configure("zh_CN")
+        self.addCleanup(configure, previous)
         self.changed, self.forwarded = [], []
         self.state = KeyboardLanguages("en_US", mode="game", runtime="/own/runtime",
                                        changed=lambda: self.changed.append(True),

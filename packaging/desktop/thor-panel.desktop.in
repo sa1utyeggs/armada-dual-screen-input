@@ -1,7 +1,11 @@
 [Desktop Entry]
 Type=Application
-Name=虚拟键鼠
-Comment=手动打开 ArmadaOS 副屏虚拟键鼠；桌面模式点击后等待进入游戏模式
+Name=Virtual Keyboard & Mouse
+Name[zh_CN]=虚拟键鼠
+Name[zh]=虚拟键鼠
+Comment=Open the ArmadaOS lower-screen input panel manually; on desktop, wait for Game Mode
+Comment[zh_CN]=手动打开 ArmadaOS 副屏虚拟键鼠；桌面模式点击后等待进入游戏模式
+Comment[zh]=手动打开 ArmadaOS 副屏虚拟键鼠；桌面模式点击后等待进入游戏模式
 Exec=/usr/bin/systemctl --user restart thor-panel.service
 Icon=armada-dual-screen-input
 Terminal=false

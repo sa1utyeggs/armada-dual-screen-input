@@ -30,7 +30,7 @@ class PanelPreferencesTests(unittest.TestCase):
         self.app.gesture = self.panel.upstream.TouchGestureProcessor(self.bridge, Mock())
         self.app.scroll_output = ScaledScroll(Mock(), self.app.scroll_scale)
         self.app.keyboard_guard = Mock()
-        self.app.window = SimpleNamespace(get_mapped=lambda: True)
+        self.app.window = SimpleNamespace(get_mapped=lambda: True, set_title=Mock())
         self.app.touch = SimpleNamespace(release_all=Mock())
         self.app.drawing_area.queue_draw = Mock()
         self.app.show_debug_hud = False
@@ -134,6 +134,33 @@ class PanelPreferencesTests(unittest.TestCase):
         self.app._save_preferences()
         self.assertFalse(self.app.preferences.error)
 
+    def test_ui_language_changes_only_after_successful_save_and_survives_reload(self):
+        from armada_dual_screen_input.i18n import configure, active_language
+        from armada_dual_screen_input.keyboard_redraw import KeyboardRedraw
+        previous = active_language()
+        self.addCleanup(configure, previous)
+        configure('en_US')
+        self.app.keyboard_redraw = KeyboardRedraw()
+        self.config.write_text(json.dumps({'keyboard_language': 'zh_CN', 'future': 42}))
+        self.app.load_config()
+        self.enter()
+        self.app.preferences.change('ui_language', 'zh_CN')
+        self.assertEqual(active_language(), 'en_US')
+        with patch.object(self.panel, 'write_settings', side_effect=PermissionError):
+            self.app._save_preferences()
+        self.assertEqual(active_language(), 'en_US')
+        self.assertTrue(self.app.preferences.error)
+        self.app._save_preferences()
+        self.assertEqual(active_language(), 'zh_CN')
+        self.app.window.set_title.assert_called_with('虚拟键鼠')
+        self.assertIn('已保存', self.app.preferences.message)
+        self.assertEqual(self.app.input_cfg['keyboard_language'], 'zh_CN')
+        self.assertEqual(json.loads(self.config.read_text())['future'], 42)
+        configure('en_US')
+        self.app.load_config()
+        self.assertEqual(active_language(), 'zh_CN')
+        self.assertFalse(self.bridge.events)
+
     def test_color_palette_edits_only_the_draft_and_never_sends_game_input(self):
         from armada_dual_screen_input.input_settings import color_swatches
         self.enter();draft=self.app.preferences
@@ -180,7 +207,7 @@ class PanelPreferencesTests(unittest.TestCase):
         self.app.updates = SimpleNamespace(available=True, confirming=False,
             refresh=Mock(), check=Mock(), install=Mock())
         self.app._watch_updates = Mock()
-        self.app._preferences_down(1, 700, 250)
+        self.app._preferences_down(1, 900, 250)
         self.assertEqual(self.app.preferences.section, 'updates')
         self.app._preferences_down(1, 200, 800)
         self.app.updates.check.assert_called_once()
@@ -204,6 +231,57 @@ class PanelPreferencesTests(unittest.TestCase):
         self.app.updates.install.assert_not_called()
         self.assertTrue(self.app.preferences.dirty)
         self.assertFalse(self.config.exists())
+
+    def uninstall_model(self):
+        from armada_dual_screen_input.uninstall_controller import UninstallController
+        self.work = []
+        self.launch = Mock()
+        self.app.uninstall = UninstallController(self.config.parent, dispatch=lambda fn: fn(),
+            changed=Mock(), launch=self.launch, background=self.work.append)
+        self.app.uninstall.managed = True
+        self.addCleanup(self.app.uninstall.close)
+        self.app.updates = SimpleNamespace(busy=False, confirming=False, refresh=Mock(), check=Mock())
+        self.app._watch_updates = Mock()
+        self.app.preferences.section = 'general'
+
+    def test_uninstall_requires_separate_confirmation_and_never_sends_game_input(self):
+        self.enter(); self.uninstall_model()
+        self.app._preferences_down(1, 900, 776)
+        self.assertFalse(self.work)
+        self.app._preferences_down(1, 200, 776)
+        self.assertTrue(self.app.uninstall.confirming)
+        self.app._preferences_down(1, 200, 776)
+        self.assertFalse(self.app.uninstall.confirming)
+        self.app._preferences_down(1, 200, 776)
+        self.app._preferences_down(1, 900, 776)
+        self.assertEqual(len(self.work), 1)
+        self.launch.assert_not_called()
+        self.assertFalse(self.bridge.events)
+        self.assertFalse(self.config.exists())
+
+    def test_uninstall_blocked_by_unsaved_settings_or_update_and_confirmation_clears_on_navigation(self):
+        self.enter(); self.uninstall_model()
+        self.app.preferences.change('sensitivity', 3.)
+        self.app._preferences_down(1, 200, 776)
+        self.assertFalse(self.app.uninstall.confirming)
+        self.app.preferences.discard()
+        self.app.updates.busy = True
+        self.app._preferences_down(1, 200, 776)
+        self.assertFalse(self.app.uninstall.confirming)
+        self.app.updates.busy = False
+        self.app._preferences_down(1, 200, 776)
+        self.assertTrue(self.app.uninstall.confirming)
+        self.app._preferences_down(1, 100, 250)
+        self.assertFalse(self.app.uninstall.confirming)
+        self.assertFalse(self.work)
+
+    def test_update_actions_are_blocked_while_uninstall_is_starting(self):
+        self.enter(); self.uninstall_model()
+        self.app.uninstall.request(); self.app.uninstall.run()
+        self.app.preferences.section = 'updates'
+        self.app._preferences_down(1, 200, 800)
+        self.app.updates.check.assert_not_called()
+        self.assertFalse(self.bridge.events)
 
 
 if __name__ == "__main__":

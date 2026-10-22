@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import math
+from .i18n import active_language
 
 
 class StaticLayer:
@@ -17,7 +18,7 @@ class StaticLayer:
         options = cr.get_target().get_font_options()
         options.merge(cr.get_font_options())
         fontmap = PangoCairo.FontMap.get_default()
-        key = (content_key, tuple(matrix), scale, options.hash(),
+        key = (active_language(), content_key, tuple(matrix), scale, options.hash(),
                fontmap.get_serial(), fontmap.get_resolution(), width, height)
         # This layer is used by the unrotated touch page only. Unsupported
         # transforms retain the original vector rendering path.

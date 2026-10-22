@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from armada_dual_screen_input.i18n import configure, active_language
 from unittest.mock import Mock, patch
 
 from armada_dual_screen_input.update_controller import UpdateController, start_worker
@@ -12,6 +13,9 @@ from test_updates import release_data
 
 class ControllerTests(unittest.TestCase):
     def setUp(self):
+        previous = active_language()
+        configure("zh_CN")
+        self.addCleanup(configure, previous)
         temp = tempfile.TemporaryDirectory(); self.addCleanup(temp.cleanup)
         self.root = Path(temp.name); (self.root / 'VERSION').write_text('0.1.0')
         self.work, self.delivery = [], []
@@ -100,6 +104,23 @@ class ControllerTests(unittest.TestCase):
         self.controller.check(); self.finish(); self.controller.install()
         self.assertFalse(self.controller.available)
         self.assertFalse(self.work)
+
+    def test_worker_status_remains_translatable_and_legacy_messages_still_work(self):
+        from armada_dual_screen_input.i18n import msg, encode_message
+        data = {'schema': 1, 'phase': 'downloading', 'message': 'legacy text',
+                'message_i18n': encode_message(msg('worker.downloading')),
+                'pid': 123, 'identity': 'boot:start'}
+        self.controller.status_file.write_text(json.dumps(data))
+        with patch('armada_dual_screen_input.update_controller.process_identity', return_value='boot:start'):
+            self.controller.refresh()
+        self.assertIn('正在下载', self.controller.message)
+        configure('en_US')
+        self.assertIn('Downloading', self.controller.message)
+        data.pop('message_i18n')
+        self.controller.status_file.write_text(json.dumps(data))
+        with patch('armada_dual_screen_input.update_controller.process_identity', return_value='boot:start'):
+            self.controller.refresh()
+        self.assertEqual(self.controller.message, 'legacy text')
 
     def test_malformed_worker_status_does_not_leave_starting_stuck_forever(self):
         self.controller.phase = 'starting'

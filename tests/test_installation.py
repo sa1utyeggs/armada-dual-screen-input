@@ -214,6 +214,10 @@ class InstallTests(unittest.TestCase):
         self.assertNotIn('src/ui.log',manifest['files'])
         self.assertFalse(any(p.startswith('extras/') for p in manifest['files']))
         self.assertIn('vendor/ratatoskr/LICENSE',manifest['files'])
+        self.assertIn('src/armada_dual_screen_input/i18n.py', manifest['files'])
+        self.assertIn('src/armada_dual_screen_input/ui_catalogs.py', manifest['files'])
+        self.assertIn('docs/i18n.md', manifest['files'])
+        self.assertIn('tools/uninstall.py', manifest['files'])
 
     def test_dry_run_writes_no_home_files_or_services(self):
         env=dict(os.environ,HOME=str(self.paths.home),XDG_DATA_HOME=str(self.paths.data),XDG_CONFIG_HOME=str(self.paths.config),PYTHONDONTWRITEBYTECODE='1')

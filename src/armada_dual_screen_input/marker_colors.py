@@ -1,4 +1,5 @@
 """Opaque marker colors, validated once outside the drawing/input hot paths."""
+from .i18n import msg
 from dataclasses import dataclass, field
 import re
 
@@ -7,10 +8,10 @@ DEFAULT_PRESSED_COLOR = '#FFA626'
 COLOR_SETTINGS = {'marker_idle_color': DEFAULT_IDLE_COLOR,
                   'marker_pressed_color': DEFAULT_PRESSED_COLOR}
 COLOR_PRESETS = (
-    (DEFAULT_IDLE_COLOR, '冰蓝'), (DEFAULT_PRESSED_COLOR, '橙色'),
-    ('#58E38B', '绿色'), ('#FFE066', '黄色'),
-    ('#FF5D73', '红色'), ('#B494FF', '紫色'),
-    ('#FF8BD1', '粉色'), ('#FFFFFF', '白色'),
+    (DEFAULT_IDLE_COLOR, msg('color.blue')), (DEFAULT_PRESSED_COLOR, msg('color.orange')),
+    ('#58E38B', msg('color.green')), ('#FFE066', msg('color.yellow')),
+    ('#FF5D73', msg('color.red')), ('#B494FF', msg('color.purple')),
+    ('#FF8BD1', msg('color.pink')), ('#FFFFFF', msg('color.white')),
 )
 
 

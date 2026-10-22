@@ -6,6 +6,8 @@ changes, cursor environment overrides, or brightness writes are used here.
 """
 from __future__ import annotations
 
+from .i18n import msg, configure, active_language
+
 import argparse
 import json
 import os
@@ -66,6 +68,7 @@ from .input_settings import read_settings, write_settings, SettingsDraft, NUMBER
 from .marker_colors import MarkerColors
 from . import settings_view
 from .update_controller import UpdateController
+from .uninstall_controller import UninstallController
 
 # Isolate our settings/socket names from a separately installed Ratatoskr.
 upstream.CONFIG_PATH = str(Path(os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config"))) / "thor-panel/config.json")
@@ -90,6 +93,7 @@ class PanelApp(upstream.ThorApp):
         self.position = None
         self.preferences = None
         self.updates = None
+        self.uninstall = None
         self._updates_timer = None
         self.languages = None
         self._language_consumed = set()
@@ -133,7 +137,7 @@ class PanelApp(upstream.ThorApp):
         # explicit Close action returns success and ends the supervisor.
         self.exit_code = 75
         self.window.unfullscreen()
-        self.window.set_title("虚拟键鼠")
+        self.window.set_title(str(msg('app.name')))
         self.window.set_resizable(True)
         self.window.set_default_size(1, 1)
         self.window.set_accept_focus(False)
@@ -173,6 +177,8 @@ class PanelApp(upstream.ThorApp):
         self._install_language_key()
         self.updates = UpdateController(BASE.parent.parent, dispatch=GLib.idle_add,
                                         changed=self._updates_changed)
+        self.uninstall = UninstallController(BASE.parent.parent, dispatch=GLib.idle_add,
+                                             changed=self._updates_changed)
         self.update_mode_bounds()
         Gdk.Display.get_default().connect("monitor-removed", self._on_monitor_removed)
         Gdk.Display.get_default().get_default_screen().connect("monitors-changed", self._on_monitors_changed)
@@ -188,6 +194,7 @@ class PanelApp(upstream.ThorApp):
         except (OSError, ValueError, TypeError):
             pass
         self.input_cfg = read_settings(cfg)
+        configure(self.input_cfg["ui_language"])
         self.touch_mode = cfg.get("touch_mode") if cfg.get("touch_mode") in TOUCH_MODES else "position"
         self.scroll_scale = read_scroll_scale(self.input_cfg["scroll_scale"])
         saved_mode = normalize_mode(cfg.get("mode"))
@@ -237,9 +244,16 @@ class PanelApp(upstream.ThorApp):
             # Persist before applying. Failure must not claim a saved change.
             write_settings(upstream.CONFIG_PATH, values)
         except (OSError, ValueError, TypeError):
-            draft.message, draft.error = "保存失败；请检查用户配置文件和目录权限", True
+            draft.message, draft.error = msg('settings.save_failed'), True
             return
         self.input_cfg = values
+        if configure(values["ui_language"]):
+            from .text_render import clear_layout_cache
+            clear_layout_cache()
+            self.window.set_title(str(msg("app.name")))
+            self.keyboard_redraw.drawn = None
+            self._position_draw_state = None
+            self.drawing_area.queue_draw()
         self.gesture.set_settings(**values)
         upstream.keyboard_settings.apply(self.keyboard_cfg, values)
         self.scroll_scale = values["scroll_scale"]
@@ -706,6 +720,8 @@ class PanelApp(upstream.ThorApp):
         if mode == "preferences" and self.mode == "preferences":
             return
         previous_mode = self.mode
+        if getattr(self, "uninstall", None):
+            self.uninstall.cancel()
         self._stop_position()
         if hasattr(self, "touch"):
             self.touch.release_all()
@@ -733,12 +749,18 @@ class PanelApp(upstream.ThorApp):
         if draft is None or draft.drag is not None:
             return
         action, key = draft.hit(x, y)
+        uninstall = getattr(self, "uninstall", None)
+        updates = getattr(self, "updates", None)
+        if action in ("check_update", "install_update") and uninstall and uninstall.busy:
+            return
         if action == "section":
+            if uninstall:
+                uninstall.cancel()
             draft.section = key
             updates = getattr(self, 'updates', None)
             if updates:
                 updates.confirming = False
-                if key == 'updates':
+                if key in ('updates', 'general'):
                     updates.refresh()
                     self._watch_updates()
         elif action == 'check_update':
@@ -754,6 +776,16 @@ class PanelApp(upstream.ThorApp):
         elif action == 'cancel_update':
             if getattr(self, 'updates', None):
                 self.updates.confirming = False
+        elif action == 'uninstall_left':
+            if uninstall:
+                if uninstall.confirming:
+                    uninstall.cancel()
+                elif not draft.dirty and not (updates and updates.busy):
+                    uninstall.request()
+        elif action == 'uninstall_confirm':
+            if uninstall and not draft.dirty and not (updates and updates.busy):
+                uninstall.run()
+                self._watch_updates()
         elif action in ("minus", "plus"):
             spec = NUMBERS[key]
             draft.change(key, draft.values[key] + spec.step * (1 if action == "plus" else -1))
@@ -777,7 +809,7 @@ class PanelApp(upstream.ThorApp):
 
     def _updates_changed(self):
         if (not getattr(self, '_cleaned', False) and self.mode == 'preferences'
-                and self.preferences and self.preferences.section == 'updates'):
+                and self.preferences and self.preferences.section in ('updates', 'general')):
             self.drawing_area.queue_draw()
 
     def _watch_updates(self):
@@ -785,10 +817,13 @@ class PanelApp(upstream.ThorApp):
             return
         def poll():
             if (getattr(self, '_cleaned', False) or self.mode != 'preferences'
-                    or not self.preferences or self.preferences.section != 'updates'):
+                    or not self.preferences or self.preferences.section not in ('updates', 'general')):
                 self._updates_timer = None
                 return False
-            self.updates.refresh()
+            if getattr(self, "updates", None):
+                self.updates.refresh()
+            if getattr(self, "uninstall", None):
+                self.uninstall.refresh()
             self._updates_changed()
             return True
         self._updates_timer = GLib.timeout_add(1000, poll)
@@ -826,20 +861,20 @@ class PanelApp(upstream.ThorApp):
 
     def _header_button_look(self, key):
         if key == "preferences":
-            return "设置", self.mode == "preferences", upstream.theme.BTN_ACCENT_DEFAULT
+            return str(msg('common.settings')), self.mode == "preferences", upstream.theme.BTN_ACCENT_DEFAULT
         if key == "position":
-            return "触屏", self.mode == "position", upstream.theme.BTN_ACCENT_DEFAULT
+            return str(msg('common.touch')), self.mode == "position", upstream.theme.BTN_ACCENT_DEFAULT
         if self.mode == "position" and key == "pen":
-            return "定位居中", False, upstream.theme.BTN_ACCENT_DEFAULT
+            return str(msg('header.center')), False, upstream.theme.BTN_ACCENT_DEFAULT
         if key == "close":
-            return "关闭", True, (0.40, 0.10, 0.12)
+            return str(msg('common.close')), True, (0.40, 0.10, 0.12)
         if key == "pen":
-            return "释放按键", False, upstream.theme.BTN_ACCENT_DEFAULT
+            return str(msg('header.release')), False, upstream.theme.BTN_ACCENT_DEFAULT
         if key == "hide":
-            return "收起", False, upstream.theme.BTN_ACCENT_DEFAULT
+            return str(msg('header.collapse')), False, upstream.theme.BTN_ACCENT_DEFAULT
         label, active, accent = super()._header_button_look(key)
-        label = {"trackpad": "触控板", "split": "键鼠", "left": "左键", "right": "右键"}.get(key, label)
-        return label, active, accent
+        label = {"trackpad": msg('header.pad'), "split": msg('header.split'), "left": msg('header.left'), "right": msg('header.right')}.get(key, label)
+        return str(label), active, accent
 
     def _draw_button(self, cr, x, y, w, h, text, active,
                      accent_color=upstream.theme.BTN_ACCENT_DEFAULT) -> None:
@@ -925,7 +960,7 @@ class PanelApp(upstream.ThorApp):
         try:
             write_settings(upstream.CONFIG_PATH, {"keyboard_language": language})
         except (OSError, ValueError, TypeError):
-            self.languages.message = "语言保存失败，原设置保留"
+            self.languages.message = msg('ime.save_failed')
             self.drawing_area.queue_draw()
             return
         self._clear_panel_contacts()
@@ -966,7 +1001,8 @@ class PanelApp(upstream.ThorApp):
             self._draw_ui(cr)
             if self.preferences is not None:
                 settings_view.draw(cr, self.preferences, getattr(self, 'updates', None),
-                                   monitor_millihz=getattr(self.position, 'monitor_millihz', 0))
+                                   monitor_millihz=getattr(self.position, 'monitor_millihz', 0),
+                                   uninstall=getattr(self, 'uninstall', None))
             cr.restore()
             return True
         if self.mode == "position":
@@ -992,7 +1028,7 @@ class PanelApp(upstream.ThorApp):
         layer = getattr(self, '_position_background', None)
         if layer is None:
             self._position_background = layer = StaticLayer()
-        layer.paint(cr, (position.touch_mode, position.armed, position.message,
+        layer.paint(cr, (active_language(), position.touch_mode, position.armed, position.message,
                          bool(getattr(self, '_touch_menu_open', False))),
                     SCREEN_WIDTH, SCREEN_HEIGHT, self._draw_position_background)
 
@@ -1007,31 +1043,31 @@ class PanelApp(upstream.ThorApp):
         steam_style.rounded(cr, 20, 168, 1200, 882, 12,
                             steam_style.SURFACE, steam_style.BORDER)
         cr.set_source_rgb(*(steam_style.GOOD if position.armed else steam_style.MUTED))
-        message = ('请选择触屏模式；收起后自动恢复' if getattr(self, '_touch_menu_open', False)
+        message = (msg('touch.select') if getattr(self, '_touch_menu_open', False)
                    else position.message)
         steam_style.label(cr, message, 20, 150, 24, max_width=1200)
         if position.touch_mode == 'direct':
             cr.set_source_rgb(*steam_style.ACCENT)
-            steam_style.label(cr, '直接触屏', 620, 370, 40, centered=True)
+            steam_style.label(cr, msg('touch.direct'), 620, 370, 40, centered=True)
             cr.set_source_rgb(*steam_style.FG)
-            for text, y in (('下屏落指位置，对应上屏相同位置', 490),
-                            ('多根手指独立触摸、移动与抬起', 570),
-                            ('上屏圆环标记每一个触点', 650)):
+            for text, y in ((msg('touch.absolute'), 490),
+                            (msg('touch.multiple'), 570),
+                            (msg('touch.rings'), 650)):
                 steam_style.label(cr, text, 620, y, 30, centered=True, max_width=1120)
             cr.set_source_rgb(*steam_style.MUTED)
-            steam_style.label(cr, '手势由上屏应用处理 · 不转成滚轮或第二指确认',
+            steam_style.label(cr, msg('touch.direct_note'),
                               620, 940, 24, centered=True, max_width=1120)
             return
         cr.set_source_rgb(*steam_style.ACCENT)
-        steam_style.label(cr, '只看上屏操作', 620, 370, 40, centered=True)
+        steam_style.label(cr, msg('touch.upper_only'), 620, 370, 40, centered=True)
         cr.set_source_rgb(*steam_style.FG)
-        for text, y in (('第一指滑动：移动定位圆环', 490),
-                        ('第二指按住：在圆环位置触摸', 570),
-                        ('保持第二指，移动第一指：拖动', 650),
-                        ('抬起第二指：释放触摸', 730)):
+        for text, y in ((msg('touch.move'), 490),
+                        (msg('touch.press'), 570),
+                        (msg('touch.drag'), 650),
+                        (msg('touch.release'), 730)):
             steam_style.label(cr, text, 620, y, 30, centered=True, max_width=1120)
         cr.set_source_rgb(*steam_style.MUTED)
-        steam_style.label(cr, '整个下方区域均可操作 · 不传输上屏画面',
+        steam_style.label(cr, msg('touch.no_capture'),
                           620, 940, 25, centered=True, max_width=1120)
 
     def _touch_selector_down(self, tid, x, y):
@@ -1068,6 +1104,8 @@ class PanelApp(upstream.ThorApp):
             return
         if getattr(self, 'updates', None):
             self.updates.close()
+        if getattr(self, 'uninstall', None):
+            self.uninstall.close()
         if getattr(self, '_updates_timer', None):
             GLib.source_remove(self._updates_timer)
             self._updates_timer = None
