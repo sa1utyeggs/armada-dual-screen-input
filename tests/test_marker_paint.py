@@ -45,6 +45,21 @@ class MarkerSceneTests(unittest.TestCase):
 
 @unittest.skipUnless(sys.platform=='linux','Offscreen Cairo checks require Linux runtime')
 class MarkerPixelTests(unittest.TestCase):
+    def test_selected_colors_apply_independently_without_filling_the_center(self):
+        import cairo
+        from armada_dual_screen_input.marker_colors import MarkerColors
+        colors=MarkerColors('#FF0000','#00FF00')
+        surface=cairo.ImageSurface(cairo.FORMAT_ARGB32,192,96)
+        draw_rings(cairo.Context(surface),((.25,.5,False),(.75,.5,True)),(192,96),colors)
+        surface.flush();pixels=bytes(surface.get_data());stride=surface.get_stride()
+        for u,channel in ((.25,2),(.75,1)):
+            cx=round(u*191);cy=round(.5*95)
+            self.assertEqual(pixels[cy*stride+cx*4+3],0)
+            ring=[pixels[y*stride+x*4:y*stride+x*4+4]
+                  for y in range(cy-16,cy+17) for x in range(cx-16,cx+17)]
+            self.assertTrue(any(p[channel]>200 and p[3]>200 and all(p[c]<10 for c in (0,1,2) if c!=channel) for p in ring))
+            self.assertTrue(any(p[3]>150 and max(p[:3])<10 for p in ring))
+
     def assert_pixels_match(self,actual,reference):
         a,b=bytes(actual.get_data()),bytes(reference.get_data())
         # Cairo's clipped/full rasterization differed by 1 alpha unit at one

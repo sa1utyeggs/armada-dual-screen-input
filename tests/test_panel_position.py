@@ -7,13 +7,15 @@ from armada_dual_screen_input.gamescope_focus import FocusSnapshot, FocusState
 from armada_dual_screen_input.panel_position import PanelPosition
 from armada_dual_screen_input.marker_target import MarkerTarget
 from armada_dual_screen_input.touchscreen_selector import PAD
+from armada_dual_screen_input.marker_colors import DEFAULT_COLORS, MarkerColors
 
 
 class Marker:
     size = (1920, 1080)
     refresh_millihz = 119930
-    def __init__(self, *, target, frame_rate='auto'):
+    def __init__(self, *, target, frame_rate='auto', colors=DEFAULT_COLORS):
         self.frame_rate = frame_rate
+        self.colors = colors
         self.target=MarkerTarget.from_focus(target)
         self.window=999
         self.valid=True; self.closed=False; self.updates=[]; self.restores=0; self.motion=[]
@@ -76,6 +78,16 @@ class PanelPositionTests(unittest.TestCase):
         self.assertFalse(self.p.sender.events)
         self.p.stop()
         self.assertEqual(self.p.monitor_millihz,119930)
+
+    def test_saved_colors_reach_recreated_marker_in_both_modes_without_input(self):
+        self.p.marker_colors = MarkerColors('#FFFFFF', '#58E38B')
+        for mode in ('position', 'direct'):
+            self.p.set_touch_mode(mode)
+            self.arm()
+            self.assertEqual(self.p.marker.colors, self.p.marker_colors)
+            self.assertFalse(self.p.sender.events)
+            self.p.stop()
+            self.p.start()
 
     def test_new_finger_during_pending_route_cancels_and_waits_for_lift(self):
         self.tick(); self.tick(.25)

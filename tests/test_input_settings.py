@@ -6,8 +6,9 @@ import unittest
 from unittest.mock import patch
 
 from armada_dual_screen_input.input_settings import (
-    DEFAULTS, NUMBERS, CHOICES, SECTIONS, SettingsDraft, read_settings, write_settings,
+    DEFAULTS, NUMBERS, CHOICES, SECTIONS, SettingsDraft, read_settings, write_settings, color_swatches,
 )
+from armada_dual_screen_input.marker_colors import COLOR_SETTINGS, COLOR_PRESETS
 
 
 class InputSettingsTests(unittest.TestCase):
@@ -55,6 +56,45 @@ class InputSettingsTests(unittest.TestCase):
         self.assertEqual(choice_caption('marker_frame_rate','auto',0),'跟随屏幕')
         self.assertEqual(choice_caption('marker_frame_rate','60',119930),'60 FPS')
 
+    def test_marker_colors_validate_old_configs_and_preserve_independent_states(self):
+        for key, default in COLOR_SETTINGS.items():
+            for invalid in (None, True, 0, [], {}, 'blue', '#FFF', '#FFFFFF00', '#gg1122', '#123456\n'):
+                self.assertEqual(read_settings({key: invalid})[key], default)
+            self.assertEqual(read_settings({key:'#ab12cd'})[key], '#AB12CD')
+        draft=SettingsDraft({'marker_idle_color':'#FFFFFF', 'scroll_scale':.001})
+        draft.change('marker_pressed_color','#58e38b')
+        self.assertEqual(draft.values['marker_idle_color'],'#FFFFFF')
+        self.assertTrue(draft.dirty)
+        draft.discard()
+        self.assertEqual(draft.values['marker_pressed_color'],DEFAULTS['marker_pressed_color'])
+        draft.section='position';draft.reset_section()
+        self.assertEqual(draft.values['marker_idle_color'],DEFAULTS['marker_idle_color'])
+        self.assertEqual(draft.values['scroll_scale'],.001)
+
+    def test_color_swatches_have_independent_hits_without_changing_other_controls(self):
+        draft=SettingsDraft({});draft.section='position'
+        for key, top in draft.rows():
+            if key not in COLOR_SETTINGS:continue
+            for left, color, _ in color_swatches():
+                self.assertEqual(draft.hit(left+30,top+44),('color',(key,color)))
+                self.assertEqual(draft.hit(left+63,top+44),(None,None))
+            self.assertEqual(draft.hit(500,top+44),(None,None))
+        self.assertEqual(len(COLOR_PRESETS),8)
+
+    def test_colors_round_trip_with_unknown_configuration_and_other_preferences(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'config.json'
+            write_settings(path,{'mode':'position','future':{'keep':True},'marker_frame_rate':'60'})
+            draft=SettingsDraft(json.loads(path.read_text()))
+            draft.change('marker_idle_color','#B494FF');draft.change('marker_pressed_color','#FFFFFF')
+            write_settings(path,read_settings(draft.values))
+            saved=json.loads(path.read_text())
+            self.assertEqual(saved['marker_idle_color'],'#B494FF')
+            self.assertEqual(saved['marker_pressed_color'],'#FFFFFF')
+            self.assertEqual(saved['marker_frame_rate'],'60')
+            self.assertEqual(saved['future'],{'keep':True})
+            self.assertEqual(saved['mode'],'position')
+
     def test_opening_and_editing_draft_does_not_change_saved_values(self):
         draft = SettingsDraft({"scroll_scale": .25})
         draft.change("sensitivity", 2.3)
@@ -93,6 +133,9 @@ class InputSettingsTests(unittest.TestCase):
             for key, top in draft.rows():
                 self.assertGreaterEqual(top, 300)
                 self.assertLess(top + 88, 934)
+                if key in COLOR_SETTINGS:
+                    self.assertEqual(draft.hit(680,top+44),('color',(key,COLOR_PRESETS[0][0])))
+                    continue
                 expected = "slider" if key in NUMBERS else "choice" if key in CHOICES else "toggle"
                 self.assertEqual(draft.hit(800 if key in NUMBERS else 1000, top + 50),
                                  (expected, key))

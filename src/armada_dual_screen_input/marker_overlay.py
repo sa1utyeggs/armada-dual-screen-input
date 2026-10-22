@@ -20,12 +20,15 @@ from .marker_state import validate_rings
 from .marker_sample import sample_payload
 from .marker_target import MarkerTarget
 from .marker_frames import read_frame_rate
+from .marker_colors import DEFAULT_COLORS, MarkerColors
 
 
 class MarkerOverlay:
-    def __init__(self, *, target, schedule=None, cancel=None, frame_rate='auto'):
+    def __init__(self, *, target, schedule=None, cancel=None, frame_rate='auto', colors=DEFAULT_COLORS):
         if read_frame_rate(frame_rate) != frame_rate:
             raise ValueError('unsupported marker frame rate')
+        if not isinstance(colors, MarkerColors):
+            raise ValueError('validated marker colors are required')
         self.target = MarkerTarget.from_focus(target)
         if (schedule is None) != (cancel is None):
             raise ValueError('marker dispatch needs both schedule and cancel')
@@ -64,6 +67,7 @@ class MarkerOverlay:
                 sys.executable, '-B', '-m', 'armada_dual_screen_input.marker_worker',
                 '--fd', str(child.fileno()), '--target', self.target.encode(),
                 '--frame-rate', frame_rate,
+                '--idle-color', colors.idle, '--pressed-color', colors.pressed,
             ], env=env, pass_fds=(child.fileno(),), stdin=subprocess.DEVNULL,
                stdout=subprocess.DEVNULL)
             parent.setblocking(False)

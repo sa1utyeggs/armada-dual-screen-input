@@ -4,6 +4,7 @@ from __future__ import annotations
 import math
 
 from .marker_state import validate_rings
+from .marker_colors import DEFAULT_COLORS
 
 
 class MarkerScene:
@@ -50,7 +51,7 @@ class MarkerScene:
         return rectangles
 
 
-def draw_rings(cr, rings, canvas):
+def draw_rings(cr, rings, canvas, colors=DEFAULT_COLORS):
     import cairo
     cr.set_operator(cairo.OPERATOR_SOURCE)
     cr.set_source_rgba(0,0,0,0)
@@ -59,7 +60,7 @@ def draw_rings(cr, rings, canvas):
     for u,v,pressed in rings:
         x,y = u*(canvas[0]-1),v*(canvas[1]-1)
         for width,color in ((5,(0,0,0,.85)),
-                            (2.5,(1.,.65,.15,1.) if pressed else (.35,.85,1.,1.))):
+                            (2.5,colors.pressed_rgba if pressed else colors.idle_rgba)):
             cr.set_line_width(width)
             cr.set_source_rgba(*color)
             cr.new_sub_path()

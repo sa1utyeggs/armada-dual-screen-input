@@ -12,9 +12,10 @@ import json
 import os
 import socket
 import time
+from .marker_colors import DEFAULT_COLORS, MarkerColors, parse_color
 
 
-def run(fd, target, frame_rate='auto'):
+def run(fd, target, frame_rate='auto', *, colors=DEFAULT_COLORS):
     os.environ['GDK_BACKEND'] = 'x11'
     os.environ['DISPLAY'] = target.surface_display
     os.environ['NO_AT_BRIDGE'] = '1'
@@ -124,7 +125,7 @@ def run(fd, target, frame_rate='auto'):
 
     def draw(widget, cr):
         state['draws'] += 1
-        draw_rings(cr, scene.rings, canvas)
+        draw_rings(cr, scene.rings, canvas, colors)
         # Open center keeps small card text and targets visible.
         if not state['ready']:
             state['ready'] = True
@@ -251,9 +252,12 @@ if __name__ == '__main__':
     parser.add_argument('--target', type=MarkerTarget.decode, required=True)
     from .marker_frames import FRAME_RATES
     parser.add_argument('--frame-rate', choices=FRAME_RATES, default='auto')
+    parser.add_argument('--idle-color', type=parse_color, default=DEFAULT_COLORS.idle)
+    parser.add_argument('--pressed-color', type=parse_color, default=DEFAULT_COLORS.pressed)
     args = parser.parse_args()
     try:
-        run(args.fd, args.target, args.frame_rate)
+        run(args.fd, args.target, args.frame_rate,
+            colors=MarkerColors(args.idle_color, args.pressed_color))
     except Exception as error:
         try:
             socket.socket(fileno=args.fd).send(json.dumps({'error': str(error)}).encode())

@@ -63,6 +63,7 @@ from .panel_modes import SUPPORTED_MODES, normalize_mode
 from .panel_position import PanelPosition, TOUCH_MODES
 from . import touchscreen_selector
 from .input_settings import read_settings, write_settings, SettingsDraft, NUMBERS, CHOICES
+from .marker_colors import MarkerColors
 from . import settings_view
 from .update_controller import UpdateController
 
@@ -107,7 +108,9 @@ class PanelApp(upstream.ThorApp):
                                         self._invalidate_keyboard)
         self.position = PanelPosition(sensitivity=self.input_cfg["position_sensitivity"],
                                       touch_mode=self.touch_mode, pad=touchscreen_selector.PAD,
-                                      frame_rate=self.input_cfg["marker_frame_rate"])
+                                      frame_rate=self.input_cfg["marker_frame_rate"],
+                                      marker_colors=MarkerColors(self.input_cfg['marker_idle_color'],
+                                                                 self.input_cfg['marker_pressed_color']))
         self._position_revision = self.position.revision
         self.scroll_output = ScaledScroll(self.bridge.emit_scroll, self.scroll_scale)
         self.bridge.emit_scroll = self.scroll_output.scroll
@@ -245,6 +248,7 @@ class PanelApp(upstream.ThorApp):
         if self.position is not None:
             self.position.position_gesture.sensitivity = values["position_sensitivity"]
             self.position.frame_rate = values["marker_frame_rate"]
+            self.position.marker_colors = MarkerColors(values['marker_idle_color'], values['marker_pressed_color'])
         if getattr(self, "languages", None) is not None and self.languages.language != values["keyboard_language"]:
             self.languages.set_language(values["keyboard_language"])
         draft.mark_saved()
@@ -761,6 +765,8 @@ class PanelApp(upstream.ThorApp):
         elif action == "choice":
             choices = list(CHOICES[key])
             draft.change(key, choices[(choices.index(draft.values[key]) + 1) % len(choices)])
+        elif action == 'color':
+            draft.change(*key)
         elif action == "defaults":
             draft.reset_section()
         elif action == "discard":

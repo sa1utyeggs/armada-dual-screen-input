@@ -14,6 +14,7 @@ from .native_input import NativeTouchInput
 from .position_gesture import PositionGesture
 from .direct_touch import DirectTouchGesture, MAX_CONTACTS
 from .marker_frames import read_frame_rate
+from .marker_colors import DEFAULT_COLORS, MarkerColors
 
 TOUCH_MODES = ('position', 'direct')
 
@@ -25,15 +26,18 @@ class PanelPosition:
     def __init__(self, *, runtime=None, resolve=None, focus_factory=FocusWatcher,
                  marker_factory=MarkerOverlay, native_factory=NativeTouchInput,
                  clock=time.monotonic, sensitivity=2.0, touch_mode='position', pad=None,
-                 frame_rate='auto'):
+                 frame_rate='auto', marker_colors=DEFAULT_COLORS):
         if touch_mode not in TOUCH_MODES:
             raise ValueError('unsupported touch mode')
+        if not isinstance(marker_colors, MarkerColors):
+            raise ValueError('validated marker colors are required')
         self.pad = self.pad if pad is None else pad
         self.runtime = Path(runtime or os.environ.get('XDG_RUNTIME_DIR', '/nonexistent'))
         self.resolve = resolve or (lambda: GamescopeTarget.resolve(self.runtime))
         self.focus_factory, self.marker_factory = focus_factory, marker_factory
         self.native_factory, self.clock = native_factory, clock
         self.frame_rate = read_frame_rate(frame_rate)
+        self.marker_colors = marker_colors
         self.monitor_millihz = 0
         self.target = self.focus = self.marker = self.sender = self.expected = None
         self.active = self.armed = self.auto_requested = False
@@ -225,7 +229,8 @@ class PanelPosition:
                 except ValueError:
                     self.message = '正在等待可用的上屏应用窗口'
                     return
-                self.marker = self.marker_factory(target=state.snapshot, frame_rate=self.frame_rate)
+                self.marker = self.marker_factory(target=state.snapshot, frame_rate=self.frame_rate,
+                                                  colors=self.marker_colors)
                 self._update_marker()
             # poll() can receive a heartbeat newer than the pre-poll timestamp.
             # Read the new worker snapshot first, then refresh the clock.

@@ -11,6 +11,7 @@ import tempfile
 from .scroll_output import read_scroll_scale
 from .keyboard_languages import LANGUAGES, read_language
 from .marker_frames import FRAME_RATES, read_frame_rate
+from .marker_colors import COLOR_SETTINGS, COLOR_PRESETS, read_color
 
 
 @dataclass(frozen=True)
@@ -57,14 +58,18 @@ NUMBERS = {
 BOOLEANS = {"tap_to_click": True, "glide": True, "keyboard_repeat_enabled": True}
 CHOICES = {"keyboard_language": LANGUAGES, "marker_frame_rate": FRAME_RATES}
 DEFAULTS = {**{key: spec.default for key, spec in NUMBERS.items()}, **BOOLEANS,
-            "keyboard_language": "en_US", "marker_frame_rate": "auto"}
+            "keyboard_language": "en_US", "marker_frame_rate": "auto", **COLOR_SETTINGS}
 SECTIONS = {
     "mouse": ("sensitivity", "scroll_speed", "scroll_scale", "tap_to_click", "glide", "friction"),
-    "position": ("position_sensitivity", "marker_frame_rate"),
+    "position": ("position_sensitivity", "marker_frame_rate", "marker_idle_color", "marker_pressed_color"),
     "keyboard": ("keyboard_language", "keyboard_repeat_enabled", "keyboard_repeat_delay_ms",
                  "keyboard_repeat_interval_ms", "keyboard_caps_window_ms"),
 }
 SETTINGS_PAGES = (*SECTIONS, 'updates')
+
+
+def color_swatches():
+    return tuple((650+index*68, color, caption) for index, (color, caption) in enumerate(COLOR_PRESETS))
 
 
 def choice_caption(key, value, monitor_millihz=0):
@@ -85,6 +90,7 @@ def read_settings(config):
                    for key, default in BOOLEANS.items()})
     values["keyboard_language"] = read_language(config)
     values["marker_frame_rate"] = read_frame_rate(config.get("marker_frame_rate"))
+    values.update({key: read_color(config.get(key), default) for key, default in COLOR_SETTINGS.items()})
     return values
 
 
@@ -130,7 +136,9 @@ class SettingsDraft:
         return self.values != self.saved
 
     def change(self, key, value):
-        if key in CHOICES:
+        if key in COLOR_SETTINGS:
+            value = read_color(value, COLOR_SETTINGS[key])
+        elif key in CHOICES:
             value = value if isinstance(value, str) and value in CHOICES[key] else DEFAULTS[key]
         else:
             value = NUMBERS[key].read(value) if key in NUMBERS else bool(value)
@@ -177,6 +185,11 @@ class SettingsDraft:
         for key, top in self.rows():
             if not top <= y <= top + 88:
                 continue
+            if key in COLOR_SETTINGS:
+                for left, color, _ in color_swatches():
+                    if left <= x <= left+60 and top+14 <= y <= top+74:
+                        return 'color', (key, color)
+                return None, None
             if key in CHOICES:
                 return ("choice", key) if 790 <= x <= 1192 else (None, None)
             if key in BOOLEANS:

@@ -11,6 +11,7 @@ from unittest.mock import patch
 from armada_dual_screen_input.marker_overlay import MarkerOverlay
 from armada_dual_screen_input.gamescope_focus import FocusSnapshot
 from armada_dual_screen_input.gamescope_target import InputUnavailable
+from armada_dual_screen_input.marker_colors import MarkerColors
 
 
 class Dispatch:
@@ -81,6 +82,19 @@ class MarkerOverlayTests(unittest.TestCase):
                        {'width':1280}, {'height':720}, {'server_pid':43},
                        {'input_in_surface':False}):
             self.assertFalse(self.marker.matches_focus(replace(self.expected,**change)))
+
+    def test_color_configuration_reaches_only_the_marker_child_arguments(self):
+        with patch('armada_dual_screen_input.marker_overlay.subprocess.Popen') as spawn:
+            spawn.return_value.poll.return_value=None
+            marker=MarkerOverlay(target=self.expected,schedule=self.dispatch.add,cancel=self.dispatch.cancel,
+                colors=MarkerColors('#FFFFFF','#58e38b'))
+            try:
+                args=spawn.call_args.args[0]
+                self.assertEqual(args[args.index('--idle-color')+1],'#FFFFFF')
+                self.assertEqual(args[args.index('--pressed-color')+1],'#58E38B')
+                self.assertEqual(dict(os.environ),self.parent_environment)
+            finally:
+                marker.close();marker.wait()
 
     def test_own_window_is_identified_separately_from_the_game(self):
         self.ready()
