@@ -87,7 +87,7 @@ The detailed documents below are currently in Simplified Chinese.
 
 Isolated checks and real interaction acceptance are recorded separately for the touch modes. Direct multi-touch gestures, long sessions and suspend/resume still need further validation. Marker rendering was found to cause focus-query timeouts in the *Slay the Spire 2* card viewer; the GL fix passed a short user test. The earlier timeline issue and long-term stability still need observation. Ring/FPS coexistence, touch input and Steam menu round trips passed a short user test on this device and depend on passive decoration-window support in the current Thor Gamescope build. Stuck physical contacts in the Thor's stock FT5452 driver cannot be fixed by changing app sensitivity. [Full limitations and evidence](docs/compatibility.md)
 
-Visual ring smoothing on `main` has been installed on the Thor, with the user reporting smoother motion. Eight actual-renderer trials support more even movement and document the additional CPU/GPU cost. These changes remain Unreleased. [Methods, results and limits — Simplified Chinese](docs/position-touch.md#真实窗口安装用户反馈与八轮资源对比)
+v0.1.3 includes visual ring smoothing installed on the Thor, with the user reporting smoother motion. Eight actual-renderer trials support more even movement and document the additional CPU/GPU cost. [Methods, results and limits — Simplified Chinese](docs/position-touch.md#真实窗口安装用户反馈与八轮资源对比). Color settings also passed temporary-configuration save/reload and real marker-window pixel checks; user acceptance of each palette control is still pending.
 
 ## Development and credits
 
