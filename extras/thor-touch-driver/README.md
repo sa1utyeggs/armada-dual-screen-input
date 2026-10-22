@@ -63,6 +63,29 @@ kernel config: 3cae56750274cbd5b90a788335389dfbd38ad9fcb526505593ee878dc208a04f
 
 ## Commands
 
+<a id="settings-controls"></a>
+
+### Optional Settings controls
+
+The current app source provides **Settings → Experimental**. The app remains unprivileged and its normal installer/bundle still excludes the module and these experimental scripts. First install a trusted, exact-kernel module package separately, then explicitly prepare the optional root-owned GUI component from this repository:
+
+```bash
+sudo python3 extras/thor-touch-driver/install_gui.py /path/to/module-package
+python3 -I -B /var/lib/armada-touch-fix-ui/gui_bridge.py status
+```
+
+Preparation verifies the package against the running kernel, persists it in the existing root-managed package store and installs only `/var/lib/armada-touch-fix-ui/` metadata/control code. It **does not change the active driver**, create a service/polkit/sudoers rule, enable boot loading or replace boot files. Normal app updates/removal leave this optional root component unchanged.
+
+The settings page reads status only when opened or refreshed. With matching fingerprints, **Enable fix until reboot** and **Restore stock driver** each require confirmation and the system's administrator authentication. Unsaved input settings or an update/uninstall block actions. A detached ordinary-user task locks against app updates, stops this panel to release its virtual input, calls only the fixed root-owned bridge through `pkexec`, and reopens the panel even after cancellation/failure. The bridge takes no GUI-supplied module/script path, verifies the fixed package again and rebinds only the lower device. Root command waits are bounded; a hung/panicking kernel still needs reboot.
+
+Save/exit games before switching. Status and actual touch acceptance are separate: a successful operation does not prove all gestures, long-session or sleep behavior. There is no background polling outside the settings page and no default autoload. A kernel update with different fingerprints refuses enable; stock restore remains available for an active module. To restore from a terminal:
+
+```bash
+sudo python3 -I -B /var/lib/armada-touch-fix-ui/gui_bridge.py revert
+```
+
+The latest driver task result remains under `~/.local/state/thor-panel/driver.json`; a desktop notification is attempted. Reopen the driver page to inspect the actual state. Preparation/controls do not modify personal input preferences, games, Steam or official display services.
+
 From the candidate directory, inspect status and the read-only plan without sudo:
 
 ```bash
@@ -127,3 +150,5 @@ PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover -s extras/thor-touch-d
 
 References: [Linux external modules](https://docs.kernel.org/kbuild/modules.html),
 [driver binding](https://docs.kernel.org/driver-api/driver-model/binding.html), [Armada Issue #757](https://github.com/armada-os/armada/issues/757).
+
+Game Mode uses a private D-Bus instance for the lower KDE session. The driver-task launcher must discover the real user service manager rather than inherit that private bus; only the detached worker receives it for desktop notifications/authentication. A startup failure with no `thor-panel-driver` unit or `driver.json` means no driver switch was attempted.

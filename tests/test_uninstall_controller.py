@@ -1,5 +1,6 @@
 """Confirmation, non-blocking launch, retry and detached removal lifetime."""
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -99,13 +100,16 @@ class UninstallControllerTests(unittest.TestCase):
         self.assertIn('未能启动', self.model.message)
 
     def test_worker_launch_uses_own_user_unit_without_wait_or_scope(self):
-        with patch('armada_dual_screen_input.uninstall_controller.subprocess.run') as run:
+        with patch.dict(os.environ, {'DBUS_SESSION_BUS_ADDRESS':'unix:path=/tmp/lower-private-bus'}), \
+             patch('armada_dual_screen_input.uninstall_controller.subprocess.run') as run:
             run.return_value.returncode = 0
             start_worker(self.root)
         command = run.call_args.args[0]
         self.assertIn('--user', command)
         self.assertIn('--unit=thor-panel-uninstall', command)
         self.assertIn('--property=Type=exec', command)
+        self.assertNotIn('DBUS_SESSION_BUS_ADDRESS', run.call_args.kwargs['env'])
+        self.assertIn('--setenv=DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/lower-private-bus', command)
         for forbidden in ('sudo', '--scope', '--wait', 'steam.service', 'gamescope.service'):
             self.assertNotIn(forbidden, command)
         self.assertEqual(command[-2:], ['--ui-language', 'en_US'])

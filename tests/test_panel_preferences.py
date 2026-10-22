@@ -208,16 +208,16 @@ class PanelPreferencesTests(unittest.TestCase):
             refresh=Mock(), check=Mock(), install=Mock())
         self.app._watch_updates = Mock()
         self.app._preferences_down(1, 900, 250)
-        self.assertEqual(self.app.preferences.section, 'updates')
-        self.app._preferences_down(1, 200, 800)
+        self.assertEqual(self.app.preferences.section, 'general')
+        self.app._preferences_down(1, 200, 648)
         self.app.updates.check.assert_called_once()
-        self.app._preferences_down(1, 900, 800)
+        self.app._preferences_down(1, 900, 648)
         self.app.updates.install.assert_not_called()
         self.assertTrue(self.app.updates.confirming)
-        self.app._preferences_down(1, 900, 880)
+        self.app._preferences_down(1, 200, 648)
         self.assertFalse(self.app.updates.confirming)
-        self.app._preferences_down(1, 900, 800)
-        self.app._preferences_down(1, 900, 800)
+        self.app._preferences_down(1, 900, 648)
+        self.app._preferences_down(1, 900, 648)
         self.app.updates.install.assert_called_once()
         self.assertFalse(self.bridge.events)
         self.assertFalse(self.config.exists())
@@ -225,9 +225,9 @@ class PanelPreferencesTests(unittest.TestCase):
     def test_unsaved_settings_block_install_without_saving_or_discarding(self):
         self.enter()
         self.app.preferences.change('sensitivity', 3.)
-        self.app.preferences.section = 'updates'
+        self.app.preferences.section = 'general'
         self.app.updates = SimpleNamespace(available=True, confirming=True, install=Mock())
-        self.app._preferences_down(1, 900, 800)
+        self.app._preferences_down(1, 900, 648)
         self.app.updates.install.assert_not_called()
         self.assertTrue(self.app.preferences.dirty)
         self.assertFalse(self.config.exists())
@@ -246,14 +246,14 @@ class PanelPreferencesTests(unittest.TestCase):
 
     def test_uninstall_requires_separate_confirmation_and_never_sends_game_input(self):
         self.enter(); self.uninstall_model()
-        self.app._preferences_down(1, 900, 776)
+        self.app._preferences_down(1, 900, 882)
         self.assertFalse(self.work)
-        self.app._preferences_down(1, 200, 776)
+        self.app._preferences_down(1, 200, 882)
         self.assertTrue(self.app.uninstall.confirming)
-        self.app._preferences_down(1, 200, 776)
+        self.app._preferences_down(1, 200, 882)
         self.assertFalse(self.app.uninstall.confirming)
-        self.app._preferences_down(1, 200, 776)
-        self.app._preferences_down(1, 900, 776)
+        self.app._preferences_down(1, 200, 882)
+        self.app._preferences_down(1, 900, 882)
         self.assertEqual(len(self.work), 1)
         self.launch.assert_not_called()
         self.assertFalse(self.bridge.events)
@@ -262,14 +262,14 @@ class PanelPreferencesTests(unittest.TestCase):
     def test_uninstall_blocked_by_unsaved_settings_or_update_and_confirmation_clears_on_navigation(self):
         self.enter(); self.uninstall_model()
         self.app.preferences.change('sensitivity', 3.)
-        self.app._preferences_down(1, 200, 776)
+        self.app._preferences_down(1, 200, 882)
         self.assertFalse(self.app.uninstall.confirming)
         self.app.preferences.discard()
         self.app.updates.busy = True
-        self.app._preferences_down(1, 200, 776)
+        self.app._preferences_down(1, 200, 882)
         self.assertFalse(self.app.uninstall.confirming)
         self.app.updates.busy = False
-        self.app._preferences_down(1, 200, 776)
+        self.app._preferences_down(1, 200, 882)
         self.assertTrue(self.app.uninstall.confirming)
         self.app._preferences_down(1, 100, 250)
         self.assertFalse(self.app.uninstall.confirming)
@@ -278,10 +278,34 @@ class PanelPreferencesTests(unittest.TestCase):
     def test_update_actions_are_blocked_while_uninstall_is_starting(self):
         self.enter(); self.uninstall_model()
         self.app.uninstall.request(); self.app.uninstall.run()
-        self.app.preferences.section = 'updates'
-        self.app._preferences_down(1, 200, 800)
+        self.app.preferences.section = 'general'
+        self.app._preferences_down(1, 200, 648)
         self.app.updates.check.assert_not_called()
         self.assertFalse(self.bridge.events)
+
+    def test_general_page_does_not_leave_update_and_uninstall_armed_together(self):
+        self.enter(); self.uninstall_model()
+        self.app.updates.available = True
+        self.app.updates.install = Mock()
+        self.app.uninstall.request()
+        self.app._preferences_down(1, 900, 648)  # Request update confirmation.
+        self.assertFalse(self.app.uninstall.confirming)
+        self.assertTrue(self.app.updates.confirming)
+        self.app._preferences_down(1, 200, 882)  # Request uninstall confirmation.
+        self.assertFalse(self.app.updates.confirming)
+        self.assertTrue(self.app.uninstall.confirming)
+        self.app._preferences_down(1, 200, 648)  # Checking cancels uninstall intent.
+        self.assertFalse(self.app.uninstall.confirming)
+        self.app.updates.check.assert_called_once()
+        self.app._preferences_down(1, 900, 648)
+        self.assertTrue(self.app.updates.confirming)
+        self.app._preferences_down(1, 1000, 340)  # Editing language cancels intent.
+        self.assertFalse(self.app.updates.confirming)
+        self.assertTrue(self.app.preferences.dirty)
+        self.assertFalse(self.work)
+        self.app.updates.install.assert_not_called()
+        self.assertFalse(self.bridge.events)
+        self.assertFalse(self.config.exists())
 
 
 if __name__ == "__main__":

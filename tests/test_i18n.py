@@ -45,6 +45,21 @@ class I18nTests(unittest.TestCase):
                 self.assertEqual(i18n.resolve_language('en_US', environ), 'en_US')
                 self.assertEqual(i18n.resolve_language('zh_CN', environ), 'zh_CN')
 
+    def test_steam_hint_only_fills_neutral_system_locale_in_auto_mode(self):
+        hint = {i18n.STEAM_LANGUAGE_HINT: 'zh_CN'}
+        for neutral in ({}, {'LANG': 'C.UTF-8'}, {'LC_ALL': 'POSIX'},
+                        {'LC_MESSAGES': 'C', 'LANG': 'en_US.UTF-8'}):
+            env = {**neutral, **hint}
+            self.assertEqual(i18n.resolve_language('auto', env), 'zh_CN')
+            self.assertEqual(i18n.resolve_language('en_US', env), 'en_US')
+            self.assertEqual(i18n.resolve_language(None, env), 'en_US')
+        for locale, expected in (('en_US.UTF-8', 'en_US'), ('zh_TW.UTF-8', 'zh_CN'),
+                                 ('fr_FR.UTF-8', 'en_US')):
+            self.assertEqual(i18n.resolve_language('auto', {'LANG': locale, **hint}), expected)
+        for value in ('schinese', 'fr_FR', '', None):
+            self.assertEqual(i18n.resolve_language('auto',
+                {'LANG': 'C.UTF-8', i18n.STEAM_LANGUAGE_HINT: value}), 'en_US')
+
     def test_catalogs_have_matching_keys_and_named_placeholders(self):
         self.assertEqual(set(i18n.EN_US), set(i18n.ZH_CN))
         for key, english in i18n.EN_US.items():

@@ -15,10 +15,11 @@ import stat
 import subprocess
 import sys
 
+from .canonical_path import canonical_path
 
 def _validate_runtime(runtime: Path) -> Path:
     """Resolve and validate the directory afresh for this operation."""
-    runtime = runtime.resolve(strict=True)
+    runtime = canonical_path(runtime)
     info = runtime.stat()
     if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid():
         raise ValueError('runtime directory must belong to the current user')
@@ -29,7 +30,7 @@ def _display_path(runtime: Path, name: str) -> Path:
     """Resolve one endpoint inside an already-validated canonical directory."""
     if not name or name in ('.', '..') or '/' in name or '\0' in name:
         raise ValueError('an explicit display socket basename is required')
-    path = (runtime / name).resolve(strict=True)
+    path = canonical_path(runtime / name)
     if path.parent != runtime:
         raise ValueError('display must be a same-user socket inside the runtime directory')
     return path

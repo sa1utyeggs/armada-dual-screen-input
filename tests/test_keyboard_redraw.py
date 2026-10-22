@@ -41,6 +41,20 @@ class DamageTests(unittest.TestCase):
 
 @unittest.skipUnless(sys.platform=='linux','Linux Pango/Cairo required')
 class DamagePixels(unittest.TestCase):
+    def test_touch_status_tick_only_invalidates_the_ribbon(self):
+        from unittest.mock import Mock
+        from armada_dual_screen_input import panel_app as panel
+        app=panel.PanelApp.__new__(panel.PanelApp)
+        app.mode='position'; app.collapsed=False
+        app.drawing_area=SimpleNamespace(queue_draw=Mock(),queue_draw_area=Mock(),
+            get_allocation=lambda:SimpleNamespace(width=620,height=540))
+        app._queue_stats_draw()
+        app.drawing_area.queue_draw.assert_not_called()
+        self.assertEqual(app.drawing_area.queue_draw_area.call_args.args,(-3,37,626,28))
+        app.collapsed=True
+        app._queue_stats_draw()
+        app.drawing_area.queue_draw.assert_called_once()
+
     def test_partial_status_repaint_matches_full_frame_after_values_change(self):
         import cairo
         from armada_dual_screen_input.panel_app import PanelApp
@@ -49,7 +63,7 @@ class DamagePixels(unittest.TestCase):
         app.mode='split'; app.kb_layout=KeyboardLayout(0,500,1240,580)
         app.active_key_press=30; app.keyboard_redraw=KeyboardRedraw()
         app.pen_mode='off'; app.touch_mode='position'; app.held_ui_button=None; app.languages=None
-        values={'bat_cap':100,'cpu_load':1,'cpu_temp':31}
+        values={'bat_cap':100,'bat_watts':None,'cpu_load':1,'cpu_temp':31}
         app.stats=SimpleNamespace(get_stats=lambda:values)
         surface=cairo.ImageSurface(cairo.FORMAT_ARGB32,1240,1080)
         def paint(target,partial=False):
@@ -58,7 +72,7 @@ class DamagePixels(unittest.TestCase):
             cr.set_source_rgb(0,0,0); cr.paint(); cr.translate(.4,1.2)
             app._draw_ui(cr)
         paint(surface)
-        values.update(bat_cap=9,cpu_load=100,cpu_temp=100,ram_used_gb=12.3)
+        values.update(bat_cap=9,bat_watts=-5.1,cpu_load=100,cpu_temp=100,ram_used_gb=12.3)
         paint(surface,True)
         reference=cairo.ImageSurface(cairo.FORMAT_ARGB32,1240,1080)
         paint(reference)

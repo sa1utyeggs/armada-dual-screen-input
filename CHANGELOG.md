@@ -2,9 +2,15 @@ English · [简体中文](CHANGELOG.zh-CN.md)
 
 # Changelog
 
-## Unreleased
+## 0.1.5 · 2026-10-22
 
-- No changes yet.
+- Use native XCB/EGL ring submission with an initialization-only GTK fallback and matching Cairo sprite pixels. Controlled whole-service trials measured about 16–22% less active CPU at 60 FPS and 26–31% at 120 FPS, with higher PSS and workload-dependent GPU costs; idle remains a separate limitation. Input timing, focus/route checks and frame caps are unchanged. See [measurements and limits](docs/position-touch.md#2026-10-22-native-marker-submission).
+- Reduce touch-page status damage, repeated sender validation and sprite drawing work; decode XCB property metadata directly and resolve target paths with fresh libc calls. Retain independent receiver checks, bounded caches and vector fallback for other transforms. The earlier whole-service idle change was modest and did not establish an active CPU/GPU improvement; see [the follow-up](docs/position-touch.md#2026-10-22-whole-app-idle-cpu).
+- Add **Settings → Experimental** with the optional Thor lower-screen driver fix, compatibility/status, confirmed enable-until-reboot and stock restore. A separately prepared root-owned component and administrator authentication are required; the normal app package contains no module, boot rule or automatic activation. Correct Game Mode driver/update/uninstall task dispatch through the actual user manager while retaining the lower desktop bus for notifications/authentication. Real authenticated restore and re-enable both succeeded on the tested Thor; long sessions and suspend/resume remain experimental. See [driver evidence and setup](docs/thor-ft5452-contact-lifecycle.md).
+- Show signed **net battery watts** beside charge in the existing status row, reusing cached voltage × current telemetry without extra polling or height. Missing sensors show unavailable. While plugged in, battery flow is not total system, charger or SoC power.
+- Move versions, manual update checking and confirmed installation under **Settings → General**, removing the separate Updates tab. Keep confirmation/cancel, unsaved-settings protection and operation locks; changing settings or requesting the other operation clears armed update/uninstall confirmation.
+- Resolve Auto UI language from Steam's saved client language in Game Mode when the inherited system locale is C/POSIX. Read the bounded registry once at launch; preserve explicit-language/non-C-locale priority, the English fallback and input settings.
+- Validate 652 Python checks on Thor, 15 Node checks on Mac and 18 isolated driver-tool checks; Mac skips 108 Linux checks. Bilingual offscreen layouts and package checks are separate from physical-input and long-session acceptance.
 
 ## 0.1.4 · 2026-10-22
 

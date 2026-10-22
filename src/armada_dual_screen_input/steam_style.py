@@ -7,6 +7,7 @@ layout. Flat fills avoid extra animation, blur or compositor dependencies.
 from __future__ import annotations
 
 from .i18n import msg
+from .power_status import battery_label
 
 import math
 
@@ -94,7 +95,7 @@ def draw_status(app, cr, y, h, width):
     cr.rectangle(0, y, width, h)
     cr.fill()
     items = [
-        (msg('status.battery', value=stats.get('bat_cap', 0)), GOOD),
+        (battery_label(stats), GOOD),
         (f"CPU {stats.get('cpu_load', 0)}%  {stats.get('cpu_temp', 0)}°C", MUTED),
         (f"GPU {stats.get('gpu_mhz', 0)}MHz  {stats.get('gpu_temp', 0)}°C", MUTED),
         (f"RAM {stats.get('ram_used_gb', 0)}/{stats.get('ram_total_gb', 0)}GB", MUTED),
@@ -104,7 +105,7 @@ def draw_status(app, cr, y, h, width):
     x = 16
     cy = y + h / 2
     # Give temperatures and memory more room without shrinking every label.
-    weights = (144, 224, 264, 248, 144, 184)
+    weights = (252, 212, 244, 214, 140, 178)
     for i, ((text, tone), weight) in enumerate(zip(items, weights)):
         cell_w = (width - 32) * weight / sum(weights)
         cr.set_source_rgb(*tone)
@@ -156,7 +157,7 @@ def draw_monitor(app, cr, top, width, height):
         ("CPU", f"{stats.get('cpu_load', 0)}%", msg('monitor.temp', value=stats.get('cpu_temp', 0))),
         ("GPU", f"{stats.get('gpu_mhz', 0)} MHz", msg('monitor.temp', value=stats.get('gpu_temp', 0))),
         (msg('monitor.memory'), f"{stats.get('ram_used_gb', 0)} GB", msg('monitor.total', value=stats.get('ram_total_gb', 0))),
-        (msg('monitor.battery'), f"{stats.get('bat_cap', 0)}%", msg('monitor.charging') if stats.get('bat_status', '').lower() == "charging" else msg('monitor.charge')),
+        (msg('monitor.battery'), battery_label(stats), msg('monitor.charging') if stats.get('bat_status', '').lower() == "charging" else msg('monitor.charge')),
         (msg('monitor.volume'), msg('monitor.muted') if stats.get('vol_muted') else f"{stats.get('vol_pct', 0)}%", msg('monitor.system_volume')),
         (msg('monitor.brightness'), f"{stats.get('top_bright_pct', 100)} / {stats.get('bot_bright_pct', 100)}%", msg('monitor.screens')),
     ]

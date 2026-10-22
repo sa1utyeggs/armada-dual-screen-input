@@ -44,7 +44,16 @@ The interface supports English / Simplified Chinese selection, defaulting to Eng
 | Two touch modes | Choose Positioning (定位) or Direct touch (直接触屏) from a dropdown; upper-screen rings follow smoothly through an independent visual filter and can coexist with Steam's performance overlay; switching pages or closing the panel releases previous contacts |
 | Input settings | Adjust sensitivity, inertia, key repeat, the ring's rendering cap (30 / 60 / 120 FPS / follow screen) and separate idle/pressed colors; saved settings take effect immediately and survive upgrades |
 | Steam keyboard integration | Temporarily suppresses Steam's keyboard on the keyboard/touchpad page; restores it when switching pages, collapsing or exiting, with timeout recovery after an unexpected exit |
-| In-app updates | Manually check stable releases under Settings → Update (设置 → 更新), then confirm a verified installation; retry failures or roll back to the previous version |
+| In-app updates | Manually check stable releases under Settings → General → Update (设置 → 通用 → 更新), then confirm a verified installation; retry failures or roll back to the previous version |
+| Optional Thor touch-driver fix | Settings → Experimental checks compatibility and offers confirmed enable-until-reboot / stock restore, using a separately installed driver component and administrator authentication |
+
+The existing one-line status row also shows signed **net battery power** from cached voltage × current: e.g. `Bat. 96% −5.0W` means discharge; `+` means charging. No extra polling is added. While plugged in, this is battery flow, not total device or charger power. See [telemetry limits](docs/usage.md#battery-power).
+
+### Thor lower-screen touch fix (experimental)
+
+**A driver-level fix helped with stuck touches and missed second-finger taps on the tested Thor.** On 2026-10-22, keeping the app and settings unchanged while switching back to the compatible lower-screen module restored normal operation, confirmed by the user. Changing pointer sensitivity cannot clear a physical touch contact retained by the stock driver.
+
+v0.1.5 adds **Settings → Experimental** for read-only status, kernel compatibility, explicit enable and stock restore. The optional component is installed separately; the normal app bundle includes no kernel module and never enables one automatically. Actions require confirmation and administrator authentication, briefly restart this panel only, and last until reboot. **Only the tested Thor / Armada 20261010 / matching Linux 7.2.6 build is supported; long sessions and suspend/resume need more validation.** [Evidence](docs/thor-ft5452-contact-lifecycle.md) · [Optional setup and rollback](extras/thor-touch-driver/README.md#settings-controls)
 
 <a id="界面预览"></a>
 
@@ -70,7 +79,7 @@ After installation, open **虚拟键鼠** from the desktop or application menu, 
 
 For offline installation, download both the ARM64 `.tar.gz` package and `SHA256SUMS` from the [latest stable release](https://github.com/sa1utyeggs/armada-dual-screen-input/releases/latest). Verify the checksum, extract the package and run `bash install.sh`. GitHub's automatically generated **Source code** archives are not the offline installer bundle.
 
-For an existing installation, open **设置 → 更新 → 检查更新** (Settings → Update → Check for updates), then confirm the upgrade. To roll back, run:
+For an existing installation, open **设置 → 通用 → 更新 → 检查更新** (Settings → General → Update → Check for updates), then confirm the upgrade. To roll back, run:
 
 ```bash
 ~/.local/bin/armada-dual-screen-input rollback

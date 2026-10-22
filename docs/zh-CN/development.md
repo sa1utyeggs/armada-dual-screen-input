@@ -9,7 +9,7 @@
 - `tools/manage.py` 管理用户安装，`tools/release.py` 只准备/校验包，`tools/build_release.py` 只生成压缩包。
 - `tools/run.py` 为源码与安装包提供同样的启动上下文；子进程使用明确的应用 `PYTHONPATH`，不依赖工作目录。
 - `vendor/ratatoskr/` 保留固定快照、许可证、致谢和本地变更说明。修改这里时同步更新 `UPSTREAM`。
-- `extras/thor-touch-driver/` 是独立 GPL 实验，不在应用安装器、默认测试或发布包内。不要把驱动状态写成通用应用依赖。
+- `extras/thor-touch-driver/` 是独立 GPL 内核实验，不属于应用安装器或发布包。内核构建 / 试用不进入默认检查；可选图形管理桥接仅使用模拟权限和设备进行测试，不加载真实模块。
 
 ## 检查
 

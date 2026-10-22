@@ -13,7 +13,7 @@ English · [简体中文](zh-CN/development.md)
 - `tools/manage.py` manages per-user installation, `tools/release.py` prepares/verifies packages, and `tools/build_release.py` creates archives.
 - `tools/run.py` gives source and installed bundles the same launch context. Children get an explicit application `PYTHONPATH`, independent of the working directory.
 - `vendor/ratatoskr/` retains the pinned snapshot, licenses, credits and local-change notes. Update `UPSTREAM` when changing it.
-- `extras/thor-touch-driver/` is a separate GPL experiment, excluded from the app installer, default tests and release bundles. Do not describe its state as a general application dependency.
+- `extras/thor-touch-driver/` is a separate GPL experiment, excluded from the app installer and release bundles. Kernel builds/trials stay outside default tests; the optional GUI bridge is checked with fake privilege and devices. Do not describe its state as a general application dependency.
 
 <a id="检查"></a>
 

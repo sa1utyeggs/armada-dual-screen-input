@@ -59,7 +59,7 @@ Visual smoothing continuously moves only the ring toward the latest true positio
 
 ## Check and install updates
 
-Select Settings → Updates → Check for updates to view current/latest stable versions. Checks are manual and run in the background: no startup network request/download or switch to prereleases. An exhausted anonymous GitHub quota shows a rate-limit message; wait and manually retry rather than reinstalling.
+Select Settings → General → Updates → Check for updates to view current/latest stable versions. Checks are manual and run in the background: no startup network request/download or switch to prereleases. An exhausted anonymous GitHub quota shows a rate-limit message; wait and manually retry rather than reinstalling.
 
 When a version is available, select Update to v…, then Confirm update and restart. First save/discard any input edits. Downloads verify official asset SHA-256, `SHA256SUMS` and the internal manifest before the existing installer upgrades. Personal settings, autostart and the previous-version rollback entry are retained.
 
@@ -70,3 +70,13 @@ Only installer-managed per-user app files are updated. No sudo, Armada/Steam upd
 [Installation and commands](installation.md) · [Compatibility and known issues](compatibility.md)
 
 The app provides Settings → General → Uninstall app. Review the scope, then confirm on the right. It keeps personal settings/logs and blocks removal during updates or unsaved edits. See [scope, result records and terminal fallback](installation.md#卸载).
+
+<a id="battery-power"></a>
+
+## Battery power in the status row
+
+The existing one-line status row shows battery charge and signed net watts, e.g. `Bat. 96% −5.0W`. Negative is discharge, positive is charging, and `0.0W` is near-zero battery flow. A missing or invalid voltage/current reports `—W`, not zero. These are cached samples at the existing sampler cadence, rounded to 0.1 W; painting performs no sensor reads and no extra polling is added.
+
+Watts are computed from `/sys/class/power_supply/battery/voltage_now` × `current_now` / 10¹² (µV × µA). On the tested Thor / Linux 7.2.6, `power_now` disagreed substantially with this pair, so it is not used. This is a battery-side estimate: unplugged it approximates battery draw including device losses; plugged in or with charging held, it cannot measure total system/charger/SoC power. Zero battery flow does not mean the device uses no power. Sensors are not calibrated by this application.
+
+Settings → Experimental contains the separately installed Thor lower-screen driver fix; see [setup, confirmation and restore](../extras/thor-touch-driver/README.md#settings-controls).

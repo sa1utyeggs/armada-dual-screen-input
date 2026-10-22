@@ -18,3 +18,6 @@ the OLED orbit on full repaints to avoid seams against retained pixels.
 Local thor_app.py patch (2026-10-21): ending a held key also uses the same
 overridable redraw hook; the vendor default remains a full redraw. This closes
 the release/slide-off path that otherwise bypassed adapter keycap damage.
+Local system_stats.py patch (2026-10-22): keep the existing signed V×I battery
+power sampling and return None for missing voltage/current rather than false 0 W.
+The adapter displays cached net battery power without additional polling.

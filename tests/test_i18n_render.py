@@ -24,7 +24,7 @@ def scenes(language):
     app._touch_menu_open = False
     app.position = PanelPosition()
     app.stats = SimpleNamespace(get_stats=lambda: {
-        'bat_cap': 100, 'cpu_load': 100, 'cpu_temp': 99, 'gpu_mhz': 1000, 'gpu_temp': 99,
+        'bat_cap': 100, 'bat_watts': -99.9, 'cpu_load': 100, 'cpu_temp': 99, 'gpu_mhz': 1000, 'gpu_temp': 99,
         'ram_used_gb': 15.9, 'ram_total_gb': 16, 'vol_pct': 100,
         'top_bright_pct': 100, 'bot_bright_pct': 100})
     def surface():
@@ -70,6 +70,21 @@ def scenes(language):
                 header(cr)
                 settings_view.draw(cr, draft, updates, uninstall=uninstall)
                 yield 'uninstall-'+variant, image
+        if section == 'driver':
+            for variant in ('active','compatible','incompatible','confirm_apply','confirm_revert','busy','missing','error'):
+                info=dict(component=variant!='missing',compatible=variant!='incompatible',
+                          active=variant in ('active','confirm_revert'),kernel='7.2.6')
+                driver=SimpleNamespace(info=info,phase='error' if variant=='error' else 'idle',
+                    confirming='apply' if variant=='confirm_apply' else 'revert' if variant=='confirm_revert' else None,
+                    busy=variant=='busy',message=str(msg('driver.'+(
+                        'check_failed' if variant=='error' else 'component_missing' if variant=='missing'
+                        else 'checking' if variant=='busy' else 'incompatible' if variant=='incompatible'
+                        else 'active' if info['active'] else 'compatible'))))
+                driver.can=lambda action: not driver.busy and info['component'] and (
+                    info['compatible'] and not info['active'] if action=='apply' else info['active'])
+                image,cr=surface();header(cr)
+                settings_view.draw(cr,draft,updates,driver=driver)
+                yield 'driver-'+variant,image
 
 
 @unittest.skipUnless(IS_LINUX, 'Bilingual layout checks require Linux Pango/Cairo')
@@ -98,7 +113,7 @@ class BilingualRenderTests(unittest.TestCase):
             for language in ('en_US', 'zh_CN'):
                 calls.clear()
                 rendered = list(scenes(language))
-                self.assertEqual(len(rendered), 12)
+                self.assertEqual(len(rendered), 20)
                 self.assertIn('Save settings' if language == 'en_US' else '保存设置', calls)
                 self.assertIn('Interface language' if language == 'en_US' else '界面语言', calls)
                 if language == 'en_US':

@@ -69,6 +69,7 @@ from .marker_colors import MarkerColors
 from . import settings_view
 from .update_controller import UpdateController
 from .uninstall_controller import UninstallController
+from .driver_controller import DriverController
 
 # Isolate our settings/socket names from a separately installed Ratatoskr.
 upstream.CONFIG_PATH = str(Path(os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config"))) / "thor-panel/config.json")
@@ -94,6 +95,7 @@ class PanelApp(upstream.ThorApp):
         self.preferences = None
         self.updates = None
         self.uninstall = None
+        self.driver = None
         self._updates_timer = None
         self.languages = None
         self._language_consumed = set()
@@ -179,6 +181,8 @@ class PanelApp(upstream.ThorApp):
                                         changed=self._updates_changed)
         self.uninstall = UninstallController(BASE.parent.parent, dispatch=GLib.idle_add,
                                              changed=self._updates_changed)
+        self.driver = DriverController(BASE.parent.parent, dispatch=GLib.idle_add,
+                                       changed=self._updates_changed)
         self.update_mode_bounds()
         Gdk.Display.get_default().connect("monitor-removed", self._on_monitor_removed)
         Gdk.Display.get_default().get_default_screen().connect("monitors-changed", self._on_monitors_changed)
@@ -342,7 +346,10 @@ class PanelApp(upstream.ThorApp):
         recent = time.monotonic()-getattr(self, '_last_keyboard_activity', -float('inf')) < .25
         typing = (self.mode == 'split' and not self.collapsed and not self.ui_hidden
                   and (recent or getattr(self, 'held_key', None) is not None))
-        if not typing:
+        # The touch page has no orbital transform. Its illustration/header
+        # stay valid when only the one-second status ribbon changes.
+        touch_page = self.mode == 'position' and not self.collapsed
+        if not typing and not touch_page:
             self.drawing_area.queue_draw()
             return
         # The monitor row changes once per second, not every keycap. Let a
@@ -722,6 +729,10 @@ class PanelApp(upstream.ThorApp):
         previous_mode = self.mode
         if getattr(self, "uninstall", None):
             self.uninstall.cancel()
+        if getattr(self, 'updates', None):
+            self.updates.confirming = False
+        if getattr(self, 'driver', None):
+            self.driver.cancel()
         self._stop_position()
         if hasattr(self, "touch"):
             self.touch.release_all()
@@ -751,36 +762,68 @@ class PanelApp(upstream.ThorApp):
         action, key = draft.hit(x, y)
         uninstall = getattr(self, "uninstall", None)
         updates = getattr(self, "updates", None)
-        if action in ("check_update", "install_update") and uninstall and uninstall.busy:
+        driver = getattr(self, 'driver', None)
+        if driver and driver.busy and action in ('update_left', 'install_update',
+                                                 'uninstall_left', 'uninstall_confirm'):
             return
+        if action in ("update_left", "install_update") and uninstall and uninstall.busy:
+            return
+        if action in ('minus', 'plus', 'slider', 'toggle', 'choice', 'color',
+                      'defaults', 'discard', 'save'):
+            if updates:
+                updates.confirming = False
+            if uninstall:
+                uninstall.cancel()
         if action == "section":
             if uninstall:
                 uninstall.cancel()
+            if driver:
+                driver.cancel()
             draft.section = key
             updates = getattr(self, 'updates', None)
             if updates:
                 updates.confirming = False
-                if key in ('updates', 'general'):
+                if key == 'general':
                     updates.refresh()
                     self._watch_updates()
-        elif action == 'check_update':
-            if getattr(self, 'updates', None):
-                self.updates.check()
+            if key == 'driver' and driver:
+                driver.refresh()
+        elif action == 'driver_refresh':
+            if driver:
+                driver.refresh()
+        elif action in ('driver_left', 'driver_right'):
+            if driver and not draft.dirty and not (updates and updates.busy) and not (uninstall and uninstall.busy):
+                if driver.confirming:
+                    if action == 'driver_left':
+                        driver.cancel()
+                    else:
+                        driver.run()
+                else:
+                    driver.request('apply' if action == 'driver_left' else 'revert')
+        elif action == 'update_left':
+            if updates:
+                if updates.confirming:
+                    updates.confirming = False
+                else:
+                    if uninstall:
+                        uninstall.cancel()
+                    updates.check()
         elif action == 'install_update':
             updates = getattr(self, 'updates', None)
             if updates and updates.available and not draft.dirty:
+                if uninstall:
+                    uninstall.cancel()
                 if updates.confirming:
                     updates.install()
                 else:
                     updates.confirming = True
-        elif action == 'cancel_update':
-            if getattr(self, 'updates', None):
-                self.updates.confirming = False
         elif action == 'uninstall_left':
             if uninstall:
                 if uninstall.confirming:
                     uninstall.cancel()
                 elif not draft.dirty and not (updates and updates.busy):
+                    if updates:
+                        updates.confirming = False
                     uninstall.request()
         elif action == 'uninstall_confirm':
             if uninstall and not draft.dirty and not (updates and updates.busy):
@@ -809,7 +852,7 @@ class PanelApp(upstream.ThorApp):
 
     def _updates_changed(self):
         if (not getattr(self, '_cleaned', False) and self.mode == 'preferences'
-                and self.preferences and self.preferences.section in ('updates', 'general')):
+                and self.preferences and self.preferences.section in ('general', 'driver')):
             self.drawing_area.queue_draw()
 
     def _watch_updates(self):
@@ -817,7 +860,7 @@ class PanelApp(upstream.ThorApp):
             return
         def poll():
             if (getattr(self, '_cleaned', False) or self.mode != 'preferences'
-                    or not self.preferences or self.preferences.section not in ('updates', 'general')):
+                    or not self.preferences or self.preferences.section != 'general'):
                 self._updates_timer = None
                 return False
             if getattr(self, "updates", None):
@@ -1002,7 +1045,8 @@ class PanelApp(upstream.ThorApp):
             if self.preferences is not None:
                 settings_view.draw(cr, self.preferences, getattr(self, 'updates', None),
                                    monitor_millihz=getattr(self.position, 'monitor_millihz', 0),
-                                   uninstall=getattr(self, 'uninstall', None))
+                                   uninstall=getattr(self, 'uninstall', None),
+                                   driver=getattr(self, 'driver', None))
             cr.restore()
             return True
         if self.mode == "position":
@@ -1023,7 +1067,8 @@ class PanelApp(upstream.ThorApp):
 
     def _draw_position(self, cr) -> None:
         position = self.position
-        if position is None:
+        if position is None or not intersects(clip_regions(cr),
+                (0, upstream.HEADER_HEIGHT, SCREEN_WIDTH, SCREEN_HEIGHT-upstream.HEADER_HEIGHT)):
             return
         layer = getattr(self, '_position_background', None)
         if layer is None:
@@ -1106,6 +1151,8 @@ class PanelApp(upstream.ThorApp):
             self.updates.close()
         if getattr(self, 'uninstall', None):
             self.uninstall.close()
+        if getattr(self, 'driver', None):
+            self.driver.close()
         if getattr(self, '_updates_timer', None):
             GLib.source_remove(self._updates_timer)
             self._updates_timer = None

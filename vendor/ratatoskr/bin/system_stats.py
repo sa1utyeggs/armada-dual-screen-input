@@ -28,7 +28,7 @@ def _read_str(path: str, default: str = "") -> str:
         return default
 
 
-def _read_int(path: str, default: int = 0) -> int:
+def _read_int(path: str, default: int | None = 0) -> int | None:
     try:
         val = _read_str(path)
         return int(val) if val else default
@@ -304,9 +304,12 @@ class HardwareStats:
         # 4. Battery
         bat_cap = _read_int(f"{BATTERY_PATH}/capacity")
         bat_status = _read_str(f"{BATTERY_PATH}/status", "Discharging")
-        v_now = _read_int(f"{BATTERY_PATH}/voltage_now")
-        c_now = _read_int(f"{BATTERY_PATH}/current_now")
-        bat_watts = round(v_now * c_now / 1e12, 1)
+        v_now = _read_int(f"{BATTERY_PATH}/voltage_now", None)
+        c_now = _read_int(f"{BATTERY_PATH}/current_now", None)
+        # power_now disagrees with V×I on this Thor kernel. Preserve the signed
+        # battery flow, and distinguish missing sensors from a genuine 0 W.
+        bat_watts = (round(v_now * c_now / 1e12, 1)
+                     if v_now is not None and v_now > 0 and c_now is not None else None)
 
         # 5. Audio (Volume)
         vol_pct = 0

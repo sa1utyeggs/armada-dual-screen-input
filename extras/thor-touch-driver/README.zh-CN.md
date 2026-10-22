@@ -53,6 +53,29 @@ kernel config: 3cae56750274cbd5b90a788335389dfbd38ad9fcb526505593ee878dc208a04f
 
 ## 操作入口
 
+<a id="settings-controls"></a>
+
+### 可选设置入口
+
+当前应用源码提供 **设置 → 试验性功能**。应用仍以普通用户运行，普通安装器 / 应用包仍不包含内核模块和这些实验脚本。先单独取得可信、精确匹配内核的模块包，再从本仓库显式准备 root 管理的可选图形组件：
+
+```bash
+sudo python3 extras/thor-touch-driver/install_gui.py /path/to/module-package
+python3 -I -B /var/lib/armada-touch-fix-ui/gui_bridge.py status
+```
+
+准备时校验模块包与运行内核，保存到原有 root 管理的模块仓库，并只安装 `/var/lib/armada-touch-fix-ui/` 中的元数据和控制代码。**不会更换当前驱动**，不增加服务 / polkit / sudoers 规则、不配置开机加载、不替换启动文件。普通应用更新或卸载保留这个独立 root 组件。
+
+设置页仅在打开或手动刷新时读取状态。指纹匹配后，“启用修复（到重启）”和“恢复原厂驱动”均需要二次确认及系统管理员认证。未保存的输入设置、正在进行的更新 / 卸载会阻止操作。独立的普通用户任务与应用更新共用操作锁，先关闭本面板释放虚拟输入，经 `pkexec` 调用固定的 root 管理入口；取消或普通失败后也重新打开面板。入口不接受 GUI 提供的模块 / 脚本路径，再次校验固定包，并只重新绑定下屏。root 命令等待有上限；内核卡死或 panic 仍需要重启。
+
+切换前请保存并退出游戏。状态检查与真实触摸验收分开，操作成功不代表所有手势、长期使用或休眠恢复均已验证。设置页外没有后台轮询，默认不开机加载。系统更新导致指纹不同会拒绝启用；已有模块生效时仍可恢复原厂。终端回退入口：
+
+```bash
+sudo python3 -I -B /var/lib/armada-touch-fix-ui/gui_bridge.py revert
+```
+
+最近一次任务结果保留在 `~/.local/state/thor-panel/driver.json`，并尝试发送桌面通知；重新打开驱动页查看实际状态。准备和操作均不修改个人输入偏好、游戏、Steam 或官方显示服务。
+
 在候选包目录中查看状态及只读计划，不需要 sudo：
 
 ```bash
@@ -116,3 +139,5 @@ PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover -s extras/thor-touch-d
 
 参考：[Linux 外置模块](https://docs.kernel.org/kbuild/modules.html)、
 [驱动绑定](https://docs.kernel.org/driver-api/driver-model/binding.html)、[Armada Issue #757](https://github.com/armada-os/armada/issues/757)。
+
+游戏模式下屏 KDE 使用独立 D-Bus 会话。驱动任务启动器需连接实际用户服务管理器，不能继承下屏私有总线；仅将它转交独立任务用于桌面通知 / 认证。若提示任务启动失败，且没有 `thor-panel-driver` 单元或 `driver.json`，说明尚未尝试切换驱动。

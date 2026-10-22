@@ -8,6 +8,7 @@ import time
 
 from .i18n import LocalizedState, active_language, decode_message, msg
 from .updates import UpdateError, process_identity, state_path
+from .user_tasks import manager_environment
 
 
 def status_path():
@@ -24,7 +25,8 @@ def start_worker(root):
             command.append('--setenv=' + key + '=' + value)
     command += ['/usr/bin/python3', '-B', str(Path(root) / 'tools/uninstall.py'),
                 '--ui-language', active_language()]
-    result = subprocess.run(command, capture_output=True, text=True, timeout=15)
+    result = subprocess.run(command, capture_output=True, text=True, timeout=15,
+                            env=manager_environment())
     if result.returncode:
         raise UpdateError(msg('uninstall.start_failed'))
 

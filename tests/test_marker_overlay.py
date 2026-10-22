@@ -299,6 +299,32 @@ class MarkerOverlayTests(unittest.TestCase):
         self.assertFalse(self.dispatch.callbacks)
         self.assertEqual(self.packets(),[])
 
+    def test_motion_geometry_is_still_rejected_before_queuing(self):
+        self.ready()
+        for point, pressed in (((.2,), False), ((float('nan'), .3), False),
+                               ((True, .3), False), ((.2, .3), 1)):
+            with self.assertRaises(ValueError):
+                self.marker.update(point, pressed, motion=self.motion())
+        for contacts in (((.2, 2., True),), ((.2, .3, 1),), ((.2, .3),)):
+            with self.assertRaises(ValueError):
+                self.marker.update_contacts(contacts, motion=self.motion())
+        self.assertFalse(self.dispatch.callbacks)
+        self.assertEqual(self.packets(), [])
+
+    def test_mutating_source_lists_after_update_cannot_change_queued_contacts(self):
+        self.ready()
+        contacts = [[.2, .3, True]]
+        motion = dict(self.motion(), ids=[8], mode='direct')
+        self.marker.update_contacts(contacts, motion=motion)
+        contacts[0][:] = [.9, .9, False]
+        motion['ids'][0] = 99
+        motion['active'] = False
+        self.dispatch.run()
+        payload = self.packets()[0]
+        self.assertEqual(payload['contacts'], [[.2, .3, True]])
+        self.assertEqual(payload['motion']['ids'], [8])
+        self.assertTrue(payload['motion']['active'])
+
     def test_default_glib_dispatch_sends_without_a_health_tick(self):
         try:
             from gi.repository import GLib

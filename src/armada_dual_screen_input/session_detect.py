@@ -82,10 +82,19 @@ def _read_processes(proc_root: Path, uid: int) -> list[_Process]:
             continue
         try:
             status = {}
-            for line in (entry / "status").read_text().splitlines():
-                key, separator, value = line.partition(":")
-                if separator and key in {"Name", "Uid", "PPid"}:
-                    status[key] = value.strip()
+            with (entry / "status").open() as stream:
+                for line in stream:
+                    key, separator, value = line.partition(":")
+                    if separator and key in {"Name", "Uid", "PPid"}:
+                        status[key] = value.strip()
+                    # Most /proc entries are unrelated to Plasma. Do not
+                    # parse their remaining status lines; relevant processes
+                    # still require fresh UID and parent metadata below.
+                    if ("Name" in status and status["Name"] not in
+                            {"kwin_wayland", "plasmashell"}) or len(status) == 3:
+                        break
+            if status.get("Name") not in {"kwin_wayland", "plasmashell"}:
+                continue
             if int(status["Uid"].split()[1]) != uid:
                 continue
             name = status["Name"]
