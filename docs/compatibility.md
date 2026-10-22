@@ -65,6 +65,8 @@ This was short interactive acceptance on one Thor. Other hardware, Desktop Mode,
 
 Full historical evidence is in the repository's [position-touch record](https://github.com/sa1utyeggs/armada-dual-screen-input/blob/main/docs/position-touch.md), [driver investigation](https://github.com/sa1utyeggs/armada-dual-screen-input/blob/main/docs/thor-ft5452-contact-lifecycle.md) and [history](https://github.com/sa1utyeggs/armada-dual-screen-input/blob/main/docs/history.md). Short user acceptance is not evidence of long-term stability.
 
-## Unreleased native marker candidate
+<a id="unreleased-native-marker-candidate"></a>
 
-The optional XCB/EGL backend is currently a tested source candidate, with GTK fallback only before activation. It reduces active service CPU in owned-window comparisons while adding about 16–21 MiB PSS; idle remains unresolved. Separate external counters help distinguish service GPU costs from Xwayland/Gamescope work. The installed release and earlier user acceptance are unchanged; physical game/FPS interaction, long sessions and suspend/resume need new acceptance for this backend. See [measurements and limits](position-touch.md#2026-10-22-native-marker-submission).
+## Native marker backend in v0.1.5
+
+v0.1.5 uses XCB/EGL submission with GTK fallback only before activation. Owned-window comparisons measured lower active service CPU with about 16–21 MiB more PSS; idle remains unresolved. Separate external counters distinguish service GPU costs from Xwayland/Gamescope work. The same application code was installed as a local candidate, and the authenticated optional-driver restore/re-enable flow passed user acceptance. Earlier GTK game/FPS acceptance remains separate: physical game/FPS interaction with the native backend, long sessions and suspend/resume need further verification. See [measurements and limits](position-touch.md#2026-10-22-native-marker-submission).
