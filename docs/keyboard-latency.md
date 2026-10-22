@@ -1,119 +1,138 @@
-# 键盘连续输入延迟检查 · 2026-10-21
+English · [简体中文](zh-CN/keyboard-latency.md)
 
-用户反馈快速点按、长按和中文输入都有不跟手的情况。本轮在 AYN Thor / Armada Game Mode 的专用上屏 GTK 输入框中测试，未向游戏或 Steam 搜索框发送自动输入。
+<a id="键盘连续输入延迟检查--2026-10-21"></a>
 
-## 已确认及修复
+# Continuous keyboard input latency · 2026-10-21
 
-原绘制路径每帧为约 92 个文字标签重新建立 Pango 布局。离屏 profiling 和真实 GLib 定时测试确认：按键处理本身通常不到 1ms，但同步重绘会占用输入所在的事件循环。
+The user reported unresponsive rapid taps, holds and Chinese input. This round used a dedicated upper-screen GTK field on AYN Thor / Armada Game Mode, without automated input to a game or Steam search.
 
-第一轮修复只缓存文字布局及尺寸，不缓存整张键盘图片，也不修改输入脉冲、重复速度、长按等待、键位、语言或触屏设置。缓存按线程隔离、最多 256 项，字体映射、缩放和字体渲染选项改变时失效；颜色、位置仍由每次绘制决定。公开的测量布局对象保持独立。像素比较覆盖中英文字、候选长词、缩放、平移、设备倍率和字体 hint 选项。
+<a id="已确认及修复"></a>
 
-## 实测结果与限制
+## Confirmed cause and first fix
 
-基线为 `340a4ff`，候选修复仅改动文字布局复用。真实 GLib 测试与专用接收窗口使用同一批固定输入；数据为短时样本，不作为系统级性能承诺。
+The old drawing path rebuilt Pango layouts for about 92 labels each frame. Offscreen profiling and real GLib timing showed key handling usually below 1ms, while synchronous repainting occupied the input event loop.
 
-| 检查 | 基线 | 候选修复 |
+The first fix cached only text layouts/measurements, not the whole keyboard image. It changed neither pulses, repeat speed/delay, keys, languages nor touch preferences. The per-thread cache holds at most 256 entries and invalidates on font-map, scale or font-render-option changes. Color/position remain draw-time decisions. Public measurement layouts remain separate. Pixel comparisons covered English/Chinese, long candidates, scale, translation, device scale and font hinting.
+
+<a id="实测结果与限制"></a>
+
+## Measurements and limits
+
+Baseline `340a4ff`; the candidate changed only text-layout reuse. Real GLib checks and the receiving window used identical fixed input. These short samples are not a system-wide performance promise.
+
+| Check | Baseline | Candidate |
 | --- | --- | --- |
-| 连续点按常规重绘中位数 | 约 13.6–13.8ms | 约 9.6–10.7ms |
-| 每秒 10 次点按的排程延迟 p95（专用窗口一轮） | 12.2ms | 9.2ms |
-| 每秒 15 次点按的排程延迟 p95（专用窗口一轮） | 5.1ms | 0.6ms |
-| 最终按键完整性 | 基线样本无丢键/乱序 | 496 次按键全部按序收到，结束时无键保持按下 |
-| 20ms 设置下长按重复间隔中位数 | 约 21.3ms | 字母 21.2ms、退格 21.1ms |
-| 中文内容 | 18 轮固定短语正确 | 24 轮固定短语正确，覆盖候选点选和排队空格提交 |
+| Median routine repaint during tapping | About 13.6–13.8ms | About 9.6–10.7ms |
+| Scheduling p95 at 10 taps/second, one receiving-window run | 12.2ms | 9.2ms |
+| Scheduling p95 at 15 taps/second, one receiving-window run | 5.1ms | 0.6ms |
+| Final key integrity | No loss/reordering in baseline samples | All 496 keys received in order; none held at end |
+| Median hold-repeat interval with 20ms setting | About 21.3ms | Letters 21.2ms, Backspace 21.1ms |
+| Chinese content | 18 correct fixed-phrase rounds | 24 correct rounds, including candidate taps and queued Space commit |
 
-最后一轮中文候选 worker 响应中位数约 2.8–3.1ms；选择/空格提交到 GTK 文本框变化的中位数约 33–40ms，个别样本约 64ms。该通道尚未显示稳定的前后改善。
+Final Chinese-worker median response was about 2.8–3.1ms. Candidate/Space commit to GTK text change had a median about 33–40ms, with some samples around 64ms. This channel did not show consistent before/after improvement.
 
-**仍有未解决的偶发长帧。** 首次或间歇重绘仍测得约 30–45ms，早期冷启动样本曾接近 85–92ms。一次候选运行也捕捉到约 38ms 的原生接收延迟。缓存减少常规主线程开销，不能据此宣称用户反馈的所有偶发停顿已消除；物理手指触摸、下屏提交显示、实际应用和长期使用仍需验收。
+**Occasional long frames remain unresolved.** First/intermittent repaints still measured about 30–45ms; earlier cold-start samples approached 85–92ms. One candidate run captured about 38ms native reception delay. Reduced routine main-thread work does not prove every reported stall is gone. Physical touch, lower-screen presentation, real apps and long use still need acceptance.
 
-## 自动化范围
+<a id="自动化范围"></a>
 
-- `tools/keyboard_latency_bench.py`：真实 GLib 时钟；经 PanelApp 的触摸路由执行每秒 5/10/15 次点按和两秒长按字母/退格。默认模拟设备，显式参数才创建自己的窗口和虚拟按键设备。记录排程、处理、绘制、接收和重复间隔，不用假时钟推断性能。
-- `tools/keyboard_ime_latency_bench.py`：真实隔离 worker、系统 libpinyin、Gamescope 文本通道；已知拼音短语与专用输入框，另行离屏绘制键帽/候选条。记录准备时间、请求响应、提交到文本变化的延迟；不测物理触摸与屏幕扫描输出。
-- 交互工具要求 Steam 首页空闲，焦点须在自己的窗口；失焦即停止，不自动抢回焦点。两个工具顺序运行，结束后关闭自己的窗口、设备和 worker。
-- `passed` 检查内容、次序、清理与超时。性能受频率、负载和冷启动影响，不将单次最大值作为绝对通过阈值；比较时应保留基线和候选 JSON。
+## Automation scope
 
-## 回归检查
+- `tools/keyboard_latency_bench.py`: real GLib clock, real PanelApp touch routing, 5/10/15 taps per second and two-second letter/Backspace holds. Fake devices by default; explicit options create its own window/virtual keyboard. Records scheduling, handling, draw, receive and repeat intervals rather than deriving performance from a fake clock.
+- `tools/keyboard_ime_latency_bench.py`: real isolated worker, system libpinyin and Gamescope text channel, fixed phrases and a dedicated field, with separate offscreen keys/candidates. Records startup, response and commit-to-text latency, not physical touch/scanout.
+- Interactive tools require an idle Steam home screen and focus in their own window. They stop on focus loss without reclaiming it. Run the two tools sequentially; each closes its windows/devices/worker afterward.
+- `passed` checks content, ordering, cleanup and timeouts. Frequency, load and cold starts affect performance; a single maximum is not an absolute pass threshold. Retain baseline/candidate JSON for comparison.
 
-Mac：371 项 Python 检查中 70 项 Linux 检查跳过；15 项 JavaScript 检查通过。Thor：371 项 Python 检查通过，包括新增的 4 项真实 Pango/Cairo 像素与缓存检查；本机无 Node，未在 Thor 重复 JavaScript 检查。
+<a id="回归检查"></a>
 
-用户复测第一轮布局缓存后反馈“略有改善，仍偶尔卡顿”，因此不能将第一轮记录为完整解决。
+## Regression checks
 
-## 第二轮：真实下屏窗口和局部刷新
+Mac: 371 Python checks with 70 Linux checks skipped; 15 JavaScript checks passed. Thor: all 371 Python checks passed, including 4 new real Pango/Cairo pixel/cache checks. Node was absent, so JavaScript was not repeated there.
 
-继续检查发现，普通键按下/抬起及每次中文候选更新仍会要求整个面板重绘。第二轮将普通键的变化限制到旧/新键帽，将拼音候选变化限制到浮层区域；Cairo 绘制时跳过裁剪区之外的键帽。Shift/Caps/修饰状态改变、语言或模式切换仍完整刷新。滑出键帽时也主动清理高亮，不改变按键发送和释放逻辑。
+After the first layout cache, the user reported slight improvement with occasional stutters. This round was not recorded as a complete fix.
 
-局部绘制沿用最近完整帧的 OLED 微移坐标，完整刷新时继续推进原轨道，避免与保留像素出现接缝。新增像素回归覆盖字母按下/换键/抬起、Shift、缩放、亚像素偏移、候选条出现/更新/消失与底部触控板恢复。
+<a id="第二轮真实下屏窗口和局部刷新"></a>
 
-`keyboard_window_latency_bench.py` 在自己的真实下屏 Wayland 窗口里，以相同状态序列逐段比较完整和局部绘制；不创建输入设备，也不向上屏发送输入。两轮各 24 秒的样本范围如下：
+## Round two: real lower window and partial repainting
 
-| 检查 | 完整刷新 | 局部刷新 |
+Ordinary key down/up and every Chinese-candidate update still repainted the whole panel. Round two limited ordinary changes to old/new keycaps and candidate changes to the overlay. Cairo skips keycaps outside the clip. Shift/Caps/modifier changes and language/mode switches retain full redraws. Sliding off a key also clears highlights without changing key send/release behavior.
+
+Partial draws reuse the most recent full frame's OLED orbital offset; full draws advance the original orbit, avoiding seams against retained pixels. New pixel tests cover press/change/release, Shift, scaling, subpixel offsets, candidate appearance/update/removal and touchpad restoration.
+
+`keyboard_window_latency_bench.py` compares full/partial drawing in its own real lower-screen Wayland window with identical state sequences. It creates no input device or upper input. Two 24-second samples per round gave:
+
+| Check | Full redraw | Partial redraw |
 | --- | --- | --- |
-| 英文帧绘制中位数 | 7.46–10.97ms | 局部帧 1.69–1.75ms |
-| 英文事件循环延迟 p95 | 8.71–10.40ms | 1.58–1.70ms |
-| 中文候选帧绘制中位数 | 12.21–12.28ms | 局部帧 2.46–2.50ms |
-| 中文候选阶段事件循环延迟 p95 | 11.96–12.31ms | 2.70–4.69ms |
+| English median frame draw | 7.46–10.97ms | Partial frames 1.69–1.75ms |
+| English event-loop delay p95 | 8.71–10.40ms | 1.58–1.70ms |
+| Chinese-candidate median frame draw | 12.21–12.28ms | Partial frames 2.46–2.50ms |
+| Chinese-candidate event-loop delay p95 | 11.96–12.31ms | 2.70–4.69ms |
 
-本轮仍保留每秒状态/完整刷新，样本中偶发完整绘制约 35ms、事件循环延迟约 43ms。因此这些结果说明常规绘制阻塞显著减少，不等同于消除了所有间歇停顿。实际触摸输入手感仍需用户验收。
+Per-second status/full redraws remained, with occasional full draws around 35ms and loop delay around 43ms. Routine drawing blocked much less, but intermittent stalls were not eliminated. Physical-touch feel still required acceptance.
 
-第二轮 Mac 379 项 Python 检查中 74 项 Linux 检查跳过，15 项 JavaScript 检查通过；Thor 379 项 Python 检查通过。新的原生接收短测 374 次按键全部按序收到，输入内容和退格结果均正确，结束时无键保持按下；局部刷新不改按键通道。
+Round two: Mac 379 Python checks, 74 Linux skips, 15 JavaScript passes; Thor all 379 Python passes. A new short native test received all 374 keys in order with correct content/Backspace and no held key at end. Partial repainting did not change the key channel.
 
-用户第二轮反馈“明显顺畅了”，随后补充连续点按仍可能卡顿。因此记录为实际体验改善，问题尚未完全解决。
+The user reported a clearly smoother experience, then noted continued tapping could still stutter. This is experiential improvement, not complete resolution.
 
-## 第三轮：输入期间避开周期完整刷新
+<a id="第三轮输入期间避开周期完整刷新"></a>
 
-第二轮仍每秒完整刷新状态和 OLED 微移，这会把键帽、候选条之外的重绘重新带入输入事件循环。第三轮在最近 250ms 内有键盘活动或仍有键被按住时，只刷新顶部状态行；暂停输入后，下一次周期状态更新恢复完整刷新和原 OLED 轨道。状态采样频率、输入重复速度、长按等待、语言、指针和触屏设置都不变。
+## Round three: avoid periodic full redraws while typing
 
-真实下屏窗口相同节奏的一次短测，英文局部更新阶段的完整绘制次数由 7 次降到 2 次，事件循环最大延迟由 40.84ms 降到 16.38ms；中文候选阶段由 40.11ms 降到 21.78ms。仍存在阶段进入的完整绘制和其他时序波动，不将一次最大值下降等同于解决全部物理触摸延迟。下一步需用户验证连续点按，并区分键帽高亮和上屏文字哪个环节延迟。
+Round two still redrew the full status/orbit each second, bringing non-key/candidate drawing into the input loop. If keyboard activity occurred within 250ms or a key remained held, round three redrew only the top status row. The next periodic update after typing pauses restores full repaint/orbit. Sampling rate, repeat/delay, language, pointer and touch preferences remain unchanged.
 
-第三轮 Mac 382 项 Python 检查中 77 项 Linux 检查跳过，15 项 JavaScript 检查通过；Thor 382 项 Python 检查通过。新增检查覆盖状态值变化后的局部像素一致性、连续输入/长按期间的刷新范围，以及输入暂停后的完整刷新恢复。
+One matched real-window short test reduced full English-phase draws from 7 to 2 and maximum loop delay from 40.84ms to 16.38ms. Chinese-candidate maximum delay fell from 40.11ms to 21.78ms. Full phase-entry draws and other variation remain. One reduced maximum does not establish resolution of all physical latency. The next user test needed to distinguish delayed keycap feedback from delayed upper-screen text.
 
-## 第四轮：用户澄清为高亮反馈偶发缺失
+Round three: Mac 382 Python checks, 77 Linux skips, 15 JavaScript passes; Thor all 382 Python passes. New checks cover status-value partial pixels, draw bounds during tapping/holds and restoration of full drawing after a pause.
 
-用户进一步说明：连续点按时，有时下屏键帽没有高亮，上屏文字没有晚出现。此后将剩余问题重点收窄到视觉反馈，不把此反馈记作按键丢失或文本提交延迟。
+<a id="第四轮用户澄清为高亮反馈偶发缺失"></a>
 
-原键帽颜色直接取逻辑 `active_key_press`。短促按下/抬起若在绘制之前已完成，绘制时就只剩未按下状态。新增独立的视觉反馈状态：实际按键仍立即发出、按原逻辑释放；键帽须先被绘出，再保留约 60ms 的可见时间。快速相邻键可各自短暂高亮，延续上一轮局部重绘。较长按住超过这段时间后，抬手照常清除高亮。离页、触摸取消、收起、关闭均清理反馈状态与定时器。
+## Round four: the user identifies missing visual highlights
 
-真实下屏专用窗口的 70 次模拟点按中，原逻辑 57 次选择了按下颜色，候选修复为 70/70。具体覆盖：
+The user clarified that some lower keycaps failed to highlight during rapid taps, while upper text was not late. The remaining focus became visual feedback, not lost keys or text-submission delay.
 
-| 模拟条件 | 原逻辑绘出高亮 | 视觉反馈修复 |
+Old color selection used logical `active_key_press`. A short down/up completed before drawing left only the up state. New independent visual state still sends/release real keys immediately on the existing schedule, but first draws the highlight and retains it for about 60ms afterward. Adjacent quick keys may each briefly highlight through partial redraws. A hold longer than that period clears normally on release. Page exit, cancellation, collapse and close clear visual state/timers.
+
+In 70 simulated taps on a real dedicated lower window, the old logic selected pressed color 57 times; the candidate achieved 70/70:
+
+| Simulated condition | Old highlight draws | Visual-feedback fix |
 | --- | --- | --- |
-| 同一回调内按下/抬起（模拟合批到达） | 0/10 | 10/10 |
-| 2ms、5ms、8ms 短促点按 | 各 9/10 | 各 10/10 |
-| 12ms、20ms、40ms 点按 | 各 10/10 | 各 10/10 |
+| Down/up in one callback, simulating batched delivery | 0/10 | 10/10 |
+| 2ms, 5ms, 8ms taps | Each 9/10 | Each 10/10 |
+| 12ms, 20ms, 40ms taps | Each 10/10 | Each 10/10 |
 
-这里只统计 Cairo 绘制回调是否对该键绘出按下颜色，不等同于物理屏幕呈现确认，也不能据此推断触摸驱动就是用户现场的唯一原因。定时器不会发送键盘事件；真实 PanelApp 集成检查验证 3ms 抬手时逻辑按键也在 3ms 释放，高亮最短时间不延长真实按键或重复输入。
+This counts Cairo callbacks choosing pressed color, not confirmed physical presentation, and does not prove the touch driver was the sole cause. Timers send no key events. Real PanelApp integration confirmed a logical key released at 3ms still releases at 3ms; visual duration does not prolong the real press or repeat.
 
-Mac 388 项 Python 检查中 78 项 Linux 检查跳过，15 项 JavaScript 检查通过；Thor 388 项 Python 检查通过，包括合批短点按、延后首绘、重复同键、多个视觉高亮、旧回调、取消清理及实际按键时序不变。
+Mac: 388 Python checks, 78 Linux skips, 15 JavaScript passes. Thor: all 388 Python checks passed, covering batched short taps, delayed first draw, repeated same key, multiple highlights, stale callbacks, cancel cleanup and unchanged native timing.
 
-2026-10-21，用户在安装 `439fbb8` 后快速连续点按，确认“现在每次都能看到”高亮。快速点按的高亮反馈通过本轮实机用户验收。安装前后配置字节一致，开机自启保持关闭，Steam 和官方下屏会话进程未重启；此结论针对本次视觉反馈缺失。
+On 2026-10-21 after installing `439fbb8`, the user confirmed every rapid tap now had visible feedback. Highlight feedback passed this round's device acceptance. Configuration bytes and disabled autostart were preserved; Steam and official lower-session processes were not restarted. This conclusion concerns that visual-feedback defect.
 
+<a id="第五轮组件裁剪触屏静态层和遗漏的按键结束刷新"></a>
 
-## 第五轮：组件裁剪、触屏静态层和遗漏的按键结束刷新
+## Round five: component clipping, static touch layer and missed key-end redraw
 
-2026-10-21，根据同机 CPU/GPU 测试继续优化绘制。组件绘制先检查 GTK 的实际脏区域，跳过无关的顶部、状态、触控板和候选条；分散键帽区域保持独立，不能只用覆盖中间无关键帽的外接矩形。Cairo 无法返回矩形裁剪列表时仍保守回退到原边界范围。
+On 2026-10-21, same-device CPU/GPU tests drove further draw optimization. Components first check actual GTK damage and skip unrelated header/status/pad/candidates. Disjoint keycap regions stay separate rather than using one rectangle covering untouched middle keys. If Cairo cannot provide rectangular clips, drawing conservatively falls back to the original bounds.
 
-直接触屏只使旧/新圆圈的边界失效；静态说明和底板复用单张有上限的 Cairo 图层。状态文字、缩放、设备倍率、字体映射和字体渲染选项改变时重建；异常变换或超过缓存上限时沿用向量绘制。背景保持不透明以避免文字边缘被重复混色，GTK 请求的局部区域仍向外舍入到控件像素。缓存增加少量内存；不缓存上屏图像。
+Direct touch invalidates only old/new ring boundaries. Static text/background reuse one bounded Cairo layer. Status text, scaling, device scale, font map and rendering-option changes rebuild it; unsupported transforms or cache limits fall back to vectors. An opaque background avoids repeated text-edge blending. GTK damage is rounded outward to widget pixels. The cache costs some memory and stores no upper-screen imagery.
 
-第一轮真实窗口验证发现，普通按键结束时父类 `_end_key_press()` 仍直接调用完整 `queue_draw()`，绕过已有键帽局部绘制入口。这会在每次抬手或滑出键帽时重画整页。补修只让这一绘制请求进入原 `_queue_keyboard_draw()` 钩子；父类默认实现仍完整刷新，按键发送、释放、重复和修饰键逻辑保持原样，供应商修改记录同步在 `vendor/ratatoskr/UPSTREAM`。
+The first real-window check found parent `_end_key_press()` still called full `queue_draw()`, bypassing keycap invalidation on each release/slide-off. The follow-up routes only that draw request through existing `_queue_keyboard_draw()`. The parent's default still repaints fully; key send/release/repeat/modifier semantics remain unchanged. Vendor notes were updated in `vendor/ratatoskr/UPSTREAM`.
 
-自动检查覆盖：不相连的脏区域、未变化/移动/移除的圆圈、静态缓存复用及文字/缩放/字体变化失效，正常和双设备倍率下的完整/局部像素一致性，以及真实 PanelApp 抬手时无隐藏整页刷新、实际按键已释放。离屏检查不创建窗口或输入设备。
+Checks cover disjoint damage, unchanged/moved/removed rings, static-cache reuse and invalidation by text/scale/fonts, full/partial pixel equality at normal/double device scale, and real PanelApp release without a hidden whole-page redraw while the key is already released. Offscreen checks create no window/input device.
 
-实机 CPU/GPU 对比只向专用上屏窗口回放合成输入，Steam 首页保持空闲，个人配置用副本；独立输入驱动与采样器不计入应用 CPU。每场景预热至少 4 秒、采样 10 秒，共两轮，第二轮倒序。基线为正式安装的 v0.1.2；初轮候选测鼠标、键盘和多指触屏，补修按键结束路径后只重测键盘，非键盘代码一致。测试后关闭全部临时窗口和输入设备，正式安装、个人配置和自启动保持不变。
+Device CPU/GPU comparisons replayed synthetic input only into a dedicated upper window while Steam home was idle and personal settings were copied. The separate input driver and sampler were excluded from app CPU. Each scene warmed for at least 4 seconds, then sampled for 10 seconds, for two rounds with reversed second-round order. Baseline was installed v0.1.2. The first candidate covered mouse, keyboard and multi-touch. Only keyboard scenes were repeated after fixing key-end redraw; non-keyboard code was identical. Temporary windows/devices were closed and the real installation, configuration and autostart remained unchanged.
 
-本轮不修改焦点/路由检查、物理触摸驱动、灵敏度、滚轮、键盘重复设置、Steam、官方下屏会话或系统频率策略。CPU 100% 代表一颗逻辑核；GPU 为被采样显示场景的合成工作，满频等效按 680 MHz 归一化。短测结果不等于物理输入端到端延迟、游戏 FPS 或续航改善。
+Focus/route checks, physical driver, sensitivity, scrolling, repeat settings, Steam, official lower session and CPU/GPU policy were unchanged. CPU 100% means one logical core. GPU covers the sampled display/composition scene, normalized to a 680 MHz full-frequency equivalent. These short tests measure neither physical end-to-end latency, game FPS nor battery-life gains.
 
-本轮同机新采样的结果如下（前 / 后）；绘制时间是下屏 Cairo 回调，不是端到端输入延迟。
+Same-device newly sampled results follow, before / after. Drawing means the lower Cairo callback, not end-to-end input latency:
 
-| 场景 | 应用 CPU 平均，单核 % | 绘制 P95，ms | 显示场景 GPU 满频等效，% |
+| Scene | Mean app CPU, one-core % | Draw p95, ms | Display-scene GPU full-frequency equivalent, % |
 | --- | --- | --- | --- |
-| 单指鼠标（对照） | 3.66 / 3.83 | 11.55 / 12.92 | 19.90 / 19.88 |
-| 英文连续点按 | 31.01 / 28.31 | 12.78 / 2.01 | 2.87 / 2.79 |
-| 中文拼音输入 | 42.61 / 28.55 | 13.55 / 1.98 | 3.69 / 3.60 |
-| 直接触屏：双指 | 58.02 / 58.15 | 3.62 / 0.66 | 5.62 / 5.23 |
-| 直接触屏：五指 | 67.57 / 61.88 | 3.73 / 1.14 | 5.90 / 5.47 |
+| Single-finger mouse, control | 3.66 / 3.83 | 11.55 / 12.92 | 19.90 / 19.88 |
+| Continuous English tapping | 31.01 / 28.31 | 12.78 / 2.01 | 2.87 / 2.79 |
+| Chinese pinyin | 42.61 / 28.55 | 13.55 / 1.98 | 3.69 / 3.60 |
+| Direct touch: two fingers | 58.02 / 58.15 | 3.62 / 0.66 | 5.62 / 5.23 |
+| Direct touch: five fingers | 67.57 / 61.88 | 3.73 / 1.14 | 5.90 / 5.47 |
 
-中文输入 CPU 平均下降约 33%，英文约 9% 且两轮存在波动；两个键盘场景绘制 P95 均降到约 2ms。直接触屏绘制明显缩短，但双指的应用总 CPU 没有明显下降；五指 CPU 平均下降约 8%，GPU 满频等效在两种多指场景约降 7%。鼠标对照接近原水平，不能宣称其高 GPU 合成负载已解决。
+Chinese mean CPU fell about 33%; English about 9%, with variation between rounds. Both keyboard draw p95 values fell to about 2ms. Direct-touch drawing shortened substantially, but two-finger total app CPU did not materially fall. Five-finger mean CPU fell about 8%; both multi-finger GPU equivalents fell about 7%. Mouse control stayed near baseline, so its high composition GPU load was not resolved.
 
-触屏场景应用进程树 PSS 约由 113–114 MiB 增到 125 MiB，包含图层及相关渲染资源的差异；缓存上限为一张、最多 800 万像素，不把测得的总内存差直接当作单张图层大小。没有进行长期内存或续航测试。
+Touch-process-tree PSS rose from about 113–114 MiB to 125 MiB, including layer/related rendering resources. Cache capacity is one layer, at most 8 million pixels. The total measured memory difference is not the single-layer size. Long-term memory/battery tests were not performed.
 
-最终 Mac 436 项 Python 检查中 86 项 Linux 检查跳过；15 项 JavaScript 检查通过。Thor 436 项 Python 检查通过；设备未安装 Node，JavaScript 未在 Thor 重复执行。合成输入、真实接收窗口与离屏像素通过；尚未由用户使用优化版完成物理触摸体验验收。正式安装仍为 v0.1.2，测试未替换其文件或改动自启动。
+Final Mac checks: 436 Python, 86 Linux skips; 15 JavaScript passed. Thor: all 436 Python passed; Node was absent, so JavaScript was not repeated. Synthetic input, real receiving window and offscreen pixels passed. Physical-touch acceptance of this optimized revision remained pending. The real install stayed v0.1.2; files and autostart were not replaced.

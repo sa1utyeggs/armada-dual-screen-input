@@ -1,48 +1,46 @@
-# 安装、升级与卸载
+English · [简体中文](zh-CN/installation.md)
 
-当前正式版为 `v0.1.2`，实机验证以 AYN Thor / Armada `20261010.c3d178c` / Linux 7.2.6 / Steam Game Mode 为准。
-其他机型和系统版本见 [兼容范围](compatibility.md)。安装器以普通用户运行，**不要加 sudo**。
+<a id="安装升级与卸载"></a>
 
-## 一键在线安装（推荐）
+# Installation, upgrades and removal
 
-在 Armada 桌面终端执行：
+The current stable release is `v0.1.3`. Device validation refers to AYN Thor / Armada `20261010.c3d178c` / Linux 7.2.6 / Steam Game Mode. See [compatibility](compatibility.md) for other devices and systems. Run the installer as your regular user, **without sudo**.
+
+<a id="一键在线安装推荐"></a>
+
+## One-command online installation (recommended)
+
+Run in an Armada desktop terminal:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/sa1utyeggs/armada-dual-screen-input/main/get.sh | bash
 ```
 
-也可以从 GitHub 下载项目根目录的 `get.sh`，然后执行 `bash get.sh`。
-这一个脚本自动解析 `main` 当前提交，下载该提交的源码压缩包，检查源码路径和安装器，再执行现有安装流程。
-不需要 Git、SSH 密钥、手动创建目录或解压；临时下载完成后会自动清理。
-基础系统依赖与下面的源码安装相同，固定的 gtk-layer-shell 私有依赖仍从 Fedora 官方地址下载并校验 SHA-256。
-整个过程以普通用户运行，**不要加 sudo**，不启用开机自启动，也不安装或加载实验驱动。
+You can also download the repository's root `get.sh` and run `bash get.sh`. It resolves the current `main` commit, downloads that commit's source archive, validates source paths and the installer, then runs the existing installation process. Git, SSH keys, manual directory creation and extraction are unnecessary. Temporary downloads are cleaned up automatically. Base dependencies match source installation below; the pinned private gtk-layer-shell dependency is still downloaded from official Fedora and SHA-256 verified. The process runs as a regular user, **without sudo**, and enables neither autostart nor an experimental driver.
 
-下载脚本后，可选用指定标签/提交，或只查看安装计划：
+After downloading the script, optionally select a tag/commit or inspect the plan:
 
 ```bash
 bash get.sh --ref v0.1.2
 bash get.sh --dry-run
 ```
 
-标签示例须替换成仓库中实际存在的标签。在线入口的 `--dry-run` 会下载到临时目录，但不安装、不修改服务；
-本地 `install.sh --dry-run` 则连下载也不执行。在线升级时再次运行同一条命令，原配置与安装器管理规则保持不变。
+Replace the tag example with an existing repository tag. Online `--dry-run` downloads into a temporary directory but performs no installation or service changes; local `install.sh --dry-run` does not even download. Rerun the same online command to upgrade while preserving configuration and installer ownership rules.
 
-匿名命令需要仓库和 `get.sh` 已公开且位于 `main`。
-如果维护私有副本，可在环境中提供已有的只读 `GH_TOKEN` / `GITHUB_TOKEN`；下载器不会把它写入磁盘或传给应用安装进程，
-跨主机重定向也不携带认证头。首次下载私有 `get.sh` 本身仍需已有的 GitHub 访问方式；该脚本不绕过仓库权限。
-安装脚本下载失败或源码检查失败时会停止，不会尝试降低系统权限限制。
+Anonymous use requires a public repository with `get.sh` on `main`. For a private fork, an existing read-only `GH_TOKEN` / `GITHUB_TOKEN` may be provided in the environment. The downloader neither writes it to disk nor passes it to the app installer; authentication headers are not forwarded across hosts. Obtaining the private `get.sh` itself still requires existing GitHub access. The script does not bypass repository permissions. Download/source-validation failures stop the process without weakening system permission restrictions.
 
-## 使用离线发布包
+<a id="使用离线发布包"></a>
 
-打开 [GitHub Releases](https://github.com/sa1utyeggs/armada-dual-screen-input/releases)，选择需要的版本，在 **Assets** 中下载：
+## Offline release bundle
 
-- `armada-dual-screen-input-<版本>-aarch64.tar.gz`：带私有运行库的 ARM64 安装包。
-- `SHA256SUMS`：同一 Release 的校验文件。
+Open [GitHub Releases](https://github.com/sa1utyeggs/armada-dual-screen-input/releases), choose a version and download both **Assets**:
 
-GitHub 自动生成的 **Source code (zip)** / **Source code (tar.gz)** 不包含打包后的运行库，不能当作上述离线安装包使用。
-可以在另一台电脑下载这两个附件，再通过 LocalSend、USB 或其他方式传到掌机；安装时无需联网。
+- `armada-dual-screen-input-<VERSION>-aarch64.tar.gz`: ARM64 installer bundle including its private runtime.
+- `SHA256SUMS`: the checksum file from the same release.
 
-接收方拿到 `armada-dual-screen-input-0.1.2-aarch64.tar.gz` 和 `SHA256SUMS` 后，在 Armada 桌面终端执行：
+GitHub's generated **Source code (zip)** / **Source code (tar.gz)** omit the packaged runtime and are not substitutes. Download both assets on another computer and transfer them with LocalSend, USB or another method; installation requires no network.
+
+For the example `armada-dual-screen-input-0.1.2-aarch64.tar.gz` and its `SHA256SUMS`, run in an Armada desktop terminal:
 
 ```bash
 sha256sum -c SHA256SUMS
@@ -51,20 +49,17 @@ cd armada-dual-screen-input-0.1.2-aarch64
 bash install.sh
 ```
 
-发布包自带本项目源码、Ratatoskr 快照、gtk-layer-shell 私有运行库和原许可证；安装期间无需下载这些内容。
-校验和用于检查文件完整性，不代替可信下载来源。只使用项目维护者提供的包，勿混用不同版本的校验文件。
+The bundle includes app sources, the Ratatoskr snapshot, private gtk-layer-shell runtime and original licenses; these need no installation-time download. Checksums establish integrity, not a trusted origin. Use maintainer-provided packages and never mix a package with another version's checksum file.
 
-安装完成后，应用菜单和桌面出现 **虚拟键鼠**。默认不自动打开，也不启用登录自启动。
-从桌面点击后，程序等待官方 Steam Game Mode 下屏会话就绪；Desktop Mode 不显示面板属于当前预期行为。
+Installation adds **Virtual Keyboard & Mouse / 虚拟键鼠** to the desktop and application menu; older releases use the Chinese name. It neither opens automatically nor enables login autostart. The shortcut waits for the official Steam Game Mode lower session. No panel in Desktop Mode is currently expected.
 
-安装、升级、回退和卸载完成后，安装器会尝试刷新用户图标与应用菜单缓存，并向当前用户实际运行的 KDE 会话发送图标重载通知，
-包括游戏模式下屏的独立会话。工具缺失、超时或刷新失败只作为 `desktop_refresh.warnings` 返回，不撤销已成功的操作。
-移动主屏可能继续保留已经绘制的旧图像；这时下次退出并重新进入游戏模式会加载新图标。
-安装器不会为刷新图标重启官方下屏、KWin 或 Steam，也不改变主屏收藏和图标位置。
+After install, upgrade, rollback or removal, the installer attempts to refresh user icon/application-menu caches and notify this user's running KDE sessions, including the separate Game Mode lower-screen session. Missing tools, timeouts or failures are returned as `desktop_refresh.warnings` without undoing a successful operation. The mobile home screen may retain an already drawn image until the next exit/re-entry to Game Mode. The installer restarts neither the official lower session, KWin nor Steam for icon refresh, and preserves home favorites and icon positions.
 
-## 从源码安装
+<a id="从源码安装"></a>
 
-有仓库访问权限时，克隆后执行：
+## Install from source
+
+With repository access, clone and run:
 
 ```bash
 git clone https://github.com/sa1utyeggs/armada-dual-screen-input.git
@@ -72,35 +67,34 @@ cd armada-dual-screen-input
 bash install.sh
 ```
 
-源码安装会从 Fedora 官方地址下载**固定版本、固定 SHA-256** 的 gtk-layer-shell RPM，只解出应用需要的库、typelib 和许可证，不执行 RPM 脚本、不写 `/usr`。
-私有仓库需要先取得 GitHub 访问权限；本地离线发布包可直接交给其他人，不要求他们有仓库账号。
+Source installation downloads an official Fedora gtk-layer-shell RPM pinned by **version and SHA-256**, extracting only required libraries, typelib and licenses. It runs no RPM scripts and writes nothing to `/usr`. A private repository needs GitHub access; an offline bundle can be given to someone without a repository account.
 
-若没有网络，可事先准备指定 RPM，再运行：
+Without network access, prepare the pinned RPM first:
 
 ```bash
 bash install.sh --offline --runtime-rpm /路径/gtk-layer-shell-0.10.0-1.fc44.aarch64.rpm
 ```
 
-源码安装解包需要 `rpm2cpio` 和 `cpio`，或支持 RPM 的 libarchive tar。离线发布包已经解包运行库，不需要这些工具。
+Source extraction needs `rpm2cpio` + `cpio`, or libarchive tar with RPM support. Offline bundles already contain the extracted runtime and need neither tool.
 
-## 安装前检查
+<a id="安装前检查"></a>
+
+## Pre-install checks
 
 ```bash
 bash install.sh --dry-run
 python3 -B tools/manage.py doctor
 ```
 
-`--dry-run` 只输出计划，不下载、不写文件、不修改服务。`doctor` 只检查依赖和权限，不创建输入设备。
-源码尚未准备私有运行库时，doctor 可以报告 GtkLayerShell 缺失；完整安装阶段会在发布包/临时目录中准备该库后再次检查。
+`--dry-run` prints a plan without downloading, writing files or changing services. `doctor` checks dependencies/permissions without creating input devices. Before source runtime preparation it may report missing GtkLayerShell; full installation checks again after preparing the library in a bundle/temporary directory.
 
-宿主仍需要 Python 3、PyGObject、Cairo、GTK3、PangoCairo、libevdev、libxcb 和 websocket-client，以及正常用户的 `/dev/uinput` 读写权限。
-安装器会拒绝缺少这些基础依赖的环境；不会用临时 `dnf` overlay、修改系统输入权限、启动 root 服务或接管官方下屏服务来绕过。
-请在 Armada 的普通桌面用户会话中运行，确保 `systemctl --user` 能连接。缺依赖时应更新/修复官方系统镜像，或向维护者提供 doctor 输出。
-界面使用系统中文字体；如果出现方块，检查系统 Noto Sans CJK 字体，不要把个人字体缓存打进发布包。
+The host still needs Python 3, PyGObject, Cairo, GTK3, PangoCairo, libevdev, libxcb, websocket-client and normal-user read/write access to `/dev/uinput`. The installer refuses missing base dependencies. It does not work around them through a transient `dnf` overlay, input-permission changes, root services or takeover of the official lower session. Use Armada's normal desktop user session with a working `systemctl --user`. Update/repair the official system image for missing dependencies, or provide `doctor` output to the maintainer. The UI uses system Chinese fonts; if squares appear, inspect Noto Sans CJK rather than packaging a personal font cache.
 
-## 管理
+<a id="管理"></a>
 
-将 `~/.local/bin` 加入 PATH 的系统可直接使用下列命令；否则使用完整路径：
+## Management
+
+If `~/.local/bin` is on PATH you may use the command name directly; otherwise use these full paths:
 
 ```bash
 ~/.local/bin/armada-dual-screen-input start
@@ -109,48 +103,43 @@ python3 -B tools/manage.py doctor
 ~/.local/bin/armada-dual-screen-input doctor
 ```
 
-右上角“关闭”按钮立即释放输入并停止本应用。收起后仍可展开，收起不等于退出。
+The upper-right Close button releases input and stops this app. Hide collapses the panel so it can be expanded again; it does not exit.
 
-## 升级与回退
+<a id="升级与回退"></a>
 
-在新版源码或发布包中再次运行 `bash install.sh`。
-程序先验证整个发布包和依赖，再将版本复制到独立目录，切换 `current` 链接并更新用户入口。
-配置和日志放在版本目录之外，不由安装器覆盖。升级前已在运行的面板会重启；原先未运行则保持停止。
-安装器不更改已有的自启动选择；**全新安装不启用自启动**。
+## Upgrade and rollback
 
-新安装器管理的旧版本会保留，可执行：
+Run `bash install.sh` again in the new source/bundle. The installer verifies the complete bundle and dependencies, copies it to a separate version directory, switches `current` and updates user entry points. Configuration and logs live outside releases and are not overwritten. An active panel restarts; an inactive panel stays stopped. Existing autostart choice is preserved; **fresh installs do not enable autostart**.
+
+Previous installer-managed versions are retained:
 
 ```bash
 ~/.local/bin/armada-dual-screen-input rollback
 ```
 
-回退恢复应用版本及安装器管理的图标、入口和服务模板，不回退个人配置或内核；本地修改过的管理文件会拒绝覆盖。
-首次从旧的平铺手工安装迁移时，没有可供上述命令切换的旧发布版本；
-旧源文件仍留在原安装目录，入口文件的原内容备份在 `~/.local/share/thor-panel/backups/`。
-升级的写入/服务重载失败会尝试恢复原入口和版本链接；如果用户服务本身不可用，应检查日志和备份，而不是重复运行 sudo。
+Rollback restores the app version and managed icon, entry and service templates, not personal configuration or the kernel. Locally modified managed files are not overwritten. A first migration from the old flat manual layout has no previous release for this rollback command: old source files remain in the original directory, and entry-file backups are under `~/.local/share/thor-panel/backups/`. Upgrade write/service-reload failures attempt to restore entries and version links. If the user service itself is unavailable, inspect logs/backups instead of repeatedly using sudo.
 
-## 卸载
+<a id="卸载"></a>
+
+## Uninstall
 
 ```bash
 ~/.local/bin/armada-dual-screen-input uninstall
 ```
 
-也可以在源码/发布包目录执行 `bash uninstall.sh`。
-卸载停止并移除本应用的用户服务、安装器管理的快捷方式、图标、启动命令和未被修改的发布版本。
-被用户修改或不属于本应用的文件不会被强行删除，结果会列出遗留项；服务文件被改动时需先人工核对。
-个人配置 `~/.config/thor-panel/`、日志 `~/.local/state/thor-panel/`、入口备份及旧手工安装文件保留。
+Alternatively run `bash uninstall.sh` from the source/bundle directory. Removal stops/deletes this app's user service, managed shortcuts, icon, command and unmodified releases. Modified or unowned files are not forcibly deleted; the result lists leftovers. A modified service file needs manual inspection first. Personal configuration under `~/.config/thor-panel/`, logs under `~/.local/state/thor-panel/`, entry backups and old manual-install files remain.
 
-## 路径与更新兼容
+<a id="路径与更新兼容"></a>
 
-| 内容 | 默认位置 |
+## Paths and system-update compatibility
+
+| Item | Default path |
 | --- | --- |
-| 版本目录 | `~/.local/share/thor-panel/releases/<版本>-<标识>/` |
-| 当前/上一版本 | `~/.local/share/thor-panel/current`、`previous` |
-| 安装记录 | `~/.local/share/thor-panel/install-state.json` |
-| 用户服务 | `~/.config/systemd/user/thor-panel.service` |
-| 应用/桌面入口 | `~/.local/share/applications/thor-panel.desktop`、桌面的 `虚拟键鼠.desktop` |
-| 配置/日志 | `~/.config/thor-panel/`、`~/.local/state/thor-panel/` |
+| Releases | `~/.local/share/thor-panel/releases/<VERSION>-<ID>/` |
+| Current/previous | `~/.local/share/thor-panel/current`, `previous` |
+| Installation state | `~/.local/share/thor-panel/install-state.json` |
+| User service | `~/.config/systemd/user/thor-panel.service` |
+| App/desktop entries | `~/.local/share/applications/thor-panel.desktop`, desktop `虚拟键鼠.desktop` |
+| Configuration/logs | `~/.config/thor-panel/`, `~/.local/state/thor-panel/` |
 
-XDG 数据/配置目录按当前用户环境确定，兼容旧 `thor-panel` 服务名和配置名，避免同时启动两份面板。
-文件位于用户持久目录，Armada 镜像更新后不会因为 `/usr` 被替换而丢失；这不代表未来 GTK、Steam 或 Gamescope API 一定兼容。
-应用安装器不包含或启用实验性触摸驱动，驱动试验的内核匹配与回退另见上游 Issue #757。
+XDG paths follow the current user's environment. Existing `thor-panel` service/configuration identities are retained to avoid duplicate panels. Files live in persistent user directories, so replacement of `/usr` by an Armada image update does not remove them. Future GTK, Steam or Gamescope API compatibility is not guaranteed. The installer includes/enables no experimental touch driver; kernel matching and rollback are documented separately in upstream Issue #757.

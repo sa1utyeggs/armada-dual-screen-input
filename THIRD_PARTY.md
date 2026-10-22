@@ -1,3 +1,5 @@
+English · [简体中文](THIRD_PARTY.zh-CN.md)
+
 # Third-party components
 
 The project's own code is MIT licensed. This does not relicense these components:

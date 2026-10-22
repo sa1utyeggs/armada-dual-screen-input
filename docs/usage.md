@@ -1,58 +1,68 @@
-# 使用虚拟键鼠
+English · [简体中文](zh-CN/usage.md)
 
-安装完成后打开桌面或应用菜单中的 **虚拟键鼠**，进入 Steam Game Mode。面板只使用官方下屏会话，不停止官方下屏服务。
+<a id="使用虚拟键鼠"></a>
 
-| 控件/模式 | 操作 |
+# Using Virtual Keyboard & Mouse
+
+Open **虚拟键鼠** from the desktop/menu and enter Steam Game Mode. Only the official lower-screen session is used; its service is not stopped.
+
+| Control/mode | Action |
 | --- | --- |
-| 触控板 | 单指移动、轻点点击，双指滑动滚轮 |
-| 键鼠 | 上方触控板、下方键盘；当前页可见时临时抑制 Steam 原生键盘 |
-| 触屏 → 定位 | 第一指相对移动上屏圆环；保持第一指，第二指按住触摸；移动第一指拖动，第二指抬起释放 |
-| 触屏 → 直接触屏 | 下屏落指位置直接对应上屏位置；每根手指独立按下、移动与抬起，上屏逐个显示圆环 |
-| 定位居中 | 仅定位子模式显示；释放旧触点并将圆环居中，抬手后自动恢复 |
-| 设置 | 调整鼠标、触屏定位倍率、键盘语言与重复输入选项；保存后生效 |
-| 释放按键 | 在键鼠 / 触控板页清除保持的按键；触屏页没有暂停或释放触点按钮 |
-| 收起 | 缩为窄条，点击可展开 |
-| 关闭 | 释放输入并退出，不自动重开 |
+| Touchpad | One-finger movement, tap to click, two-finger scrolling |
+| Keys+Pad | Touchpad above keyboard; temporarily suppress Steam's native keyboard while this page is visible |
+| Touchscreen → Position | Move the first finger to aim the ring; keep it down and hold a second finger to touch; move the first to drag, lift the second to release |
+| Touchscreen → Direct touch | Lower-screen positions map directly to the upper screen; each finger presses, moves and releases independently, with an upper ring per contact |
+| Center | Position mode only; release old contacts, center the ring, then resume once fingers lift |
+| Settings | Adjust pointer, positioning multiplier, input language and repeat; save to apply |
+| Release keys | Clear held keys on Keys+Pad / Touchpad; the touch page has no pause/release-contact button |
+| Hide | Collapse to a strip; tap to expand |
+| Close | Release input and exit, without automatic reopening |
 
-定位圆环默认蓝色表示仅定位，橙色表示触点按下；两种状态的颜色可分别在设置中调整。默认移动倍率为 2.0。切换界面后先抬起所有手指，旧手势不续接。
-触屏页只要可见便自动等待上屏目标与路由就绪，然后启用触摸；无需手动开启。在顶部现有工具栏的下拉框选择“定位”或“直接触屏”，选择会保留到下次打开。下拉框不增加额外行，操作区从原来的状态栏下沿开始。菜单展开时浮在原有界面上，并暂停向上屏发送触点；选择或点外部收起后，等待全部抬手与目标稳定再自动恢复。打开、选项与收起菜单的触摸序列均不会发送到上屏。
-直接触屏按操作区绝对位置映射，不使用定位倍率，不将双指变为滚轮。程序可独立跟踪最多 10 个触点；实际数量受下屏设备与上屏应用限制。圆环使用所选的“触摸中”颜色（默认橙色）标记触点位置，不表示测得的手指压力或真实接触面积。
-部分 Steam / Gamescope 触摸策略会将触屏转成鼠标，原生多指手势须由接收应用和其触摸策略支持；程序不会静默覆盖游戏的 Steam 触摸设置。
+Blue means aiming without a pressed contact; orange means touching, by default. Both colors can be changed independently. Default positioning multiplier is 2.0. Lift all fingers after switching UI; old gestures are not continued.
 
-面板不自动加闲置变暗遮罩。顶部设备监控为只读，电源、亮度、官方下屏服务仍由 Armada 管理。
+While the touch page is visible, it automatically waits for the upper target and route, then enables input. The existing header dropdown selects Position / Direct touch and retains the choice. It adds no row: input still starts below the original status ribbon. Opening the menu overlays the page and pauses sent contacts. Selection or outside dismissal waits for all fingers to lift and the target to stabilize before resuming. Opening, selecting and dismissing the menu never sends those touches to the upper app.
 
-## 输入设置
+Direct touch maps absolute positions in the input area, ignores the positioning multiplier and does not convert two fingers to scrolling. Up to 10 independent contacts can be tracked; real capacity depends on hardware/app support. Each ring uses the selected touching color, orange by default. It does not represent measured pressure or actual contact area. Some Steam/Gamescope policies turn touch into mouse input. Native multi-touch needs support from the app and its touch policy; game touch settings are not silently overwritten.
 
-点击顶部 **设置**，选择“鼠标 / 触屏 / 键盘”。拖动滑块或点击减号、加号调整数值，最后点击 **保存设置**；无需退出应用或手动修改文件。保存失败会显示提示，保留待保存的修改，不覆盖原配置。
+The panel does not dim itself when idle. Header telemetry is read-only; Armada continues to manage power, brightness and the official lower-screen service.
 
-| 分组 | 可调项目 |
+<a id="输入设置"></a>
+
+## Input settings
+
+Select Settings, then Mouse / Touchscreen / Keyboard / Updates. Drag sliders or use minus/plus, then Save settings. No restart or manual file editing is needed. A failed save keeps the draft and original configuration and displays an error.
+
+| Group | Options |
 | --- | --- |
-| 鼠标 | 移动速度 0.2～5.0×、滚轮档位 1～5、滚轮倍率 0.01～1.0×、轻点点击、惯性滑行及阻力 |
-| 触屏 | 定位子模式移动倍率 0.1～4.0×，默认 2.0×；圆环帧率上限可选 30 / 60 / 120 FPS / 跟随屏幕；未触摸 / 触摸中配色分别选择 |
-| 键盘 | 英文 US / 中文拼音；长按重复开关、首次重复等待 150～800 ms、重复间隔 20～200 ms、Shift 双击间隔 150～800 ms |
+| Mouse | Speed 0.2–5.0×, scroll level 1–5, multiplier 0.01–1.0×, tap to click, glide and friction |
+| Touchscreen | Position multiplier 0.1–4.0×, default 2.0×; ring cap 30 / 60 / 120 FPS / Follow display; independent idle / touching colors |
+| Keyboard | English US / Chinese pinyin; repeat toggle, delay 150–800 ms, interval 20–200 ms, Shift double-tap interval 150–800 ms |
 
-“恢复本页默认”只重置当前分组，仍需保存；“放弃修改”恢复上次保存值。切到其他输入模式会放弃未保存的编辑。打开设置时会释放应用保持的按键与定位触点；设置页不接管上屏键盘焦点，也不会把滑块触摸当成上屏鼠标移动。重新启动会回到之前的输入模式，而非设置页。
 
-点击“圆环帧率上限”右侧按钮循环选择，再保存。默认“跟随屏幕”，已检测到上屏后显示刷新率，例如“跟随屏幕（120 Hz）”；尚未检测时只显示“跟随屏幕”。固定档位最高不超过上屏刷新率。这是两种触屏模式的圆环绘制上限，不修改游戏限帧、屏幕刷新率或触摸发送频率；实际帧率可能因提交等待和系统负载降低，静止时不持续绘制。更高档位可能增加 CPU/GPU 消耗；详细测量见[圆环帧率记录](position-touch.md#2026-10-21按上屏刷新率调度及帧率设置)。定位倍率仅影响定位子模式，直接触屏不使用此倍率。
+Reset this page changes only the selected group and still requires Save. Discard changes restores saved values. Switching to another input mode discards unsaved edits. Entering settings releases held keys and positioning contacts; the page takes no upper-screen keyboard focus and sends no slider touches as mouse movement. Restart returns to the previous input mode, not settings.
 
-在“圆环颜色 · 未触摸”和“圆环颜色 · 触摸中”两行，直接点击右侧色板，最后保存。提供冰蓝、橙、绿、黄、红、紫、粉、白八种颜色，左侧显示当前颜色名称及色值，选中色板有背景高亮。未触摸对应只定位而未向上屏按下触点的状态；触摸中对应已按下的触点，也用于直接触屏的每个圆环。默认保留现有蓝色 / 橙色，圆环中心仍透明、黑色描边保留；颜色在重新进入触屏页时使用，无需退出应用。放弃修改、恢复触屏页默认及重新启动保留按原设置机制处理，不改变输入、帧率或游戏设置。
+Cycle the ring cap with its right-side button, then save. Follow display is the default. Once detected it shows e.g. Follow display (120 Hz); before detection no rate is shown. Fixed caps do not exceed upper refresh. They limit ring rendering in both modes, changing neither game limit, display refresh nor touch-send frequency. Submission waits/load can reduce actual FPS; there is no continuous drawing at rest. Higher caps can use more CPU/GPU; see [measurements](position-touch.md#2026-10-21按上屏刷新率调度及帧率设置). Positioning speed does not affect direct touch.
 
-键盘原 Win 位置的 **中/EN** 可即时切换英文与中文拼音，并保存选择。中文目前在 Game Mode 复用系统 libpinyin 词库，输入拼音时在下屏临时显示候选；选词或取消后自动收起，空闲时触控板保持完整大小。点击候选或按空格选词，数字 1–6 选当前页候选，回车提交原始拼音，取消/Esc 清除组合。需要系统库可用，目标应用也必须支持文字输入。英文沿用原有按键通道，中文不会修改系统全局输入法；[接口、兼容限制与验证记录](multilingual-keyboard.md)。
+For Ring color · Idle and Ring color · Touching, choose a swatch and save. Ice blue, orange, green, yellow, red, purple, pink and white are available. The left caption shows name/hex and the selected swatch is highlighted. Idle means aiming without an upper press; touching means a pressed contact and also colors each direct-touch ring. Defaults retain blue/orange, transparent centers and black outlines. New colors apply when re-entering the touch page, without exiting the app. Discard, touch-page defaults and persistence use the existing settings lifecycle. Input, frame caps and game settings are unchanged.
 
-设置保存在 `~/.config/thor-panel/config.json`（遵守 `XDG_CONFIG_HOME`）。已有配置和未知字段保留，安装器不替你覆盖设置。滚轮太快时可先尝试档位 1、倍率 0.25×；定位速度调节只影响圆环移动，不改变触点角色或实验驱动状态。设置页已于 2026-10-20 在 Thor Game Mode 完成调整、保存、重开及键鼠/定位触摸交互验收；范围和限制见[兼容说明](compatibility.md)。
+The former Win key, **中/EN**, switches and saves English/Chinese input immediately. Chinese full pinyin uses system libpinyin in Game Mode. Candidates appear transiently above the keyboard and disappear after selection/cancel, leaving the full touchpad when idle. Tap a candidate or Space; 1–6 selects from the current page; Enter commits raw pinyin; Cancel/Esc clears composition. System libraries and receiving-app text support are required. English retains its key channel, and Chinese does not change a global input method. See [interfaces, limits and evidence](multilingual-keyboard.md).
 
-如 Ctrl/Shift 等保持导致意外组合键，使用“释放按键”。需要 Steam 自己的整段文字输入对话框时，先收起面板或切到触控板页。
+Preferences are in `~/.config/thor-panel/config.json` (respecting `XDG_CONFIG_HOME`). Existing/unknown fields remain; the installer does not overwrite preferences. For fast scrolling, try level 1 and 0.25×. Positioning speed changes neither finger roles nor experimental-driver state. Settings adjustment, save, reopen and keyboard/mouse/position-touch operation passed Thor Game Mode user acceptance on 2026-10-20. See [scope](compatibility.md).
 
-圆环视觉平滑只让上屏圆环连续靠近最新真实位置，遵守既有帧率上限；真实点击和触摸发送路径保持即时。点击、抬手或切换模式时对齐真实位置，静止后结束绘制。平滑会增加少量视觉滞后，运动时也可能有更多绘制，不代表游戏收到更高频输入；[算法、模型回放与验收边界](position-touch.md#2026-10-22圆环视觉跟随平滑新分支候选)。平滑本身没有新增个人配置项，也不会修改下屏驱动。
+Use Release keys if a held Ctrl/Shift causes unintended combinations. Collapse the panel or switch to Touchpad when Steam's own full-text input dialog is needed.
 
-## 检查与安装更新
+Visual smoothing continuously moves only the ring toward the latest true position within its existing cap. Actual clicks/touches stay immediate. Click, lift or mode switch aligns the ring with the real position; drawing stops at rest. Smoothing adds slight visual lag and potentially more moving draws, not higher-frequency game input. See [algorithm, replay and acceptance limits](position-touch.md#2026-10-22圆环视觉跟随平滑新分支候选). Smoothing itself adds no preference and changes no lower driver.
 
-点击 **设置 → 更新 → 检查更新**，查看当前版本与 GitHub 最新正式版。检查由手动触发，在后台进行；不会在启动时自动联网或下载，也不会切换到预览版。 GitHub 匿名查询额度用完时，会提示“查询次数已达上限，请稍后重试”；等待额度恢复后再手动检查，无需重新安装应用。
+<a id="检查与安装更新"></a>
 
-发现新版本后，点击 **更新至 v…**，再点 **确认更新并重启**。若有未保存的输入设置，先切回原分组保存或放弃修改。下载会核对官方附件的 SHA-256、`SHA256SUMS` 和包内文件清单，然后由原安装器升级；个人配置、自启动选择和上一版本回退入口保留。
+## Check and install updates
 
-更新任务独立于面板运行，安装时面板会短暂关闭；原本由用户服务运行的面板会自动重新打开。完成后可回到本页查看结果。网络、校验、依赖或安装错误会显示失败提示，可重新检查后重试。面板异常退出后，任务仍由用户服务管理；任务本身中断后，页面提示重新检查。应用不自动重启中断的更新任务。
+Select Settings → Updates → Check for updates to view current/latest stable versions. Checks are manual and run in the background: no startup network request/download or switch to prereleases. An exhausted anonymous GitHub quota shows a rate-limit message; wait and manually retry rather than reinstalling.
 
-此入口只更新安装器管理的用户目录应用，不使用 sudo、不更新 Armada 或 Steam，也不安装实验驱动。源码直接运行时可检查版本，更新按钮不可用。仍可按[安装文档](installation.md)手动升级或回退。
+When a version is available, select Update to v…, then Confirm update and restart. First save/discard any input edits. Downloads verify official asset SHA-256, `SHA256SUMS` and the internal manifest before the existing installer upgrades. Personal settings, autostart and the previous-version rollback entry are retained.
 
-[安装与管理命令](installation.md) · [兼容范围与已知问题](compatibility.md)
+The updater runs independently. Installation briefly closes the panel; a panel running through its user service reopens automatically. Return to the page to inspect results. Network, checksum, dependency or install failures show an error and allow a new check/retry. The task survives a panel crash under the user manager; interruption of the task itself prompts a fresh check. Interrupted updates are not automatically restarted.
+
+Only installer-managed per-user app files are updated. No sudo, Armada/Steam update or experimental driver is involved. Source runs can check versions but cannot install through this button. [Manual upgrade/rollback](installation.md) remains available.
+
+[Installation and commands](installation.md) · [Compatibility and known issues](compatibility.md)

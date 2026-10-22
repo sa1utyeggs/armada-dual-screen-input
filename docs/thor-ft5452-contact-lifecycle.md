@@ -1,67 +1,80 @@
-# Thor 下屏漏落指 / 漏抬指：内核修复候选
+English · [简体中文](zh-CN/thor-ft5452-contact-lifecycle.md)
 
-2026-10-20。状态：整内核构建已停止，未完成编译、未安装或启动候选内核；后续独立模块已完成 90 秒实机触摸与自动回退验证，并获授权继续试用。两条路线的结果分别记录如下，不代表长期或休眠验证已完成。
-这是特定机型的系统问题研究，不是虚拟键鼠通用安装器的一部分。
-已向上游提交 [ArmadaOS Issue #757](https://github.com/armada-os/armada/issues/757)，包含设备环境、聚合诊断、复现步骤、参考来源及候选 diff；尚未作为已验证修复提交 PR。
+<a id="thor-下屏漏落指--漏抬指内核修复候选"></a>
 
-## 现象及已验证范围
+# Missed contact begin/end on the Thor lower screen: kernel candidate
 
-用户反馈：第二指落下有时不识别，手指抬起后标识仍为橙色。异常坐标保护上线后，用户确认不再跳位、拖动正常，随后仍反馈这两项生命周期问题。
-因此不能把坐标保护的通过扩大为整个定位触摸已稳定，或把漏事件称为灵敏度不足。
+2026-10-20. Status: the whole-kernel build was stopped before completion; no candidate kernel was installed or booted. A later standalone-module experiment passed a 90-second physical-touch test and automatic rollback, followed by an authorized extended trial. These are separate results, and neither establishes long-session or suspend/resume reliability.
+This is device-specific system research, outside the application's general installer.
+[ArmadaOS Issue #757](https://github.com/armada-os/armada/issues/757) contains the environment, aggregate diagnostics, reproduction steps, references and candidate diff. No PR presents it as a validated fix.
 
-此前对物理下屏只读查询 MT 槽和 BTN_TOUCH，在用户确认全部抬手后仍持续报告一个接触及 BTN_TOUCH=true。
-GTK 分发前后记录表明已有 BEGIN / END 均进入应用；部分真实操作在分发前就缺少事件。触点残留发生在应用之前。
-2026-10-20 本轮只读快照又正常返回零接触，说明问题是间歇性的。
+<a id="现象及已验证范围"></a>
 
-环境：Armada `20261010.c3d178c`，Linux `7.2.6`，根设备树兼容 `ayn,thor`，下屏 `focaltech,ft5452`，驱动 `edt_ft5x06`（builtin），下屏启用 `no-regmap-bulk-read`。
-这里不需要修改手势延迟、灵敏度或用静止超时猜测抬手。正常长按也可以没有运动事件。
+## Symptoms and established scope
 
-## 找到的对应修复
+The user reported occasional missed second-finger presses and an orange marker after lifting the finger. After the coordinate guard was installed, the user confirmed that jumps stopped and dragging worked, but these two contact-lifecycle problems remained.
+Passing the coordinate-guard test therefore does not establish stable positioning touch overall, and missing events should not be described as insufficient sensitivity.
 
-[SteamOS ARM Port 的发布说明](https://github.com/hashtagbasit/SteamOS-ARM-Port/releases)提到修复 Thor 触摸残留。
-其[具体驱动补丁](https://github.com/hashtagbasit/SteamOS-ARM-Port/blob/e54dac93afccf76e5fefe998399b6c1b1a23f3a1/external-and-mods/kernel-sm8550/patches/0030-input-edt-ft5x06-thor-release-contacts-a-frame-leaves-out.patch)说明：
-FT5452 偶发漏掉 UP，而旧驱动依赖显式 UP 清理触点；控制器每帧包含所有当前活动接触，因此通过 `INPUT_MT_DROP_UNUSED` 加 `input_mt_sync_frame()` 清掉本帧未出现的旧槽。
-这与本机实测高度吻合，但别的发行版修复声明不能代替 Armada 上的启动和触摸验证。
+Earlier read-only MT-slot and BTN_TOUCH queries still reported one contact and `BTN_TOUCH=true` after the user confirmed all fingers were lifted.
+Records around GTK dispatch showed that received BEGIN / END events reached the application, while some physical actions produced no event before dispatch. The stale contact existed before application processing.
+A read-only snapshot on 2026-10-20 returned zero contacts normally, confirming intermittency.
 
-相比先前对逐字节读取路径的怀疑，这个补丁提供了直接对应“漏 UP 后永远残留”的修复方向。
-它没有修改 `no-regmap-bulk-read`；本轮不再把关闭该属性作为首选试验，也不宣称该读取方式已经被证明是根因。
+Environment: Armada `20261010.c3d178c`, Linux `7.2.6`, root DT compatible `ayn,thor`, lower controller `focaltech,ft5452`, builtin `edt_ft5x06` driver, and lower-screen `no-regmap-bulk-read` enabled.
+Changing gesture delays or sensitivity, or guessing release from inactivity, is inappropriate: a valid long press can have no motion events.
 
-## 针对 Armada 的整内核候选（早期阶段）
+<a id="找到的对应修复"></a>
 
-[候选补丁](patches/0030-input-edt-ft5x06-thor-bottom-drop-unused.patch)保留来源署名，按 Armada 源码重新生成，并将范围缩小为同时匹配 `ayn,thor` 和 `focaltech,ft5452`。
-相较参考补丁的整机匹配，只覆盖已确认有问题的下屏，不改变上屏 FT5426 或其他设备。
-不修改读取模式、IRQ、坐标转换、设备树、输入权限、Steam 或应用配置。
+## Corresponding upstream fix
 
-准备与验证：
+The [SteamOS ARM Port release notes](https://github.com/hashtagbasit/SteamOS-ARM-Port/releases) mention a Thor stale-touch fix.
+Its [driver patch](https://github.com/hashtagbasit/SteamOS-ARM-Port/blob/e54dac93afccf76e5fefe998399b6c1b1a23f3a1/external-and-mods/kernel-sm8550/patches/0030-input-edt-ft5x06-thor-release-contacts-a-frame-leaves-out.patch) explains that FT5452 sometimes omits UP, while the old driver depends on explicit UP events to clear slots. Each controller frame contains all active contacts, so `INPUT_MT_DROP_UNUSED` plus `input_mt_sync_frame()` clears old slots missing from the frame.
+This closely matches local observations, but another distribution's fix claim cannot replace boot and touch validation on Armada.
 
-1. 读取 Linux `v7.2.6` 的驱动文件。
-2. 按 Armada `c3d178c` 的 `patches/series`，在本地临时目录依次应用两份现有 ft5x06 补丁：输入名称、no-regmap-bulk-read。
-3. 对候选做 `patch --dry-run -p1 -F0`；无模糊匹配通过。
-4. 在 Mac 的独立 ARM64 构建容器中，192 份原有补丁及候选共 193 份全部应用通过，失败数为零。生成的内核配置与掌机当前配置一致，编译出的 Thor 设备树与已安装版本逐字节相同。
-5. 内核主体编译未完成即按用户要求停止。没有完成内核或模块包可供部署，也没有启动、触摸或恢复介质实测结果。
+Compared with earlier suspicions about byte-at-a-time reads, the patch directly addresses contacts left indefinitely after a missing UP.
+It does not change `no-regmap-bulk-read`. Disabling that property is no longer the preferred initial experiment, and its read path has not been established as the cause.
 
-上述检查验证补丁适用性及构建输入的一致性，不代表内核通过完整编译、真实帧完整性已独立证实，或所有漏落指都能解决。若存在独立 DOWN 丢失、读取不完整帧或完全没有后续 IRQ，仍需进一步诊断。
+<a id="针对-armada-的整内核候选早期阶段"></a>
 
-## 整内核路线的后续边界
+## Whole-kernel candidate for Armada (early stage)
 
-驱动编入当前内核，不能通过替换 Python 模块修好。此前准备的是兼容 Armada 的测试内核路线，需要在保存游戏、具备原内核回退路径后重启验证。
-本轮没有改动掌机的内核、设备树、启动条目或系统服务，也没有部署其他发行版内核。
-用户已要求暂不改动内核；后续若恢复试验，须重新明确授权，并先验证备用 Armada 启动介质及独立恢复路径。本项目合并候选文档不构成继续编译或安装的指令。
-系统试验应作为独立阶段确认范围，不能把源码匹配通过当成可以直接替换启动文件。
+The [candidate patch](patches/0030-input-edt-ft5x06-thor-bottom-drop-unused.patch) retains attribution, was regenerated against Armada's source, and narrows the condition to both `ayn,thor` and `focaltech,ft5452`.
+Unlike the reference's whole-device match, it affects only the identified lower controller, leaving the upper FT5426 and other devices unchanged.
+It does not change reads, IRQs, coordinates, DT, input permissions, Steam or application configuration.
 
-验证至少区分：单指保持 + 第二指反复按下抬起；两指同时落下抬起；长按及拖动；全部抬手后内核槽归零；上屏物理触摸与手柄共存。
-候选若无效，应保留现场并回退测试内核，不以放宽应用判定或超时自动松手掩盖。
+Preparation and checks:
 
-## 后续：独立模块路线
+1. Read the Linux `v7.2.6` driver source.
+2. In a temporary local directory, apply Armada `c3d178c`'s two existing ft5x06 patches, for input names and no-regmap-bulk-read, in `patches/series` order.
+3. Run `patch --dry-run -p1 -F0` against the candidate: passed without fuzzy matching.
+4. In a separate ARM64 build container on the Mac, all 192 existing patches plus the candidate—193 total—applied with zero failures. The generated kernel configuration matched the device, and the built Thor DTB was byte-identical to the installed version.
+5. Stop the main kernel compilation at the user's request before completion. This route produced no completed deployable kernel or module package, boot test, touch test or recovery-media test.
 
-2026-10-20 用户要求探索方便更新的方式后，新增了可选的[Thor 下屏独立模块实验](../extras/thor-touch-driver/README.md)。
-它通过名称独立、仅匹配下屏的驱动接管物理设备，不替换启动内核。模块已完成离线编译、69 个导入符号核对及掌机只读计划检查；
-18 项工具检查通过。用户保存并退出游戏后，完成三轮运行时试验：前两轮因面板不可见而主动中断，原厂驱动均恢复；第三轮在面板可见后完成 90 秒测试。
-第三轮用户确认保持第一指、反复落下和抬起第二指时“每次都能立即变蓝，拖动正常”。只读聚合记录包含 2 → 1 → 0 接触变化，末尾持续返回零接触及 `BTN_TOUCH=false`。
-到期自动回退正常退出，复查下屏已恢复 `edt_ft5x06`，候选模块已卸载；上屏驱动和原输入设备保持不变。没有改动启动文件或配置开机加载。
-这支持该补丁对本次第二指抬起残留的修复效果，仍不能替代两指同时落下、长期游戏及休眠恢复的专项验证。
-随后用户明确要求启用补丁以继续测试，已用 `apply` 再次启用同一模块至手动回退或重启，并重新打开虚拟键鼠。复查仅下屏驱动改变，上屏原输入设备未改变；没有配置开机加载，长期测试反馈待补充。
-此前停止的整内核构建仍未恢复；新的模块构建使用独立工作区。
+These checks establish source applicability and consistent build inputs, not successful full compilation, independently proven complete controller frames, or a fix for every missing DOWN. Independent DOWN loss, incomplete frames or absent subsequent IRQs still require diagnosis.
 
-以上驱动改动、90 秒实机与回退结果、继续试用状态及验证边界，已于 2026-10-20 更新到 [Issue #757 的后续评论](https://github.com/armada-os/armada/issues/757#issuecomment-6284200266)。
-评论也说明了应用侧圆环恢复 / 等待优化和时间线间歇重连的当前观察，未将尚未确认的应用问题归因于驱动；Issue 保持打开。
+<a id="整内核路线的后续边界"></a>
+
+## Boundaries for further whole-kernel work
+
+The driver is builtin; replacing Python code cannot fix it. This route prepared an Armada-compatible test kernel, requiring saved games, an original-kernel rollback path and reboot validation.
+It did not change the device's kernel, DT, boot entries or services, or deploy another distribution's kernel.
+The user asked to stop kernel changes. Resuming requires explicit renewed authorization and prior verification of spare Armada boot media and an independent recovery path. Merging these documents does not authorize continued compilation or installation.
+System experiments need a separate scope decision; source matching is insufficient justification to replace boot files.
+
+Validate separately: hold one finger while repeatedly pressing/lifting the second; simultaneous two-finger begin/end; long holds and drags; zero kernel slots after all fingers lift; upper physical touch and controller coexistence.
+If ineffective, preserve evidence and roll back the test kernel instead of hiding missing events through looser app rules or timed releases.
+
+<a id="后续独立模块路线"></a>
+
+## Later standalone-module experiment
+
+After the user requested an update-friendly alternative on 2026-10-20, a separate optional [Thor lower-screen module experiment](../extras/thor-touch-driver/README.md) was added.
+An independently named driver, matched only to the lower controller, takes over the physical device without replacing the boot kernel. Offline compilation, 69 imported-symbol checks and the device's read-only plan check completed; 18 tool checks passed.
+After the user saved and exited the game, three runtime trials took place: the first two were interrupted because the panel was not visible and both restored the stock driver; the third completed 90 seconds with a visible panel.
+In the third trial, the user confirmed that lifting the second finger while holding the first immediately returned the marker to blue and dragging worked. Read-only aggregates included 2 → 1 → 0 contacts, then repeated zero contacts and `BTN_TOUCH=false`.
+The deadline triggered a clean rollback: the lower screen returned to `edt_ft5x06`, the candidate unloaded, and the upper driver/input device remained unchanged. No boot files or boot-loading rules changed.
+This supports a fix for the second-finger release residue in that trial; simultaneous begin, long sessions and suspend/resume still require dedicated validation.
+The user then explicitly authorized continued use. The same module was enabled with `apply` until manual rollback or reboot, and the panel reopened. Only the lower driver changed; the original upper input device remained, with no boot autoload. Long-session feedback remains pending.
+The earlier whole-kernel build stayed stopped; the module used a separate workspace.
+
+The driver changes, 90-second test, rollback, extended-trial status and limits were added to [Issue #757's follow-up comment](https://github.com/armada-os/armada/issues/757#issuecomment-6284200266) on 2026-10-20.
+The comment also separates application marker-recovery/wait improvements and intermittent timeline reconnections from driver observations; unconfirmed app problems were not attributed to the driver. The issue remains open in this historical record.

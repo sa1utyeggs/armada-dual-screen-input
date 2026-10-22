@@ -14,10 +14,14 @@ import tempfile
 import urllib.request
 
 APP = 'armada-dual-screen-input'
-ROOT_FILES = ('VERSION', 'README.md', 'README.en.md', 'CHANGELOG.md', 'LICENSE', 'THIRD_PARTY.md', 'install.sh', 'uninstall.sh')
+ROOT_FILES = ('VERSION', 'README.md', 'README.en.md', 'README.zh-CN.md', 'CHANGELOG.md', 'CHANGELOG.zh-CN.md', 'LICENSE', 'THIRD_PARTY.md', 'THIRD_PARTY.zh-CN.md', 'install.sh', 'uninstall.sh')
 TREES = ('src', 'vendor', 'assets', 'packaging')
 TOOLS = ('manage.py', 'release.py', 'run.py', 'update.py', 'desktop_cache.py')
-DOCS = ('installation.md', 'usage.md', 'compatibility.md', 'multilingual-keyboard.md')
+DOC_GUIDES = ('README.md', 'installation.md', 'usage.md', 'compatibility.md', 'development.md',
+              'history.md', 'multilingual-keyboard.md', 'keyboard-latency.md',
+              'native-touch-routing.md', 'position-touch.md', 'trackpad-recovery.md',
+              'thor-ft5452-contact-lifecycle.md')
+DOCS = DOC_GUIDES + tuple('zh-CN/' + name for name in DOC_GUIDES)
 
 
 class PackageError(RuntimeError):

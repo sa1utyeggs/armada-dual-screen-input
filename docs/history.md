@@ -1,100 +1,114 @@
-# 历史实现与实测记录
+English · [简体中文](zh-CN/history.md)
 
-以下保留重构前的记录；当前安装与兼容范围以 README 和 installation.md 为准。
+<a id="历史实现与实测记录"></a>
 
-# Armada Dual Screen Input（虚拟键鼠）
+# Historical implementation and device tests
 
-面向 ArmadaOS 双屏设备的副屏输入工具，提供虚拟键盘、触控板、设备监控及无需镜像的定位触摸。
-项目以适配不同机型的屏幕尺寸、方向和输入设备为目标。
+These are records from before the repository refactor. For current installation and support, use the README and installation guide.
 
-目前实机验证设备为 **AYN Thor**，已验证范围主要是 **Steam Game Mode**。
-其他 ArmadaOS 双屏设备尚未验证，不能据此认为当前版本已经通用；设备识别、屏幕参数、触摸映射及硬件监控仍需逐机型确认。
-Desktop Mode 支持仍为实验状态，默认关闭。
+<a id="armada-dual-screen-input虚拟键鼠"></a>
 
-## 源码与版本管理
+# Armada Dual Screen Input (virtual keyboard and mouse)
 
-本项目以 Git 独立管理，项目名为 `armada-dual-screen-input`；GitHub 主仓库为
-[`sa1utyeggs/armada-dual-screen-input`](https://github.com/sa1utyeggs/armada-dual-screen-input)，默认分支为 `main`，远端名为 `origin`。
-原项目名为 `thor-virtual-input`。本地目录暂时保留 `thor-panel-prototype`，以兼容现有工作路径。
-已有 `thor-panel` 安装目录、配置路径和用户服务名暂时保留，后续通过兼容迁移处理；更名不修改掌机运行配置。
+A secondary-screen input tool for ArmadaOS dual-screen devices, providing a keyboard, touchpad, device monitoring and positioning touch without mirroring.
+The project aims to adapt screen sizes, orientation and input devices across models.
 
-`vendor/ratatoskr/` 是固定版本的第三方代码快照，来源、提交及本地修改记录见
-[`UPSTREAM`](../vendor/ratatoskr/UPSTREAM)，许可证和致谢保留在该目录内。
-个人 GitHub 主仓库与 Ratatoskr 的代码来源分别记录，尚未把后者配置成 Git 远端。
+**AYN Thor** is the device tested so far, mainly in **Steam Game Mode**.
+Other dual-screen ArmadaOS devices remain untested: device discovery, screen parameters, touch mapping and monitoring require per-model validation.
+Desktop Mode remains experimental and disabled by default.
 
-仓库包含源码、测试、图标、桌面入口和用户服务模板。Python 缓存、设备运行库、个人配置、日志及备份由 `.gitignore` 排除。
-进入源码目录后，在 Mac 上可执行 `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -v`；依赖 Linux GTK 的集成检查会跳过，完整验证仍需 Thor 实机。
-Steam 键盘抑制脚本另用 `node --test test_steam_keyboard_guard.js` 检查；测试使用模拟 Steam 对象，不连接或操作真实客户端。
+<a id="源码与版本管理"></a>
 
-2026-10-20 按用户要求移除“同屏触摸”及独立镜像预览，保留“触控板”“键鼠”“定位触摸”三种模式。
-不再启动画面采集、复制或镜像刷新任务；原触控板的双指滚动和灵敏度设置保留。旧 `mirror` 模式自动回退到键鼠，读取配置时不改写其他设置。
-删除后的 Thor 回归检查为 250 项全部通过；三页顶部控件中文显示与边界检查通过，详见[定位触摸验证记录](../docs/position-touch.md#移除同屏触摸)。
+## Source and version control
 
-## 定位触摸
+This is an independently Git-managed project named `armada-dual-screen-input`. The main repository is
+[`sa1utyeggs/armada-dual-screen-input`](https://github.com/sa1utyeggs/armada-dual-screen-input), default branch `main`, remote `origin`.
+Its earlier name was `thor-virtual-input`. The local directory initially remained `thor-panel-prototype` for existing workflows.
+Existing `thor-panel` installation/configuration paths and user-service names are retained for compatible migration; renaming does not change device configuration.
 
-定位触摸已合入 `main`，保留已有触控板恢复修复；原生输入、目标验证及几何数据已独立于被移除的镜像实现。
-2026-10-20 增加“定位触摸”页签（当前为第三页）：第一指相对移动上屏圆环，不向应用发送鼠标悬停或触摸；
-保持第一指接触，第二指在操作区任意位置按住，在圆环位置产生一个原生触点。
-第二指保持时移动第一指可拖动；第二指或第一指先抬起均释放触点，手指角色不会互换。
-此模式不启动 PipeWire / GStreamer 捕获；圆环通过独立的输入穿透覆盖层显示，不移动系统鼠标。
-专用窗口自动检查通过；用户确认基本定位及拖动恢复正常。Thor 曾出现单指坐标突跳，加入应用侧保护并通过 333 项检查后，用户确认「不再跳位，拖动也正常」。底层漏触点 / 偶发未释放仍是独立已知问题：只读诊断发现全部抬手后物理下屏仍残留按下状态，原因尚未解决。长时间游戏及系统性能覆盖层共存仍待验收。
-操作规则、实现与测试边界见[定位触摸](../docs/position-touch.md)。
-物理下屏漏事件已提交 [ArmadaOS Issue #757](https://github.com/armada-os/armada/issues/757)，附诊断证据和仅针对 Thor 下屏的候选补丁。内核构建已按用户要求停止，未完成编译或实机验证；项目合并不会安装或启用该补丁。
-另有可选的 [Thor 下屏独立驱动模块实验](../extras/thor-touch-driver/README.md)，已通过一次 90 秒实机触摸测试及自动回退，长期与休眠验证待完成；应用默认入口不会安装或启用它。
+`vendor/ratatoskr/` is a pinned third-party snapshot. See [`UPSTREAM`](../vendor/ratatoskr/UPSTREAM) for origin, commit and local changes; licenses and credits remain alongside it.
+The personal GitHub repository and Ratatoskr provenance are recorded separately; Ratatoskr was not added as a Git remote.
 
-## AYN Thor 实测环境与当前状态
+Source, tests, icons and desktop/user-service templates are tracked. `.gitignore` excludes Python caches, device runtime libraries, personal configuration, logs and backups.
+The historical Mac command was `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -v`; Linux GTK checks skip there, so complete validation requires the Thor.
+The separate Steam guard checks used `node --test test_steam_keyboard_guard.js` with fake Steam objects, without connecting to a real client.
 
-设备：AYN Thor 16GB / 512GB，Armada OS `20261010.c3d178c`。
+On 2026-10-20, mirroring touch and the standalone mirror preview were removed at the user's request, leaving Touchpad, Keyboard & mouse and Positioning touch.
+No capture, image-copy or mirror-refresh task runs; existing two-finger scrolling and sensitivity remain. Legacy `mirror` falls back to `split` without rewriting other settings while reading configuration.
+All 250 Thor regression checks passed after removal, including three-page Chinese label/bounds checks. See [the removal record](../docs/position-touch.md#移除同屏触摸).
 
-2026-10-15 已安装为独立 Linux 用户应用，默认只在 Steam Game Mode 的下屏显示。用户已确认键盘、触控板、上屏触摸和手柄可正常使用。按最新要求取消开机／登录自启动，改为桌面快捷方式手动打开；桌面模式显示仍暂不启用。
+<a id="定位触摸"></a>
 
-## 使用
+## Positioning touch
 
-2026-10-19 起，原面板采用 Steam 默认深色键盘风格：深灰实心键帽、蓝色按下与修饰键反馈、矢量编辑图标，以及统一的触控板、状态栏和收起条。样式由 `steam_style.py`、`steam_keys.py` 绘制；未复制 Valve 素材。按键排列、键鼠模式的键盘位置和大小保持不变。
+Positioning touch was merged into `main`, retaining trackpad recovery fixes. Native input, target checks and geometry were separated from the removed mirror implementation.
+The page was added on 2026-10-20 as the third page: one finger moves an upper-screen ring relatively, without app hover or touch; holding that finger and pressing a second anywhere in the input area creates one native contact at the ring.
+Move the first finger while holding the second to drag. Lifting either releases the contact; roles never swap.
+No PipeWire/GStreamer capture runs. An independent input-transparent overlay displays the ring without moving the system pointer.
+Dedicated-window checks passed and the user confirmed basic positioning/dragging. After single-finger jumps on the Thor, an application guard passed 333 checks and the user confirmed no more jumps and normal dragging. Missed physical contacts and occasional stale presses remained separate: read-only diagnostics still found a pressed physical lower-screen contact after all fingers lifted. Long game sessions and performance-overlay coexistence were pending at this stage.
+See [positioning touch](../docs/position-touch.md) for operations, implementation and boundaries.
+[ArmadaOS Issue #757](https://github.com/armada-os/armada/issues/757) records missed physical events, evidence and a lower-screen-only candidate. The whole-kernel build was stopped before compilation/device validation completed; merging this project does not install or enable it.
+A separate optional [Thor module experiment](../extras/thor-touch-driver/README.md) later passed one 90-second physical-touch trial and automatic rollback. Long sessions and suspend/resume remain unverified; the default app entry point never installs or enables it.
 
-- 默认“键鼠”：上方触控板，下方键盘，顶部用单行显示设备状态。
-- 顶部提供“触控板”“键鼠”“定位触摸”三种模式；状态栏只读。旧配置中的 `keyboard/settings/mirror` 在打开时兼容为 `split`（键鼠），最后选择的模式沿用原配置保存机制；定位触摸的启用状态不保存。键鼠模式的键盘位置和大小保持不变。
-- **关闭**：右上角红字按钮，立即释放虚拟按键／鼠标并退出面板；后台不会马上重新打开。
-- **收起**：面板缩为窄条，让出官方下屏界面；点击窄条重新展开。
-- **释放按键**：清除 Ctrl、Alt、Shift、Super 和鼠标键的保持状态。轻点修饰键可能使其保持到下一次输入；不确定当前状态时用此按钮复位。
-- 面板不会因闲置自动叠加变暗遮罩；系统自身的亮度和休眠规则仍由 Armada 管理。
-- 触控板轻点允许 350 毫秒内的小范围手指抖动；移动以离开落点的距离判定，不再累加原地抖动。移动加速按速度计算，减少触摸事件合并时的速度变化。
-- 滚轮单独使用配置 `scroll_speed`（1～5）和 `scroll_scale`（大于 0、不超过 1；缺省为 1）。2026-10-19 在最低档仍偏快时，增加 `scroll_output.py`，在生成高精度与传统滚轮事件之前统一缩放并保留小数余量；当前掌机设置为 `scroll_speed=1`、`scroll_scale=0.25`。修改配置后需要重新打开面板，不改变指针、点击或系统滚轮设置。滚动手感待用户复测。
-- Steam Game Mode 中，只在“键鼠”页可见、未收起时，临时抑制 Steam 原生键盘（含 Steam＋X）；触控板页、收起、隐藏或退出后恢复。`steam_keyboard_guard.py` 的后台线程使用现有本机 Steam CDP（127.0.0.1:8080）和系统已有的 `websocket-client`，不在 GTK 线程做网络请求，不修改 Steam 文件、首选项或自启动。`steam_keyboard_guard.js` 在 Steam 内设置 4 秒租约；面板被杀、UI 心跳停止或连接故障后独立过期，只恢复函数，不重放旧键盘请求。Steam 调试接口不可用或内部对象不匹配时，保持原生键盘可用。
-- 游戏的专用整段文字输入请求在被抑制时按 Steam 的取消协议结束；下屏的真实按键不能代替这类 API 的文本提交回调。需要该对话框时先切到触控板页或收起下屏键盘。此联动适配 Steam 当前内部接口，客户端更新后需复核。显示拦截的已有项目参考：[BetterKeyboard](https://github.com/chenx-dust/BetterKeyboard/blob/01d52c6abd9cff20fa2b981a5b7f91a572eb6d02/src/utility/context.ts)；本实现不部署该插件的输入抓取功能。
-- Ctrl＋P 等组合仍是标准键盘快捷键，可能打开上屏应用的打印窗口；可按 Esc 关闭。“释放按键”保留为独立按钮；右上角新增红色“关闭”，与收起分开。
+<a id="ayn-thor-实测环境与当前状态"></a>
 
-**默认不自动启动。** 手动打开后，程序等待官方 Game Mode 下屏会话就绪才显示，不接管或关闭官方下屏服务。模式切换时回收旧窗口和虚拟输入；在桌面模式点快捷方式后，只等待进入 Game Mode，不在桌面显示面板。关闭后再次点击快捷方式即可重新打开。
+## AYN Thor environment and state
 
-掌机桌面快捷方式：`~/Desktop/虚拟键鼠.desktop`。应用列表入口：**虚拟键鼠**。点击不需要管理员密码，也不会重新启用自启动。
+AYN Thor 16GB / 512GB, Armada OS `20261010.c3d178c`.
 
-手动管理，不需要 sudo：
+Installed as an independent per-user Linux application on 2026-10-15, normally displayed only on the Game Mode lower screen. The user confirmed keyboard, touchpad, upper touch and controller operation. Boot/login autostart was subsequently removed in favor of the desktop shortcut; Desktop Mode display remained disabled.
+
+<a id="使用"></a>
+
+## Usage
+
+Since 2026-10-19, the panel uses a Steam-style dark keyboard: solid dark-gray keycaps, blue pressed/modifier feedback, vector editing icons and consistent touchpad/status/collapsed controls. `steam_style.py` and `steam_keys.py` draw these without copied Valve artwork. Key arrangement and keyboard bounds in split mode stayed unchanged.
+
+- Default split mode: touchpad above the keyboard, with one status row at the top.
+- Three top modes: Touchpad, Keyboard & mouse, Positioning touch. Status is read-only. Legacy `keyboard/settings/mirror` values normalize to `split`; the last mode uses existing persistence, while touch-enabled state is not saved. Keyboard position/size stay unchanged.
+- **Close**: the red upper-right button releases virtual keys/buttons and exits; the background does not immediately reopen it.
+- **Collapse**: leaves a narrow strip exposing the official lower interface; tap to expand.
+- **Release keys**: clears held Ctrl, Alt, Shift, Super and mouse buttons. Tapped modifiers may latch until the next key; use this to reset uncertain state.
+- No app-added idle dimming; Armada still controls system brightness and sleep.
+- A tap allows small jitter within 350ms. Movement uses maximum displacement from the starting point rather than accumulated jitter. Acceleration uses speed to reduce changes caused by batched touch delivery.
+- Scrolling uses `scroll_speed` (1–5) and `scroll_scale` (>0, ≤1, default 1). On 2026-10-19, `scroll_output.py` added scaling before high-resolution/legacy wheel events while retaining fractional remainder because the lowest speed was still fast. The device then used `scroll_speed=1`, `scroll_scale=0.25`, requiring a panel reopen. Pointer/click/system scrolling were unchanged; user retesting was pending at that stage.
+- In Game Mode, suppress Steam's keyboard (including Steam+X) only while the expanded split page is visible; restore on touchpad, collapse, hide or exit. `steam_keyboard_guard.py` uses existing local Steam CDP (`127.0.0.1:8080`) and system `websocket-client` in a background thread, without GTK-thread network work or Steam-file/preference/autostart changes. `steam_keyboard_guard.js` leases the interception for 4 seconds: a killed panel, missing UI heartbeat or broken connection expires independently, restoring functions without replaying old requests. Unavailable debugging or mismatched internals leaves the native keyboard available.
+- Dedicated whole-text game-input requests are cancelled through Steam's protocol while suppressed. Physical keys cannot replace those APIs' text callback. Use the touchpad page or collapse to permit the dialog. This depends on current Steam internals and needs rechecking after updates. [BetterKeyboard](https://github.com/chenx-dust/BetterKeyboard/blob/01d52c6abd9cff20fa2b981a5b7f91a572eb6d02/src/utility/context.ts) informed display interception; this project does not deploy its input capture.
+- Ctrl+P remains a standard shortcut and can open an app's print window; Esc dismisses it. Release keys, red Close and Collapse remain separate controls.
+
+**No autostart by default.** Manual launch waits for the official Game Mode lower session; it neither takes over nor stops that service. Mode changes reclaim old windows/input. A Desktop Mode shortcut launch waits for Game Mode without showing a desktop panel. Click again after closing to reopen.
+
+Device shortcut: `~/Desktop/虚拟键鼠.desktop`; application-menu name: **虚拟键鼠**. It needs no administrator password and does not re-enable autostart.
+
+Manual management, without sudo:
 
 ```bash
 systemctl --user restart thor-panel.service
 systemctl --user stop thor-panel.service
 ```
 
-当前服务状态应为 `disabled`（手动打开时可同时为 `active`）。如以后需要管理自启动：
+The service should be `disabled` for autostart and may also be `active` after manual launch. Optional autostart management:
 
 ```bash
 systemctl --user disable --now thor-panel.service
 systemctl --user enable --now thor-panel.service
 ```
 
-## 安装位置与排查
+<a id="安装位置与排查"></a>
 
-| 内容 | 路径 |
+## Installation paths and troubleshooting
+
+| Contents | Path |
 | --- | --- |
-| 程序、上游来源及运行库 | `~/.local/share/thor-panel/` |
-| 配置 | `~/.config/thor-panel/config.json` |
-| 日志 | `~/.local/state/thor-panel/panel.log` |
-| 独立用户服务 | `~/.config/systemd/user/thor-panel.service` |
-| 应用入口 | `~/.local/share/applications/thor-panel.desktop` |
-| 桌面快捷方式 | `~/Desktop/虚拟键鼠.desktop` |
-| 键盘与鼠标图标 | `~/.local/share/icons/hicolor/scalable/apps/thor-virtual-input.svg` |
+| App, provenance and runtime | `~/.local/share/thor-panel/` |
+| Configuration | `~/.config/thor-panel/config.json` |
+| Log | `~/.local/state/thor-panel/panel.log` |
+| User service | `~/.config/systemd/user/thor-panel.service` |
+| App entry | `~/.local/share/applications/thor-panel.desktop` |
+| Desktop shortcut | `~/Desktop/虚拟键鼠.desktop` |
+| Historical keyboard/mouse icon | `~/.local/share/icons/hicolor/scalable/apps/thor-virtual-input.svg` |
 
-目录位于用户持久存储，没有使用重启后消失的系统 overlay。补充运行库仅供本应用加载，未修改宿主系统的动态链接器配置或全局环境。
+These are persistent user paths, not a transient system overlay. Extra libraries are private to the app; no host loader configuration/global environment changes.
 
 ```bash
 python3 ~/.local/share/thor-panel/supervisor.py --probe
@@ -102,43 +116,47 @@ systemctl --user status thor-panel.service --no-pager
 journalctl --user -u thor-panel.service -n 60 --no-pager
 ```
 
-在桌面模式执行 probe，`session: null` 是当前仅支持 Game Mode 的预期结果。
+A Desktop Mode probe returning `session: null` is expected for the current Game-Mode-only behavior.
 
-## 已验证与限制
+<a id="已验证与限制"></a>
 
-- 双指滚动后的应用层触点恢复已于 2026-10-19 安装，用户短测确认单指移动、滚动后移动正常；不据此认定物理驱动的漏事件已解决。机制、验证范围和复测记录见[触点恢复说明](../docs/trackpad-recovery.md)。
-- 系统 GTK3、Cairo 与正常用户 `/dev/uinput` 权限可用；GUI 通过原生 GTK 运行。
-- 原键鼠使用自己的 `/dev/uinput`；定位触摸在页签就绪、目标稳定且所有手指抬起后按需建立临时触屏，暂停 / 离页即销毁。不读取 raw evdev，不独占物理触摸屏。
-- Game Mode 连接官方底层 KWin 的 `armada-plasma-bottom`，不是直接连接 bottom Gamescope。真实唯一输出为 `X11-0`，逻辑尺寸 `689×600`。
-- 官方 `armada-bottom-gamescope`、`armada-bottom-screen` 在面板运行时仍为 active。
-- 首轮出现过 Steam 网页界面无响应。停止面板后仍未恢复；重建该 Steam 界面进程后恢复。随后仅为面板设置 `NO_AT_BRIDGE=1`，下一轮键盘、触摸和手柄测试通过。**尚不能确定首轮故障根因，不能将无障碍警告直接认定为根因。** 该隔离设置不修改系统辅助功能。
-- 基础版本 63 项会话发现、输出选择和触摸状态测试在本地通过；此前 48 项测试在掌机 Linux 上通过。另增加并通过了 2 项关闭生命周期测试，覆盖关闭后停止后台、会话同时消失时也不会重开。通过桌面文件实际启动后确认服务 `active` 且自启动仍 `disabled`。旧版顶部 10 个控件曾通过离屏字体与边界检查。这些检查不等同于长期图形兼容验证。
-- 2026-10-19 精简为 7 个顶部控件后，12 张原始／实际窗口尺寸预览无缺字；掌机 Linux 上 54 项布局、按键、触摸、滚轮与抑制检查通过。真实下屏回调检查确认：状态栏不切页，键鼠／触控板切换、收起、展开和关闭时抑制按预期启用或释放，保存的配置不变；该检查未向上屏发送文字，不代替实际游戏或长期触控体验验证。
-- 此前针对拖动偶发停住 / 跳动，修正过严的焦点比较：已经验证属于同一可见窗口的子控件切换不会销毁原生触摸连接，真实窗口、应用、尺寸、服务器、display、触屏策略变化或失焦仍会释放。掌机 260 项检查通过，用户复测拖动 / 点按 / 控件切换正常；诊断版修正前的一轮也正常，不能据此把该判断确定为所有卡顿的根因。中断日志仅记录状态、年龄、变化字段名和聚合发送数，不记录坐标或文字。
-- 休眠恢复、长时间游戏、双屏模拟器接管下屏尚未验证。Desktop 支持保留为实验代码，默认关闭，不作为已完成能力。
+## Validated behavior and limitations
 
-## 实现与来源
+- Application contact recovery after scrolling was installed on 2026-10-19. The user confirmed single-finger movement before/after scrolling in a short test; this does not fix physical missed events. See [contact recovery](../docs/trackpad-recovery.md).
+- System GTK3/Cairo and normal-user `/dev/uinput` permissions work; the GUI uses native GTK.
+- Keyboard/mouse uses its own `/dev/uinput`. Positioning touch creates a temporary touchscreen only after page readiness, target stability and all fingers lifted; pause/leaving destroys it. No raw evdev reads or physical touchscreen grabs.
+- Game Mode connects to the official underlying KWin, `armada-plasma-bottom`, rather than bottom Gamescope directly. Its unique output is `X11-0`, logical `689×600`.
+- Official `armada-bottom-gamescope` and `armada-bottom-screen` remain active while the panel runs.
+- An initial Steam web UI hang persisted after stopping the panel and recovered after rebuilding that Steam UI process. A later panel-only `NO_AT_BRIDGE=1` test passed keyboard, touch and controller checks. **The initial cause is unconfirmed; accessibility warnings alone do not establish it.** The setting does not change system accessibility.
+- 63 base session/output/touch checks passed locally; an earlier 48 passed on the Thor. Two additional Close lifecycle checks cover stopping the background and avoiding reopening when the session also vanishes. Desktop-file launch showed `active` while autostart stayed `disabled`. Ten historical top controls passed offscreen font/bounds checks, which do not establish long-term graphics compatibility.
+- After reducing the header to 7 controls on 2026-10-19, 12 original/actual-size previews had no missing glyphs. 54 Linux layout/key/touch/scroll/guard checks passed on the Thor. Real lower-screen callbacks confirmed read-only status, page switching, collapse/expand/close guard transitions and unchanged saved config. No upper-screen text was sent; this is not game/long-session acceptance.
+- For occasional drag stops/jumps, an overly strict focus comparison was relaxed only for verified child controls in the same visible window. Real window/app/size/server/display/touch-policy changes or lost focus still release. 260 Thor checks passed and the user confirmed drag/tap/control changes; a pre-fix diagnostic round also passed, so this is not proof of every stutter's cause. Logs contain state, ages, changed field names and aggregate send counts, never coordinates/text.
+- Suspend/resume, long games and dual-screen emulator takeover remain unverified. Desktop code stays experimental and disabled by default.
 
-复用 Ratatoskr 的 Cairo 键盘、手势与设备监控代码，改用 GTK 的窗口触摸事件，统一到单调时钟。中文按钮、监控页与收起条通过 PangoCairo 绘制，首选系统 Noto Sans CJK SC 并保留字体回退；已在掌机检查 16 个 UI 字符串无缺字、顶部标签无溢出。取消触摸、收起或退出进程时释放按键并停止惯性移动。GTK layer shell 指定输出且不获取键盘焦点。
+<a id="实现与来源"></a>
 
-2026-10-19 本地修补了 vendor 中的 `engine.py`：单指点击按最大落点偏移判定、350 毫秒点击窗口、超出 12 个逻辑像素后才开始移动、每次新触摸清除小数余量、按时间计算有上限的加速。`UPSTREAM` 已注明这些本地修改。新增 8 项无硬件指针回归测试，与原有输入隔离、会话和关闭生命周期测试一起运行；模拟检查不代替掌机手感验证。
+## Implementation and sources
 
-同日用户确认不再自动变暗、轻点可以点击，但移动仍有卡顿。短时聚合诊断未见绘制线程持续阻塞；随后将 GDK 源事件间隔单独用于指针速度／加速／惯性计算，避免回调被批量投递时误判为高速移动。点击时长与接触存活仍使用单调时钟。新增 12 项源时间、回绕、重复事件与批量投递测试通过；这轮移动修复尚待用户实测，不将其记为完全解决。
+Reuse Ratatoskr's Cairo keyboard, gestures and monitoring with GTK window touch events and a monotonic clock. PangoCairo draws Chinese controls/status/collapsed text, preferring Noto Sans CJK SC with fallback; 16 UI strings and header bounds passed device checks. Cancellation, collapse or exit releases keys/stops inertia. GTK layer shell selects an output without taking keyboard focus.
 
-随后用户反馈移动较顺畅，继续观察偶发停顿；又反馈多个应用中输入文字偶有卡顿。已发现原 `tap_key()` 在 GTK 触摸回调中同步等待 20 毫秒，改为本应用的 `KeyboardPulses` 定时释放；长按重复也改为同一事件循环的定时器，保留原 350／60 毫秒设置。快速同键连点用独立令牌防止旧释放干扰新按键，改变修饰键前先结束未完成脉冲，取消和关闭时清理所有定时源。掌机上 17 项无真实输入设备测试通过；输入体感是否改善仍待用户确认。未改动鼠标引擎、系统输入服务或自启动设置。
+On 2026-10-19, local vendor `engine.py` changes used maximum tap displacement, a 350ms window, movement only beyond 12 logical pixels, fractional reset on each new touch, and bounded time-based acceleration. `UPSTREAM` records these modifications. Eight hardware-free pointer regressions ran alongside input-isolation/session/Close checks; simulation does not replace physical feel tests.
 
-补充库为 Fedora 官方 `gtk-layer-shell-0.10.0-1.fc44.aarch64.rpm`，掌机 `rpmkeys --checksig` 结果为 `digests signatures OK`。
+The user confirmed no idle dimming and working taps but still reported movement stutter. Short aggregate diagnostics showed no sustained render-thread block. GDK source intervals were then used separately for pointer speed/acceleration/inertia to avoid mistaking batched delivery for high-speed motion. Tap duration/contact liveness remain monotonic. Twelve source-time/wrap/duplicate/batch checks passed; physical acceptance was still pending then, so this was not recorded as a complete fix.
 
-- RPM SHA256：`de2a27df40ae7cffd3b858f46f73744ec2f0b153a2870120f88cd0b40660fb92`
-- [官方 RPM](https://dl.fedoraproject.org/pub/fedora/linux/releases/44/Everything/aarch64/os/Packages/g/gtk-layer-shell-0.10.0-1.fc44.aarch64.rpm)
-- [Fedora 源包](https://dl.fedoraproject.org/pub/fedora/linux/releases/44/Everything/source/tree/Packages/g/gtk-layer-shell-0.10.0-1.fc44.src.rpm)
-- 运行库许可证保留在 `runtime/usr/share/licenses/gtk-layer-shell/`。
+The user next reported smoother movement with occasional pauses, then intermittent typing pauses across apps. `tap_key()` was found synchronously waiting 20ms inside GTK touch callbacks; app-owned `KeyboardPulses` timer releases replaced it. Hold-repeat also moved to event-loop timers, keeping 350/60ms. Per-press tokens protect rapid same-key taps from old releases; pending pulses finish before modifier changes, and cancel/Close clears timers. Seventeen device checks without real input passed; typing feel still awaited confirmation at that stage. Mouse engine, system input services and autostart were unchanged.
 
-其他来源：
+The private runtime is Fedora's official `gtk-layer-shell-0.10.0-1.fc44.aarch64.rpm`; device `rpmkeys --checksig` returned `digests signatures OK`.
 
-- [Ratatoskr](https://github.com/venatrix-ritz/Ratatoskr)，固定提交 `24471899b5923b73f0ecb7ae67aba54ad7b6d73e`。`vendor/ratatoskr` 保留 MIT LICENSE 与 CREDITS，未部署其安装器、Decky 后端或服务切换管理器。
-- [Armada Thor 设备配置](https://github.com/armada-os/armada/blob/c3d178c/system_files/usr/lib/armada/devices/ayn-thor.conf)
-- [官方下屏会话](https://github.com/armada-os/armada/blob/c3d178c/system_files/usr/libexec/armada/armada-plasma-session)
-- [官方下屏服务](https://github.com/armada-os/armada/blob/c3d178c/system_files/usr/lib/systemd/user/armada-bottom-screen.service)
+- RPM SHA256: `de2a27df40ae7cffd3b858f46f73744ec2f0b153a2870120f88cd0b40660fb92`
+- [Official RPM](https://dl.fedoraproject.org/pub/fedora/linux/releases/44/Everything/aarch64/os/Packages/g/gtk-layer-shell-0.10.0-1.fc44.aarch64.rpm)
+- [Fedora source RPM](https://dl.fedoraproject.org/pub/fedora/linux/releases/44/Everything/source/tree/Packages/g/gtk-layer-shell-0.10.0-1.fc44.src.rpm)
+- Runtime licenses remain in `runtime/usr/share/licenses/gtk-layer-shell/`.
+
+Other sources:
+
+- [Ratatoskr](https://github.com/venatrix-ritz/Ratatoskr), pinned commit `24471899b5923b73f0ecb7ae67aba54ad7b6d73e`. `vendor/ratatoskr` retains MIT LICENSE/CREDITS. Its installer, Decky backend and service-switch manager are not deployed.
+- [Armada Thor device configuration](https://github.com/armada-os/armada/blob/c3d178c/system_files/usr/lib/armada/devices/ayn-thor.conf)
+- [Official lower-screen session](https://github.com/armada-os/armada/blob/c3d178c/system_files/usr/libexec/armada/armada-plasma-session)
+- [Official lower-screen service](https://github.com/armada-os/armada/blob/c3d178c/system_files/usr/lib/systemd/user/armada-bottom-screen.service)
 - [GTK layer shell API](https://wmww.github.io/gtk-layer-shell/)
-- [GDK 触摸事件](https://docs.gtk.org/gdk3/struct.EventTouch.html)
+- [GDK touch events](https://docs.gtk.org/gdk3/struct.EventTouch.html)
