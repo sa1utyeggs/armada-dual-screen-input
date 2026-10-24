@@ -55,9 +55,17 @@ v0.1.5 增加 **设置 → 试验性功能**：只读查看状态与内核兼容
 
 ### 界面预览
 
-[![双屏操作实录，以及卡通手套抓起、松开苹果的手势演示](.github/assets/interface-demo-preview-v10.gif)](.github/assets/interface-demo.mp4)
+**键盘与鼠标**
 
-[观看完整演示（46 秒，720p MP4）](.github/assets/interface-demo.mp4)。动图结合双屏操作实录与定位触屏原理动画：食指移动指针，中指保持接触，收回掌心表示离开屏幕并松开苹果。真实多指识别取决于下屏硬件、Steam 触摸策略及上屏应用。[多语言键盘](docs/zh-CN/multilingual-keyboard.md) · [触屏说明](docs/zh-CN/usage.md)
+![键盘输入和鼠标操作实录](.github/assets/interface-keyboard-mouse-v10.gif)
+
+**杀戮尖塔2与手势演示**
+
+![杀戮尖塔2游玩实录，以及卡通手套抓起、松开苹果的手势演示](.github/assets/interface-gameplay-gesture-v10.gif)
+
+第二张动图结合游戏实录与定位触屏原理动画：食指移动指针，中指保持接触，收回掌心表示离开屏幕并松开苹果。真实多指识别取决于下屏硬件、Steam 触摸策略及上屏应用。[多语言键盘](docs/zh-CN/multilingual-keyboard.md) · [触屏说明](docs/zh-CN/usage.md)
+
+[下载完整演示（46 秒，720p MP4）](https://raw.githubusercontent.com/sa1utyeggs/armada-dual-screen-input/main/.github/assets/interface-demo.mp4)。
 
 ## 快速开始
 
