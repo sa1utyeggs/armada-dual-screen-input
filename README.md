@@ -31,7 +31,7 @@ A standalone Linux application for dual-screen ArmadaOS handhelds. Type, move th
 
 > **Currently tested: AYN Thor · ArmadaOS · Steam Game Mode.** Desktop Mode is disabled by default; other devices have not been tested. [System versions and validation scope](docs/compatibility.md)
 
-The interface supports English / Simplified Chinese selection, defaulting to English when no preference exists; input language is independent. Screenshots below remain Chinese examples. [Language settings and validation scope](docs/i18n.md). General settings also provide a [confirmed uninstall action](docs/installation.md#卸载) that keeps personal configuration.
+The interface supports English / Simplified Chinese selection, defaulting to English when no preference exists; input language is independent. The demo below has bilingual captions; recorded app screens use Chinese. [Language settings and validation scope](docs/i18n.md). General settings also provide a [confirmed uninstall action](docs/installation.md#卸载) that keeps personal configuration.
 
 <a id="能做什么"></a>
 
@@ -59,11 +59,9 @@ v0.1.5 adds **Settings → Experimental** for read-only status, kernel compatibi
 
 ### Interface previews
 
-| Chinese keyboard and touchpad | Direct touch |
-| :---: | :---: |
-| [![Chinese pinyin candidates above the keyboard and touchpad input area](.github/assets/keyboard-preview.png)](.github/assets/keyboard-preview.png) | [![Direct-touch page with a mode dropdown in the top toolbar](.github/assets/touch-preview.png)](.github/assets/touch-preview.png) |
+[![Recorded dual-screen use and a cartoon glove lifting and releasing an apple](.github/assets/interface-demo-preview-v10.gif)](.github/assets/interface-demo.mp4)
 
-These are offscreen renderings with placeholder status values. Click an image for its full size. Actual multi-touch reception depends on the lower-screen hardware, Steam's touch policy and the receiving application. [Multilingual keyboard](docs/multilingual-keyboard.md) · [Touch controls](docs/usage.md)
+[Watch the full demo (46 seconds, 720p MP4)](.github/assets/interface-demo.mp4). The animated preview combines recorded dual-screen use with an illustrated positioning-touch explanation: the index finger moves the pointer, while the middle finger maintains contact until it curls into the palm to release the apple. Actual multi-touch reception depends on the lower-screen hardware, Steam's touch policy and the receiving application. [Multilingual keyboard](docs/multilingual-keyboard.md) · [Touch controls](docs/usage.md)
 
 <a id="快速开始"></a>
 

@@ -31,7 +31,7 @@
 
 > **当前实测：AYN Thor · ArmadaOS · Steam Game Mode。** Desktop Mode 默认关闭，其他机型尚未实测。[系统版本与验证边界](docs/zh-CN/compatibility.md)
 
-界面支持中英切换，缺少语言配置时默认英文；与键盘输入语言独立。[语言设置与验证边界](docs/zh-CN/i18n.md)。通用设置另提供保留个人配置的[卸载入口](docs/zh-CN/installation.md#卸载)，需要二次确认。
+界面支持中英切换，缺少语言配置时默认英文；与键盘输入语言独立。下方演示配有中英双语字幕，录制的应用画面使用中文。[语言设置与验证边界](docs/zh-CN/i18n.md)。通用设置另提供保留个人配置的[卸载入口](docs/zh-CN/installation.md#卸载)，需要二次确认。
 
 ## 能做什么
 
@@ -55,11 +55,9 @@ v0.1.5 增加 **设置 → 试验性功能**：只读查看状态与内核兼容
 
 ### 界面预览
 
-| 中文键盘与触控板 | 直接触屏 |
-| :---: | :---: |
-| [![中文全拼候选与键鼠输入区域](.github/assets/keyboard-preview.png)](.github/assets/keyboard-preview.png) | [![触屏页的直接触屏模式与顶部下拉框](.github/assets/touch-preview.png)](.github/assets/touch-preview.png) |
+[![双屏操作实录，以及卡通手套抓起、松开苹果的手势演示](.github/assets/interface-demo-preview-v10.gif)](.github/assets/interface-demo.mp4)
 
-以上为离屏渲染预览，状态数值为示例；点击图片可查看原图。真实多指识别取决于下屏硬件、Steam 触摸策略及上屏应用。[多语言键盘](docs/zh-CN/multilingual-keyboard.md) · [触屏说明](docs/zh-CN/usage.md)
+[观看完整演示（46 秒，720p MP4）](.github/assets/interface-demo.mp4)。动图结合双屏操作实录与定位触屏原理动画：食指移动指针，中指保持接触，收回掌心表示离开屏幕并松开苹果。真实多指识别取决于下屏硬件、Steam 触摸策略及上屏应用。[多语言键盘](docs/zh-CN/multilingual-keyboard.md) · [触屏说明](docs/zh-CN/usage.md)
 
 ## 快速开始
 
