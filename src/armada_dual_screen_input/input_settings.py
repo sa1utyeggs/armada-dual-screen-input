@@ -57,7 +57,8 @@ NUMBERS = {
         NumberSetting("keyboard_caps_window_ms", msg('settings.shift_interval'), msg('settings.shift_interval_note'), 350, 150, 800, 25, " ms"),
     )
 }
-BOOLEANS = {"tap_to_click": True, "glide": True, "keyboard_repeat_enabled": True}
+BOOLEANS = {"tap_to_click": True, "glide": True, "keyboard_repeat_enabled": True,
+            "touch_display_mode": False}
 CHOICES = {"keyboard_language": LANGUAGES, "marker_frame_rate": FRAME_RATES,
            "ui_language": {**UI_LANGUAGES, "auto": msg("settings.follow_system")}}
 DEFAULTS = {**{key: spec.default for key, spec in NUMBERS.items()}, **BOOLEANS,
@@ -67,11 +68,13 @@ SECTIONS = {
     "position": ("position_sensitivity", "marker_frame_rate", "marker_idle_color", "marker_pressed_color"),
     "keyboard": ("keyboard_language", "keyboard_repeat_enabled", "keyboard_repeat_delay_ms",
                  "keyboard_repeat_interval_ms", "keyboard_caps_window_ms"),
-    "general": ("ui_language",),
+    "general": ("ui_language", "touch_display_mode"),
 }
 SETTINGS_PAGES = (*SECTIONS, 'driver')
-GENERAL_UPDATE_BUTTON_TOP = 618
-GENERAL_UNINSTALL_BUTTON_TOP = 854
+GENERAL_UPDATE_BUTTON_TOP = 586
+GENERAL_UNINSTALL_BUTTON_TOP = 786
+GENERAL_ACTION_HEIGHT = 52
+GENERAL_TOUCH_DISPLAY_TOP = 888
 
 
 def settings_tabs():
@@ -175,7 +178,7 @@ class SettingsDraft(LocalizedState):
         self.message, self.error = msg('settings.discarded'), False
 
     def rows(self):
-        return [(key, 300 + index * 98)
+        return [(key, GENERAL_TOUCH_DISPLAY_TOP if key == 'touch_display_mode' else 300 + index * 98)
                 for index, key in enumerate(SECTIONS.get(self.section, ()))]
 
     def hit(self, x, y):
@@ -183,12 +186,12 @@ class SettingsDraft(LocalizedState):
             if left <= x <= left + width and 220 <= y <= 280:
                 return "section", section
         if self.section == "general":
-            if GENERAL_UPDATE_BUTTON_TOP <= y <= GENERAL_UPDATE_BUTTON_TOP + 60:
+            if GENERAL_UPDATE_BUTTON_TOP <= y <= GENERAL_UPDATE_BUTTON_TOP + GENERAL_ACTION_HEIGHT:
                 if 44 <= x <= 564:
                     return 'update_left', None
                 if 620 <= x <= 1192:
                     return 'install_update', None
-            if GENERAL_UNINSTALL_BUTTON_TOP <= y <= GENERAL_UNINSTALL_BUTTON_TOP + 56:
+            if GENERAL_UNINSTALL_BUTTON_TOP <= y <= GENERAL_UNINSTALL_BUTTON_TOP + GENERAL_ACTION_HEIGHT:
                 if 44 <= x <= 564:
                     return "uninstall_left", None
                 if 620 <= x <= 1192:

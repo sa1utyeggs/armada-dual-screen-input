@@ -3,7 +3,8 @@ from .i18n import msg
 from . import steam_style as s
 import math
 from .input_settings import (BOOLEANS, CHOICES, NUMBERS, settings_tabs, choice_caption,
-                             color_swatches, GENERAL_UPDATE_BUTTON_TOP, GENERAL_UNINSTALL_BUTTON_TOP)
+                             color_swatches, GENERAL_UPDATE_BUTTON_TOP, GENERAL_UNINSTALL_BUTTON_TOP,
+                             GENERAL_ACTION_HEIGHT)
 from .marker_colors import COLOR_SETTINGS, COLOR_PRESETS, color_rgb
 
 TITLES = {"mouse": msg('settings.mouse'), "position": msg('common.touch'), "keyboard": msg('settings.keyboard'),
@@ -12,6 +13,7 @@ TOGGLES = {
     "tap_to_click": (msg('settings.tap'), msg('settings.tap_note')),
     "glide": (msg('settings.glide'), msg('settings.glide_note')),
     "keyboard_repeat_enabled": (msg('settings.repeat'), msg('settings.repeat_note')),
+    "touch_display_mode": (msg('settings.touch_display'), msg('settings.touch_display_note')),
 }
 CHOICE_LABELS = {
     "ui_language": (msg("settings.ui_language"), msg("settings.ui_language_note")),
@@ -25,8 +27,9 @@ COLOR_LABELS = {'marker_idle_color': msg('settings.idle_color'),
 def draw(cr, draft, updates=None, *, monitor_millihz=0, uninstall=None, driver=None):
     cr.set_source_rgb(*s.FG)
     s.label(cr, msg('common.settings'), 28, 150, 34, bold=True)
-    cr.set_source_rgb(*s.MUTED)
-    s.label(cr, msg('driver.component_note') if draft.section == 'driver'
+    cr.set_source_rgb(*(s.DANGER if draft.error else s.ACCENT if draft.dirty else s.MUTED))
+    s.label(cr, draft.message if draft.section == 'general' else
+            msg('driver.component_note') if draft.section == 'driver'
             else msg('settings.instructions'), 28, 194, 22)
     for section, left, width in settings_tabs():
         s.button(cr, left, 220, width, 60,
@@ -93,26 +96,27 @@ def draw(cr, draft, updates=None, *, monitor_millihz=0, uninstall=None, driver=N
                         (msg('settings.touch_style'), 830),
                         (msg('settings.touch_scope'), 880)):
             s.label(cr, text, 44, y, 25, max_width=1140)
-    cr.set_source_rgb(*(s.DANGER if draft.error else s.ACCENT if draft.dirty else s.MUTED))
-    s.label(cr, draft.message, 28, 958 if draft.section == 'general' else 934, 24, max_width=1180)
+    if draft.section != 'general':
+        cr.set_source_rgb(*(s.DANGER if draft.error else s.ACCENT if draft.dirty else s.MUTED))
+        s.label(cr, draft.message, 28, 934, 24, max_width=1180)
     s.button(cr, 24, 996, 270, 64, msg('settings.defaults'))
     s.button(cr, 662, 996, 250, 64, msg('settings.discard'))
     s.button(cr, 936, 996, 280, 64, msg('settings.save'), True)
 
 
 def draw_updates(cr, draft, updates, *, blocked=False):
-    s.rounded(cr, 24, 440, 1192, 250, 8, s.SURFACE)
+    s.rounded(cr, 24, 432, 1192, 214, 8, s.SURFACE)
     cr.set_source_rgb(*s.FG)
-    s.label(cr, msg('settings.updates'), 44, 456, 26, bold=True)
+    s.label(cr, msg('settings.updates'), 44, 448, 24, bold=True)
     cr.set_source_rgb(*s.MUTED)
     current = updates.current if updates else msg('common.unknown')
     latest = updates.latest.tag if updates and updates.latest else msg('update.not_checked')
-    s.label(cr, msg('update.current_version', current=current), 44, 494, 23, max_width=550)
-    s.label(cr, msg('update.latest_version', latest=latest), 620, 494, 23, max_width=550)
-    s.label(cr, msg('update.source'), 44, 526, 20, max_width=1120)
+    s.label(cr, msg('update.current_version', current=current), 44, 480, 22, max_width=550)
+    s.label(cr, msg('update.latest_version', latest=latest), 620, 480, 22, max_width=550)
+    s.label(cr, msg('update.source'), 44, 508, 18, max_width=1120)
     message = updates.message if updates else msg('update.unavailable')
     cr.set_source_rgb(*(s.DANGER if updates and updates.phase == 'error' else s.ACCENT))
-    s.label(cr, message, 44, 556, 21, max_width=1120)
+    s.label(cr, message, 44, 534, 20, max_width=1120)
     cr.set_source_rgb(*s.MUTED)
     if draft.dirty:
         note = msg('update.unsaved')
@@ -122,19 +126,19 @@ def draw_updates(cr, draft, updates, *, blocked=False):
         note = msg('update.confirm_note')
     else:
         note = msg('update.manual_note')
-    s.label(cr, note, 44, 586, 20, max_width=1140)
+    s.label(cr, note, 44, 560, 18, max_width=1140)
     can_check = bool(updates and not updates.busy and not blocked)
     can_install = bool(updates and updates.available and not draft.dirty and not blocked)
-    s.button(cr, 44, GENERAL_UPDATE_BUTTON_TOP, 520, 60,
+    s.button(cr, 44, GENERAL_UPDATE_BUTTON_TOP, 520, GENERAL_ACTION_HEIGHT,
              msg('common.cancel') if updates and updates.confirming else
              msg('update.check') if can_check else msg('update.busy'), can_check)
     caption = (msg('update.confirm') if updates and updates.confirming else msg('update.to', tag=updates.latest.tag)
                if updates and updates.latest and can_install else msg('common.update'))
-    s.button(cr, 620, GENERAL_UPDATE_BUTTON_TOP, 572, 60, caption, can_install)
+    s.button(cr, 620, GENERAL_UPDATE_BUTTON_TOP, 572, GENERAL_ACTION_HEIGHT, caption, can_install)
 
 
 def draw_uninstall(cr, draft, uninstall, updates=None, *, blocked=False):
-    s.rounded(cr, 24, 708, 1192, 236, 8, s.SURFACE)
+    s.rounded(cr, 24, 658, 1192, 216, 8, s.SURFACE)
     confirming = bool(uninstall and uninstall.confirming)
     busy = bool(uninstall and uninstall.busy)
     managed = bool(uninstall and uninstall.managed)
@@ -142,23 +146,23 @@ def draw_uninstall(cr, draft, uninstall, updates=None, *, blocked=False):
     enabled = managed and not busy and not blocked and uninstall.phase != 'success'
     cr.set_source_rgb(*s.DANGER)
     s.label(cr, msg('uninstall.confirm_title' if confirming else 'uninstall.title'),
-            44, 724, 25, bold=True, max_width=1120)
+            44, 674, 24, bold=True, max_width=1120)
     cr.set_source_rgb(*s.MUTED)
-    s.label(cr, msg('uninstall.scope'), 44, 760, 21, max_width=1120)
-    s.label(cr, msg('uninstall.keep'), 44, 790, 21, max_width=1120)
+    s.label(cr, msg('uninstall.scope'), 44, 706, 20, max_width=1120)
+    s.label(cr, msg('uninstall.keep'), 44, 732, 20, max_width=1120)
     message = (msg('uninstall.managed_only') if not managed else
                msg('uninstall.unsaved') if draft.dirty else
                msg('uninstall.update_busy') if updates and updates.busy else uninstall.message)
     cr.set_source_rgb(*(s.DANGER if uninstall and uninstall.phase == 'error' else s.MUTED))
-    s.label(cr, message, 44, 820, 20, max_width=1120)
+    s.label(cr, message, 44, 758, 20, max_width=1120)
     if confirming:
-        s.button(cr, 44, GENERAL_UNINSTALL_BUTTON_TOP, 520, 56, msg('common.cancel'))
-        s.button(cr, 620, GENERAL_UNINSTALL_BUTTON_TOP, 572, 56, msg('uninstall.confirm'), enabled, danger=True)
+        s.button(cr, 44, GENERAL_UNINSTALL_BUTTON_TOP, 520, GENERAL_ACTION_HEIGHT, msg('common.cancel'))
+        s.button(cr, 620, GENERAL_UNINSTALL_BUTTON_TOP, 572, GENERAL_ACTION_HEIGHT, msg('uninstall.confirm'), enabled, danger=True)
     else:
-        s.button(cr, 44, GENERAL_UNINSTALL_BUTTON_TOP, 520, 56, msg('update.busy') if busy else msg('uninstall.title'),
+        s.button(cr, 44, GENERAL_UNINSTALL_BUTTON_TOP, 520, GENERAL_ACTION_HEIGHT, msg('update.busy') if busy else msg('uninstall.title'),
                  enabled, danger=True)
     cr.set_source_rgb(*s.MUTED)
-    s.label(cr, msg('uninstall.record'), 44, 922, 18, max_width=1120)
+    s.label(cr, msg('uninstall.record'), 44, 850, 18, max_width=1120)
 
 
 def draw_driver(cr, draft, driver, *, blocked=False):

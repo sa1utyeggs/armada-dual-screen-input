@@ -2,6 +2,10 @@ English · [简体中文](CHANGELOG.zh-CN.md)
 
 # Changelog
 
+## Unreleased
+
+- Add opt-in **Settings → General → Show touch contacts** at the bottom of the page. Semi-transparent vector fingers follow actual contacts in Touchpad, the pointer area of Keys+Pad, and Positioning / Direct touch. Lift, cancellation, page changes, collapse and input cleanup remove them. Keyboard, candidates and controls are excluded. Repaint only old/new illustration bounds, with no extra input, focus changes or visual polling timer. Existing preferences and default-off behavior are retained.
+
 ## 0.1.5 · 2026-10-22
 
 - Use native XCB/EGL ring submission with an initialization-only GTK fallback and matching Cairo sprite pixels. Controlled whole-service trials measured about 16–22% less active CPU at 60 FPS and 26–31% at 120 FPS, with higher PSS and workload-dependent GPU costs; idle remains a separate limitation. Input timing, focus/route checks and frame caps are unchanged. See [measurements and limits](docs/position-touch.md#2026-10-22-native-marker-submission).
