@@ -50,6 +50,7 @@ import thor_app as upstream
 from engine import SCREEN_HEIGHT, SCREEN_WIDTH
 from .monitor_select import choose_bottom_monitor, MODE_GAMEMODE, MODE_DESKTOP
 from .toolkit_touch import ToolkitTouch
+from .touch_display import TouchDisplay, input_region
 from . import steam_style
 from . import steam_keys
 from .keyboard_pulses import KeyboardPulses
@@ -108,6 +109,7 @@ class PanelApp(upstream.ThorApp):
         # selecting a tab/control. Never mistake the selecting finger for up.
         self._physical_sequences = set()
         self.keyboard_redraw = KeyboardRedraw()
+        self.touch_display = TouchDisplay()
         self.main_loop = None
         super().__init__()
         self.key_feedback = KeyFeedback(GLib.timeout_add, GLib.source_remove,
@@ -434,6 +436,7 @@ class PanelApp(upstream.ThorApp):
     def _queue_language_draw(self):
         if self._cleaned:
             return
+        self._sync_touch_display()
         self._last_keyboard_activity = time.monotonic()
         if self.mode != 'split' or self.collapsed or self.ui_hidden:
             self.drawing_area.queue_draw()
@@ -512,6 +515,9 @@ class PanelApp(upstream.ThorApp):
         super()._send_keys(events)
 
     def _reset_input(self) -> None:
+        display = getattr(self, 'touch_display', None)
+        if display is not None:
+            self._queue_touch_display(display.clear())
         self.gesture.glide_stop.set()
         self.gesture.reset_all()
         self._end_key_press()
@@ -619,7 +625,35 @@ class PanelApp(upstream.ThorApp):
                     self.position.pause(manual=False)
                 self._reset_input()
         # Do not forward a touch to the toolkit's emulated pointer handlers.
+        self._sync_touch_display()
         return True
+
+    def _queue_touch_display(self, dirty):
+        if not dirty or self._cleaned:
+            return
+        allocation = self.drawing_area.get_allocation()
+        for rect in dirty:
+            self.drawing_area.queue_draw_area(*widget_rect(rect, allocation.width, allocation.height))
+
+    def _sync_touch_display(self):
+        display = getattr(self, 'touch_display', None)
+        if display is None:
+            return
+        candidate = (self._language_top() if self.mode == 'split'
+                     and getattr(self, 'languages', None) is not None
+                     and keyboard_language_view.visible(self.languages) else None)
+        region = input_region(self.mode, header=upstream.HEADER_HEIGHT,
+                              split=upstream.SPLIT_Y, width=SCREEN_WIDTH, height=SCREEN_HEIGHT,
+                              candidate_top=candidate, hidden=self.ui_hidden, collapsed=self.collapsed,
+                              menu_open=getattr(self, '_touch_menu_open', False))
+        self._queue_touch_display(display.sync(
+            self.touch.active, self._touch_owner, region,
+            enabled=getattr(self, 'input_cfg', {}).get('touch_display_mode', False)))
+
+    def _draw_touch_display(self, cr):
+        display = getattr(self, 'touch_display', None)
+        if display is not None:
+            display.draw(cr)
 
     def _handle_timed_touch_move(self, tid, x, y, now, motion_interval) -> None:
         owner = self._touch_owner.get(tid)
@@ -1056,12 +1090,15 @@ class PanelApp(upstream.ThorApp):
             self._draw_position(cr)
             if getattr(self, '_touch_menu_open', False):
                 touchscreen_selector.draw_menu(cr, self.touch_mode)
+            self._draw_touch_display(cr)
             cr.restore()
             return True
         cr.save()
         cr.scale(allocation.width / SCREEN_WIDTH, allocation.height / SCREEN_HEIGHT)
         try:
-            return super().on_draw(widget, cr)
+            result = super().on_draw(widget, cr)
+            self._draw_touch_display(cr)
+            return result
         finally:
             cr.restore()
 

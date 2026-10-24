@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from armada_dual_screen_input.input_settings import (
     DEFAULTS, NUMBERS, CHOICES, SECTIONS, SettingsDraft, read_settings, write_settings, color_swatches,
-    settings_tabs,
+    settings_tabs, GENERAL_TOUCH_DISPLAY_TOP, GENERAL_UPDATE_BUTTON_TOP, GENERAL_UNINSTALL_BUTTON_TOP,
 )
 from armada_dual_screen_input.marker_colors import COLOR_SETTINGS, COLOR_PRESETS
 
@@ -18,6 +18,19 @@ class InputSettingsTests(unittest.TestCase):
         self.assertEqual(DEFAULTS["sensitivity"], 1.5)
         self.assertEqual(DEFAULTS["position_sensitivity"], 2.)
         self.assertTrue(DEFAULTS["keyboard_repeat_enabled"])
+        self.assertFalse(DEFAULTS['touch_display_mode'])
+
+    def test_touch_display_is_opt_in_and_preserves_other_preferences(self):
+        for invalid in ('true',1,None,{}):
+            self.assertFalse(read_settings({'touch_display_mode':invalid})['touch_display_mode'])
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'config.json'
+            original={'scroll_scale':.001,'mode':'position','future':{'keep':True}}
+            write_settings(path,original)
+            write_settings(path,{'touch_display_mode':True})
+            saved=json.loads(path.read_text())
+            self.assertEqual(saved,{**original,'touch_display_mode':True})
+            self.assertTrue(read_settings(saved)['touch_display_mode'])
 
     def test_invalid_and_nonfinite_numbers_never_reach_input(self):
         for key, spec in NUMBERS.items():
@@ -133,7 +146,7 @@ class InputSettingsTests(unittest.TestCase):
             draft.section = section
             for key, top in draft.rows():
                 self.assertGreaterEqual(top, 300)
-                self.assertLess(top + 88, 934)
+                self.assertLess(top + 88, 996 if section=='general' else 934)
                 if key in COLOR_SETTINGS:
                     self.assertEqual(draft.hit(680,top+44),('color',(key,COLOR_PRESETS[0][0])))
                     continue
@@ -146,11 +159,12 @@ class InputSettingsTests(unittest.TestCase):
             self.assertEqual(draft.hit(left + width/2, 250), ('section', section))
             self.assertLessEqual(left + width, 1216)
         draft.section = 'general'
-        self.assertEqual(draft.hit(200, 648), ('update_left', None))
-        self.assertEqual(draft.hit(900, 648), ('install_update', None))
-        self.assertEqual(draft.hit(200, 882), ('uninstall_left', None))
-        self.assertEqual(draft.hit(900, 882), ('uninstall_confirm', None))
-        self.assertEqual(draft.hit(900, 800), (None, None))  # Former update action is inert.
+        self.assertEqual(draft.hit(200, GENERAL_UPDATE_BUTTON_TOP+20), ('update_left', None))
+        self.assertEqual(draft.hit(900, GENERAL_UPDATE_BUTTON_TOP+20), ('install_update', None))
+        self.assertEqual(draft.hit(200, GENERAL_UNINSTALL_BUTTON_TOP+20), ('uninstall_left', None))
+        self.assertEqual(draft.hit(900, GENERAL_UNINSTALL_BUTTON_TOP+20), ('uninstall_confirm', None))
+        self.assertEqual(draft.hit(900, GENERAL_TOUCH_DISPLAY_TOP+40), ('toggle','touch_display_mode'))
+        self.assertGreater(GENERAL_TOUCH_DISPLAY_TOP, GENERAL_UNINSTALL_BUTTON_TOP+52)
 
     def test_save_merges_unknown_fields_and_preserves_previous_input_page(self):
         with tempfile.TemporaryDirectory() as directory:

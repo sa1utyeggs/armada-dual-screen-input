@@ -36,10 +36,12 @@ Select Settings, then Mouse / Touchscreen / Keyboard / General / Updates. Drag s
 | --- | --- |
 | Mouse | Speed 0.2–5.0×, scroll level 1–5, multiplier 0.01–1.0×, tap to click, glide and friction |
 | Touchscreen | Position multiplier 0.1–4.0×, default 2.0×; ring cap 30 / 60 / 120 FPS / Follow display; independent idle / touching colors |
-| General | System language / Simplified Chinese / English UI; missing preference defaults to English, independent of input; confirmed app removal |
+| General | System language / Simplified Chinese / English UI; missing preference defaults to English, independent of input; confirmed app removal; optional touch-contact display at the bottom |
 | Keyboard | English US / Chinese pinyin; repeat toggle, delay 150–800 ms, interval 20–200 ms, Shift double-tap interval 150–800 ms |
 
 Choose Settings → General → Interface language and save; no restart is required. Older configurations missing the field also default to English. See [resolution, migration and validation](i18n.md).
+
+For demo recordings, enable **Show touch contacts** at the bottom of **Settings → General**, then Save settings. It defaults to off. Translucent finger illustrations show actual lower-screen contacts on Touchpad, the pointer area of Keys+Pad, and both touchscreen modes. Multiple fingers appear independently and disappear on lift or cancellation. Keyboard keys, candidate bars and controls are excluded; switching pages or collapsing clears the illustrations. This visual option adds no input events, focus change or continuous refresh timer. It does not measure pressure or finger size. Turning it off and saving restores the normal view; pointer, wheel and keyboard settings are retained.
 
 Reset this page changes only the selected group and still requires Save. Discard changes restores saved values. Switching to another input mode discards unsaved edits. Entering settings releases held keys and positioning contacts; the page takes no upper-screen keyboard focus and sends no slider touches as mouse movement. Restart returns to the previous input mode, not settings.
 
