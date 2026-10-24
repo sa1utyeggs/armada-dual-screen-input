@@ -61,11 +61,11 @@ v0.1.5 adds **Settings → Experimental** for read-only status, kernel compatibi
 
 **Keyboard and mouse**
 
-![Recorded keyboard input and mouse operation](.github/assets/interface-keyboard-mouse-v10-compact.gif)
+![Recorded keyboard input and mouse operation](.github/assets/interface-keyboard-mouse-v10-lite.gif)
 
 **Slay the Spire 2 and gesture demonstration**
 
-![Recorded Slay the Spire 2 gameplay and a cartoon glove lifting and releasing an apple](.github/assets/interface-gameplay-gesture-v10-compact.gif)
+![Recorded Slay the Spire 2 gameplay and a cartoon glove lifting and releasing an apple](.github/assets/interface-gameplay-gesture-v10-lite.gif)
 
 The second preview combines recorded gameplay with an illustrated positioning-touch demonstration: the index finger moves the pointer, while the middle finger maintains contact until it curls into the palm to release the apple. Actual multi-touch reception depends on the lower-screen hardware, Steam's touch policy and the receiving application. [Multilingual keyboard](docs/multilingual-keyboard.md) · [Touch controls](docs/usage.md)
 

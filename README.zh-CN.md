@@ -57,11 +57,11 @@ v0.1.5 增加 **设置 → 试验性功能**：只读查看状态与内核兼容
 
 **键盘与鼠标**
 
-![键盘输入和鼠标操作实录](.github/assets/interface-keyboard-mouse-v10-compact.gif)
+![键盘输入和鼠标操作实录](.github/assets/interface-keyboard-mouse-v10-lite.gif)
 
 **杀戮尖塔2与手势演示**
 
-![杀戮尖塔2游玩实录，以及卡通手套抓起、松开苹果的手势演示](.github/assets/interface-gameplay-gesture-v10-compact.gif)
+![杀戮尖塔2游玩实录，以及卡通手套抓起、松开苹果的手势演示](.github/assets/interface-gameplay-gesture-v10-lite.gif)
 
 第二张动图结合游戏实录与定位触屏原理动画：食指移动指针，中指保持接触，收回掌心表示离开屏幕并松开苹果。真实多指识别取决于下屏硬件、Steam 触摸策略及上屏应用。[多语言键盘](docs/zh-CN/multilingual-keyboard.md) · [触屏说明](docs/zh-CN/usage.md)
 
