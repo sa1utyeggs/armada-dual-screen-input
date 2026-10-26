@@ -2,10 +2,31 @@
 
 # 安装、升级与卸载
 
-当前正式版为 `v0.1.4`，实机验证以 AYN Thor / Armada `20261010.c3d178c` / Linux 7.2.6 / Steam Game Mode 为准。
+当前正式版本见 [Releases](https://github.com/sa1utyeggs/armada-dual-screen-input/releases/latest)，实机验证以 AYN Thor / Armada `20261010.c3d178c` / Linux 7.2.6 / Steam Game Mode 为准。
 其他机型和系统版本见 [兼容范围](compatibility.md)。安装器以普通用户运行，**不要加 sudo**。
 
-## 一键在线安装（推荐）
+<a id="click-install"></a>
+
+## 点击安装（推荐）
+
+主页从仓库提供单个自包含的 `Install-Armada-Dual-Screen-Input.desktop` 文件，直接保存即可，无需解压或终端。即使新 Release 尚未附带该入口，也能安装最新稳定版应用包。已有发布标签和附件保持原样。
+
+1. 在 **Armada 桌面模式**长按或右键[安装器链接](https://github.com/sa1utyeggs/armada-dual-screen-input/raw/refs/heads/main/Install-Armada-Dual-Screen-Input.desktop)，选择 **链接另存为**，保存 `Install-Armada-Dual-Screen-Input.desktop`。正常打开 GitHub Raw 链接可能显示文本，此时按准确文件名另存为即可。
+2. 在 **Dolphin 文件管理器**打开下载目录。如果 Firefox 保存为 `Install-Armada-Dual-Screen-Input.desktop.download`，重命名为 `Install-Armada-Dual-Screen-Input.desktop`，只去掉最后的 `.download`。打开 `.desktop` 文件，按系统提示信任并允许运行。如果不允许执行，请在“属性 → 权限”勾选允许执行，再次打开。浏览器下载面板可能只显示文件，请使用文件管理器。
+3. 窗口检查支持的设备并展示最新**稳定版 Release** 的版本。点击 **Install / 安装**，自动完成下载、校验、解压和安装，无需终端命令。窗口默认英文，可选择 **简体中文**；与键盘输入和应用语言配置独立。
+4. 等待成功提示，关闭安装器，从桌面或应用菜单打开 **Virtual Keyboard & Mouse / 虚拟键鼠**，进入 Steam Game Mode 使用。
+
+入口文件自带安装助手，不会从 `main` 下载并直接执行脚本。它跟随 GitHub 公开的 `releases/latest` 重定向，读取该标签的 HTTPS `SHA256SUMS` 并检查有大小上限的安装包响应头。这条路径不请求 REST API，因此不消耗共享的匿名 API 配额，也不需要 GitHub token。执行前，重新下载的校验文件必须与确认版本时的内容一致，安装包必须通过 SHA-256、安全路径、清单和所选版本检查。安装期间即使出现新的稳定版，也保持已确认标签，再以离线模式调用包内现有安装器。基础系统依赖与源码安装相同；浏览器登录不会为下载器提供认证。附件缺失、校验变化和网页下载失败都会停止安装，不自动重试，也不回退到开发构建。“重新检查”会重新检查设备与版本。下载文件和内嵌助手在正常退出时清理；忙碌期间请保持窗口打开。
+
+窗口按显示器逻辑工作区留出装饰边界。已测 Thor 桌面的下屏在当前缩放下只有 `443×386`，安装器以 `419×322` 打开；内容可滚动，语言选择、安装与关闭按钮保持可见。这与应用的游戏模式面板尺寸独立。
+
+Firefox 的保护性 `.download` 后缀在完整下载后仍可能保留，与未完成下载的 `.part` 不同。新 Release 也附带同一个入口和 `INSTALLER-SHA256SUMS`。应用的 `SHA256SUMS` 继续只列安装包，兼容旧版应用内更新。校验和只验证完整性，不代替发布者身份验证；请只从本项目下载。无法打开窗口时会尝试 KDE 错误弹窗；请检查系统 Python 3、PyGObject、GTK3 和桌面会话，或使用下面的离线安装方式。
+
+全新安装不自动打开应用、不启用自启动；升级保留个人配置和已有自启动选择。入口仅调用本应用的用户级安装器，不安装或启用内核驱动。2026-10-26 用户已在 Thor 修正版窗口中完成安装，安装包校验、保留偏好和恢复原候选版均通过。初次浏览器下载使用临时局域网附件地址，修正版助手随后传入测试；干净用户下首次安装，以及尚未发布的 GitHub 附件按钮，仍需分别检查。[实机证据与边界](history.md#click-installer-20261026)
+
+<a id="一键在线安装推荐"></a>
+
+## 一键在线安装（开发构建）
 
 在 Armada 桌面终端执行：
 

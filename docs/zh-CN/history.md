@@ -144,3 +144,15 @@ journalctl --user -u thor-panel.service -n 60 --no-pager
 - [官方下屏服务](https://github.com/armada-os/armada/blob/c3d178c/system_files/usr/lib/systemd/user/armada-bottom-screen.service)
 - [GTK layer shell API](https://wmww.github.io/gtk-layer-shell/)
 - [GDK 触摸事件](https://docs.gtk.org/gdk3/struct.EventTouch.html)
+
+<a id="click-installer-20261026"></a>
+
+## 点击安装器实机测试（2026-10-26）
+
+在 AYN Thor / Armada `20261010.c3d178c` / aarch64 上，先用 Firefox `157.0.1` 从提供附件下载的临时局域网地址取得自包含入口，字节与构建文件一致。Firefox 自动添加了 `.download`，去掉该后缀后可从 Dolphin 启动。用户反馈窗口在下屏显示不全；实测桌面工作区只有 `443×386` 逻辑像素、缩放 3，而原窗口宽度为 540 像素。修正版采用 `419×322` 窗口、可滚动正文和固定的语言与操作按钮。使用 Thor 实际字体，在正常和下屏尺寸下通过了十六组中英文状态／布局检查；修正版入口随后传到设备继续测试。
+
+首次版本查询遇到 GitHub REST HTTP 403，匿名剩余配额为零。改用公开 Release 查询后，无 REST API 请求即可选中 `v0.1.5` 并下载、验证校验文件及安装包；Thor 通过七项公开版本查询隔离检查。用户确认在修正版窗口完成安装。实际安装包为 `c32c83db8ae992fc`，源码提交 `1ce7f156dfa175068f12f34186821e3b35ffbd58`；清单内 138 个文件、管理入口和运行依赖全部通过检查，个人配置哈希不变，自启动仍关闭。
+
+回退恢复了原本地候选版 `c8d8e0c7aa377414` 和原 `previous` 指向；完整安装状态文件与个人配置哈希均与测试前一致。安装后服务处于运行状态，回退保留该运行状态，不代表全新安装会自动启动。安装／回退期间桌面 KWin 与 Plasma 进程身份保持不变。本轮没有驱动、启动文件或官方服务操作，也未向游戏自动发送输入。Mac 运行 676 项 Python 检查，其中 111 项 Linux 检查跳过；Mac 的 15 项 Node 检查通过。这与设备安装、七项查询检查及十六组布局验证分别记录。
+
+本次为已有安装的重装与回退，启动与确认有用户参与。干净用户下首次安装、尚未发布的 GitHub 附件按钮、其他设备和长期运行仍未验证；已有 `v0.1.5` 标签与附件保持原样。参见[安装步骤](installation.md#click-install)、[GitHub Release 链接](https://docs.github.com/en/repositories/releasing-projects-on-github/linking-to-releases)与 [Mozilla 文件名处理](https://bugzilla.mozilla.org/show_bug.cgi?id=1961777)。

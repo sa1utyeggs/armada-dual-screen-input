@@ -5,6 +5,7 @@ from pathlib import Path
 import tempfile
 
 from release import APP, archive, digest, prepare, version
+from build_click_installer import build
 
 root = Path(__file__).resolve().parent.parent
 parser = argparse.ArgumentParser(description=__doc__)
@@ -20,4 +21,8 @@ with tempfile.TemporaryDirectory(prefix='ads-release-') as work:
     target = args.output / (name + '.tar.gz')
     archive(tree, target)
 (args.output / 'SHA256SUMS').write_text(digest(target) + '  ' + target.name + '\n')
+launcher = build(root, args.output)
+# Keep the app checksum single-entry: already installed updaters require it.
+(args.output / 'INSTALLER-SHA256SUMS').write_text(digest(launcher) + '  ' + launcher.name + '\n')
 print(target)
+print(launcher)

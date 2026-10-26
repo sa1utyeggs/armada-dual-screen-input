@@ -81,9 +81,25 @@ Mac uses the system libarchive tar with RPM support; Linux can use `rpm2cpio` + 
 ```text
 armada-dual-screen-input-<VERSION>-aarch64.tar.gz
 SHA256SUMS
+Install-Armada-Dual-Screen-Input.desktop
+INSTALLER-SHA256SUMS
 ```
 
 `manifest.json` contains each file's SHA-256, source revision and bundle ID. Uncommitted sources get a `-dirty` revision suffix. With the same source tree and revision, archive ordering, permissions, uid/gid and timestamps are fixed for reproducibility. Whitelisted sources, templates, licenses, bilingual documentation and the pinned runtime are included. Tests, personal configuration, logs, caches, Git history and driver experiments are excluded.
+
+The click launcher embeds only the installer, stable downloader, public Release discovery, verification/host-check helpers, bilingual catalogs and project license. First-install discovery uses the official web redirect and pinned checksum asset without REST API requests; existing in-app update discovery keeps its API asset-digest checks. It runs those helpers from a temporary zip, downloads the reviewed stable bundle and invokes its existing installer with `--offline`. The separate `INSTALLER-SHA256SUMS` keeps older app updaters compatible with the single-entry `SHA256SUMS`. The tracked homepage launcher and Release launcher must contain the generator's sources and bootstrap; compression bytes can differ across zlib versions. Regenerate the homepage file after changing any embedded helper:
+
+```bash
+python3 -B tools/build_click_installer.py --output .
+```
+
+Tests run the embedded launcher's `--help` outside the checkout, check that it is current, and exercise fixture downloads without network or real installation. Linux CI uses Xvfb for bilingual installer window layouts as well as the existing catalog/panel checks. To preview only this installer's own window on a Linux desktop, without downloads, installation or input devices:
+
+```bash
+python3 -B tools/click_install.py --preview ready
+```
+
+Browser download behavior, KDE trust prompts and end-to-end installation on Thor remain separate acceptance steps.
 
 <a id="发布"></a>
 
@@ -106,7 +122,7 @@ SHA256SUMS
    ```
 
 4. Open Actions → **Build and release offline package**. After full Linux/Python/JavaScript checks pass, CI verifies matching tag and `VERSION`, membership in `main` and both changelog entries. It builds the pinned-dependency aarch64 bundle from that commit and checks SHA-256. The publishing job checks that the remote tag still targets that source revision.
-5. CI creates a draft, uploads `armada-dual-screen-input-<VERSION>-aarch64.tar.gz` and its `SHA256SUMS`, then publishes. Notes include English first, Simplified Chinese second, with installation/checksum instructions in both languages. Prereleases are not Latest. Only the publishing job has `contents: write`; checks/builds remain read-only, without a personal access token.
+5. CI creates a draft, uploads `armada-dual-screen-input-<VERSION>-aarch64.tar.gz`, its `SHA256SUMS`, `Install-Armada-Dual-Screen-Input.desktop` and `INSTALLER-SHA256SUMS`, then publishes. Both checksum files are verified before upload. Notes include English first, Simplified Chinese second, with click/offline installation instructions in both languages. Prereleases are not Latest; their click launcher still selects the latest stable app. Only the publishing job has `contents: write`; checks/builds remain read-only, without a personal access token.
 6. Validate fresh installation, configuration-preserving upgrade, rollback and uninstall on AYN Thor before expanding device support. Record isolated checks separately from device acceptance. GitHub's generated Source code archives are not the installer bundle. Private-repository releases cannot be anonymously downloaded.
 
 The manual **Run workflow** entry remains artifact-only: checks, build and an Actions artifact containing the package, checksum and release notes. Release-related PRs also build without publishing.

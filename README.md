@@ -20,7 +20,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/sa1utyeggs/armada-dual-screen-input/releases/latest"><strong>Download stable release</strong></a> ·
+  <a href="https://github.com/sa1utyeggs/armada-dual-screen-input/raw/refs/heads/main/Install-Armada-Dual-Screen-Input.desktop"><strong>Download click installer</strong></a> ·
+  <a href="https://github.com/sa1utyeggs/armada-dual-screen-input/releases/latest"><strong>Offline package</strong></a> ·
   <a href="docs/installation.md">Installation</a> ·
   <a href="docs/usage.md">Usage</a> ·
   <a href="docs/compatibility.md">Compatibility</a> ·
@@ -69,25 +70,15 @@ The existing one-line status row also shows signed **net battery power** from ca
 
 ## Quick start
 
-**Recommended: [Download the latest stable release](https://github.com/sa1utyeggs/armada-dual-screen-input/releases/latest).**
+**[Get the click installer (.desktop)](https://github.com/sa1utyeggs/armada-dual-screen-input/raw/refs/heads/main/Install-Armada-Dual-Screen-Input.desktop) in Armada Desktop Mode.**
 
-Download both the ARM64 `.tar.gz` package and `SHA256SUMS`. Verify the checksum, extract the package and run `bash install.sh` as your regular user in an **Armada desktop terminal**. **Do not use sudo.** GitHub's automatically generated **Source code** archives are not the offline installer bundle. [Full installation guide](docs/installation.md)
+1. Right-click the installer link (or press and hold on the touchscreen), choose **Save Link As** and save `Install-Armada-Dual-Screen-Input.desktop`. If the link opens as text, save it with that filename.
+2. Open the file in **Dolphin**, confirm the system's run prompt and select **Install**. If Firefox added `.download`, remove only that extra suffix first. The window shows the latest stable version and downloads, verifies and installs it for your user.
+3. Open **Virtual Keyboard & Mouse / 虚拟键鼠** from the desktop or application menu, then enter Steam Game Mode.
 
-After installation, open **虚拟键鼠** from the desktop or application menu, then enter Steam Game Mode to use the panel. **Installation does not open the app or enable autostart by default.**
+No terminal commands are needed. The window defaults to English; choose 简体中文 if preferred. Fresh installs do not open the app or enable autostart; upgrades keep personal settings and the existing autostart choice. [Full steps and troubleshooting](docs/installation.md#click-install)
 
-**Development build (`main`):** the online command below installs the current `main` build rather than a fixed stable release. Run it as your regular user in an **Armada desktop terminal**; to install an existing tag, see the [installation guide](docs/installation.md).
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/sa1utyeggs/armada-dual-screen-input/main/get.sh | bash
-```
-
-For an existing installation, open **设置 → 通用 → 更新 → 检查更新** (Settings → General → Update → Check for updates), then confirm the upgrade. To roll back, run:
-
-```bash
-~/.local/bin/armada-dual-screen-input rollback
-```
-
-The installer manages only this app's user-directory files, desktop entry and user service. It preserves personal configuration and the existing autostart choice. **Experimental kernel drivers are not included or enabled.** [Installation, upgrades, rollback and removal](docs/installation.md)
+For an existing installation, use **Settings → General → Update → Check for updates** (设置 → 通用 → 更新 → 检查更新). [Offline installation, source/development builds, rollback and removal](docs/installation.md) are covered in the guide. GitHub's generated **Source code** archives are not the installer bundle. Experimental kernel drivers are installed separately.
 
 ## Thor lower-screen touch fix (experimental)
 

@@ -20,7 +20,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/sa1utyeggs/armada-dual-screen-input/releases/latest"><strong>下载正式版</strong></a> ·
+  <a href="https://github.com/sa1utyeggs/armada-dual-screen-input/raw/refs/heads/main/Install-Armada-Dual-Screen-Input.desktop"><strong>下载点击安装器</strong></a> ·
+  <a href="https://github.com/sa1utyeggs/armada-dual-screen-input/releases/latest"><strong>离线安装包</strong></a> ·
   <a href="docs/zh-CN/installation.md">安装指南</a> ·
   <a href="docs/zh-CN/usage.md">使用说明</a> ·
   <a href="docs/zh-CN/compatibility.md">兼容范围</a> ·
@@ -63,25 +64,15 @@
 
 ## 快速开始
 
-**推荐：[下载最新正式版](https://github.com/sa1utyeggs/armada-dual-screen-input/releases/latest)。**
+**在 Armada 桌面模式[获取点击安装器（.desktop）](https://github.com/sa1utyeggs/armada-dual-screen-input/raw/refs/heads/main/Install-Armada-Dual-Screen-Input.desktop)。**
 
-同时下载 ARM64 `.tar.gz` 安装包和 `SHA256SUMS`。校验、解压后，在 **Armada 桌面终端**以普通用户运行 `bash install.sh`。**不要使用 sudo。** GitHub 自动生成的 **Source code** 不是离线安装包。[完整安装指南](docs/zh-CN/installation.md)
+1. 长按或右键安装器链接，选择 **链接另存为**，保存 `Install-Armada-Dual-Screen-Input.desktop`。如果打开后显示文本，按这个文件名另存为即可。
+2. 在 **Dolphin 文件管理器**打开文件，按系统提示允许运行，点击 **Install / 安装**。如果 Firefox 添加了 `.download`，先去掉这个额外后缀。窗口展示最新稳定版本，自动下载、校验并安装到当前用户目录。
+3. 从桌面或应用菜单打开 **Virtual Keyboard & Mouse / 虚拟键鼠**，进入 Steam Game Mode 使用。
 
-安装后从桌面或应用菜单打开 **虚拟键鼠**，进入 Steam Game Mode 使用。**默认不自动打开，也不开机自启。**
+全程无需输入终端命令。窗口默认英文，可选择简体中文。全新安装不自动打开应用、不开机自启；升级保留个人设置和已有自启动选择。[完整步骤与排错](docs/zh-CN/installation.md#click-install)
 
-**开发构建（`main`）：** 以下在线命令安装 `main` 当前构建，而非固定正式版本。在 **Armada 桌面终端**以普通用户运行；如需指定已有 tag，见[安装指南](docs/zh-CN/installation.md)。
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/sa1utyeggs/armada-dual-screen-input/main/get.sh | bash
-```
-
-已有安装可进入 **设置 → 通用 → 更新 → 检查更新**，再确认升级。需要回退时运行：
-
-```bash
-~/.local/bin/armada-dual-screen-input rollback
-```
-
-安装器只管理本应用的用户目录、桌面入口与用户服务，保留个人配置和原自启动选择。**不包含或启用实验内核驱动。** [完整安装、升级、回退与卸载](docs/zh-CN/installation.md)
+已有安装可使用 **设置 → 通用 → 更新 → 检查更新**。[离线安装、源码／开发构建、回退与卸载](docs/zh-CN/installation.md)见安装指南。GitHub 自动生成的 **Source code** 不是离线安装包。实验内核驱动仍需单独安装。
 
 ## Thor 下屏触摸驱动修复（实验）
 

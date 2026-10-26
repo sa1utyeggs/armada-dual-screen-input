@@ -4,6 +4,8 @@ English · [简体中文](CHANGELOG.zh-CN.md)
 
 ## Unreleased
 
+- Add a downloadable `.desktop` installer on the homepage, with English/Chinese graphical version review, progress, errors and retry. Reuse stable-release digest/path/manifest checks and the per-user installer; keep the selected version fixed and require confirmation before package download/install. Generate self-contained launchers from an explicit source allowlist, with a separate checksum and Release asset, preserving the single-entry app checksum for older updaters. User-assisted stable reinstallation and restoration of the original candidate passed on Thor; the public attachment button and a clean first install remain unverified. See [device evidence](docs/history.md#click-installer-20261026).
+- Adapt the installer to the Thor desktop's scaled lower work area, with scrolling content and fixed language/actions. Document Firefox's added `.download` suffix. Discover the first-install version through public Release redirects and pin its HTTPS checksum asset, preserving package/manifest checks while avoiding the anonymous REST API quota. Existing in-app API update validation is unchanged.
 - Add opt-in **Settings → General → Show touch contacts** at the bottom of the page. Semi-transparent vector fingers follow actual contacts in Touchpad, the pointer area of Keys+Pad, and Positioning / Direct touch. Lift, cancellation, page changes, collapse and input cleanup remove them. Keyboard, candidates and controls are excluded. Repaint only old/new illustration bounds, with no extra input, focus changes or visual polling timer. Existing preferences and default-off behavior are retained.
 
 ## 0.1.5 · 2026-10-22

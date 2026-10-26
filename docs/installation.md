@@ -4,11 +4,31 @@ English · [简体中文](zh-CN/installation.md)
 
 # Installation, upgrades and removal
 
-The current stable release is `v0.1.4`. Device validation refers to AYN Thor / Armada `20261010.c3d178c` / Linux 7.2.6 / Steam Game Mode. See [compatibility](compatibility.md) for other devices and systems. Run the installer as your regular user, **without sudo**.
+See [Releases](https://github.com/sa1utyeggs/armada-dual-screen-input/releases/latest) for the current stable version. Device validation refers to AYN Thor / Armada `20261010.c3d178c` / Linux 7.2.6 / Steam Game Mode. See [compatibility](compatibility.md) for other devices and systems. Run the installer as your regular user, **without sudo**.
+
+<a id="click-install"></a>
+
+## Click installation (recommended)
+
+The homepage provides one self-contained `Install-Armada-Dual-Screen-Input.desktop` file from the repository. Save that file directly; no extraction or terminal is needed. It installs the latest stable app bundle, even before a new Release includes the launcher as an attachment. Older published tags and assets are unchanged.
+
+1. In **Armada Desktop Mode**, right-click (or press and hold) the [installer link](https://github.com/sa1utyeggs/armada-dual-screen-input/raw/refs/heads/main/Install-Armada-Dual-Screen-Input.desktop), choose **Save Link As** and save `Install-Armada-Dual-Screen-Input.desktop`. GitHub Raw may display the file as text when opened normally; save it with this exact filename in that case.
+2. Open Downloads in **Dolphin**. If Firefox saved `Install-Armada-Dual-Screen-Input.desktop.download`, rename it to `Install-Armada-Dual-Screen-Input.desktop` by removing only the final `.download`. Open the `.desktop` file and confirm the system's trust/run prompt. If execution is disabled, open Properties → Permissions, allow execution, and open it again. Browser download panels may only show the file; use the file manager.
+3. The window checks the supported device and displays the latest **stable Release** version. Select **Install**. Downloads, checksum verification, extraction and installation are automatic; no terminal commands are needed. Select **简体中文** for Chinese; the window defaults to English independently of keyboard input and app preferences.
+4. Wait for the success message, close the installer and open **Virtual Keyboard & Mouse / 虚拟键鼠** from the desktop or application menu. Enter Steam Game Mode to use the panel.
+
+The launcher embeds the installer helper; it does not fetch and execute a script from `main`. It follows GitHub's public `releases/latest` redirect, reads that tag's HTTPS `SHA256SUMS` and checks bounded package headers. This path makes no REST API requests, so it does not consume the shared anonymous API quota or need a GitHub token. Before execution, the downloaded checksum file must still match the reviewed bytes, and the package must match its SHA-256, safe paths, manifest and selected version. The selected tag stays fixed even if another stable release appears during installation. It then invokes the existing package installer in offline mode. Base dependencies match source installation; a browser login does not authenticate its downloads. Missing files, changed checksums and web download failures stop installation, with no automatic retries or development-build fallback. **Check again** rechecks the device and release. Downloads and the embedded helper are temporary and are removed on normal exit. Keep the window open while it is busy.
+
+The window uses logical monitor work areas and leaves room for decorations. On the tested Thor desktop, the lower screen is only `443×386` at its current scaling; the installer starts at `419×322`. Content scrolls while the language selector, Install and Close buttons stay visible. This is separate from the app's Game Mode panel geometry.
+
+Firefox's protective `.download` suffix can remain after a complete download; it differs from an unfinished `.part` file. New Releases also include the same launcher and `INSTALLER-SHA256SUMS`. The app's `SHA256SUMS` remains single-entry for older in-app updaters. Checksums verify integrity, not publisher identity; download only from this project. If the window cannot open, a KDE error dialog is attempted; check system Python 3, PyGObject, GTK3 and the desktop session, or use the offline instructions below.
+
+Fresh installation does not open the app or enable autostart; upgrades preserve preferences and the existing autostart choice. Only this app's per-user installer is invoked. No kernel driver is installed or enabled. On 2026-10-26 the user completed installation through the revised window on Thor; package verification, unchanged preferences and restoration of the original candidate passed. The initial browser download used a temporary LAN attachment URL, and the revised helpers were transferred for testing. A clean first install and the unpublished GitHub attachment button remain separate checks. [Device evidence and limits](history.md#click-installer-20261026)
 
 <a id="一键在线安装推荐"></a>
+<a id="one-command-online-installation-recommended"></a>
 
-## One-command online installation (recommended)
+## One-command online installation (development build)
 
 Run in an Armada desktop terminal:
 
