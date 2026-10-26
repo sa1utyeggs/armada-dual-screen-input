@@ -20,7 +20,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/sa1utyeggs/armada-dual-screen-input/releases/latest">下载正式版</a> ·
+  <a href="https://github.com/sa1utyeggs/armada-dual-screen-input/releases/latest"><strong>下载正式版</strong></a> ·
   <a href="docs/zh-CN/installation.md">安装指南</a> ·
   <a href="docs/zh-CN/usage.md">使用说明</a> ·
   <a href="docs/zh-CN/compatibility.md">兼容范围</a> ·
@@ -32,6 +32,20 @@
 > **当前实测：AYN Thor · ArmadaOS · Steam Game Mode。** Desktop Mode 默认关闭，其他机型尚未实测。[系统版本与验证边界](docs/zh-CN/compatibility.md)
 
 界面支持中英切换，缺少语言配置时默认英文；与键盘输入语言独立。下方演示配有中英双语字幕，录制的应用画面使用中文。[语言设置与验证边界](docs/zh-CN/i18n.md)。通用设置另提供保留个人配置的[卸载入口](docs/zh-CN/installation.md#卸载)，需要二次确认。
+
+## 界面预览
+
+**键盘与鼠标**
+
+![键盘输入和鼠标操作实录](.github/assets/interface-keyboard-mouse-v10-lite.gif)
+
+**杀戮尖塔2与手势演示**
+
+![杀戮尖塔2游玩实录，以及卡通手套抓起、松开苹果的手势演示](.github/assets/interface-gameplay-gesture-v10-lite.gif)
+
+第二张动图结合游戏实录与定位触屏原理动画：食指移动指针，中指保持接触，收回掌心表示离开屏幕并松开苹果。真实多指识别取决于下屏硬件、Steam 触摸策略及上屏应用。[多语言键盘](docs/zh-CN/multilingual-keyboard.md) · [触屏说明](docs/zh-CN/usage.md)
+
+[下载完整演示（46 秒，720p MP4）](https://raw.githubusercontent.com/sa1utyeggs/armada-dual-screen-input/main/.github/assets/interface-demo.mp4)。
 
 ## 能做什么
 
@@ -47,37 +61,19 @@
 
 原有单行状态栏同时显示带正负号的**电池净功率**，复用电压×电流缓存。例如 `电池 96% −5.0W` 表示放电，`+` 表示充电；不增加轮询。接电时此值不代表整机或充电器功率。[监控含义与限制](docs/zh-CN/usage.md#battery-power)。
 
-### Thor 下屏触摸驱动修复（实验）
-
-**本机实测，驱动修复改善了触点卡住和第二指点按失灵。** 2026-10-22 保持应用与配置不变，仅重新启用兼容的下屏驱动模块后，用户确认操作恢复正常。调整指针灵敏度无法清除原厂驱动残留的物理触点。
-
-v0.1.5 增加 **设置 → 试验性功能**：只读查看状态与内核兼容性，手动确认启用或恢复原厂。驱动组件单独安装；普通应用包不含内核模块，也不会自动启用。操作需要二次确认及管理员认证，只短暂重启本面板，生效至重启。**仅支持已测 Thor / Armada 20261010 / 匹配指纹的 Linux 7.2.6 构建；长期使用与休眠恢复仍需继续验证。** [排查证据](docs/zh-CN/thor-ft5452-contact-lifecycle.md) · [可选组件安装与回退](extras/thor-touch-driver/README.zh-CN.md#settings-controls)
-
-### 界面预览
-
-**键盘与鼠标**
-
-![键盘输入和鼠标操作实录](.github/assets/interface-keyboard-mouse-v10-lite.gif)
-
-**杀戮尖塔2与手势演示**
-
-![杀戮尖塔2游玩实录，以及卡通手套抓起、松开苹果的手势演示](.github/assets/interface-gameplay-gesture-v10-lite.gif)
-
-第二张动图结合游戏实录与定位触屏原理动画：食指移动指针，中指保持接触，收回掌心表示离开屏幕并松开苹果。真实多指识别取决于下屏硬件、Steam 触摸策略及上屏应用。[多语言键盘](docs/zh-CN/multilingual-keyboard.md) · [触屏说明](docs/zh-CN/usage.md)
-
-[下载完整演示（46 秒，720p MP4）](https://raw.githubusercontent.com/sa1utyeggs/armada-dual-screen-input/main/.github/assets/interface-demo.mp4)。
-
 ## 快速开始
 
-在 **Armada 桌面终端**以普通用户运行：
+**推荐：[下载最新正式版](https://github.com/sa1utyeggs/armada-dual-screen-input/releases/latest)。**
+
+同时下载 ARM64 `.tar.gz` 安装包和 `SHA256SUMS`。校验、解压后，在 **Armada 桌面终端**以普通用户运行 `bash install.sh`。**不要使用 sudo。** GitHub 自动生成的 **Source code** 不是离线安装包。[完整安装指南](docs/zh-CN/installation.md)
+
+安装后从桌面或应用菜单打开 **虚拟键鼠**，进入 Steam Game Mode 使用。**默认不自动打开，也不开机自启。**
+
+**开发构建（`main`）：** 以下在线命令安装 `main` 当前构建，而非固定正式版本。在 **Armada 桌面终端**以普通用户运行；如需指定已有 tag，见[安装指南](docs/zh-CN/installation.md)。
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/sa1utyeggs/armada-dual-screen-input/main/get.sh | bash
 ```
-
-安装后从桌面或应用菜单打开 **虚拟键鼠**，进入 Steam Game Mode 使用。**不要使用 sudo；默认不自动打开，也不开机自启。** 在线入口安装 `main` 当前构建；需要固定正式版本时，使用下面的离线包或指定已有 tag。
-
-离线安装：从 [最新正式版](https://github.com/sa1utyeggs/armada-dual-screen-input/releases/latest) 同时下载 ARM64 `.tar.gz` 和 `SHA256SUMS`，校验、解压后运行 `bash install.sh`。GitHub 自动生成的 **Source code** 不是离线安装包。
 
 已有安装可进入 **设置 → 通用 → 更新 → 检查更新**，再确认升级。需要回退时运行：
 
@@ -86,6 +82,12 @@ curl -fsSL https://raw.githubusercontent.com/sa1utyeggs/armada-dual-screen-input
 ```
 
 安装器只管理本应用的用户目录、桌面入口与用户服务，保留个人配置和原自启动选择。**不包含或启用实验内核驱动。** [完整安装、升级、回退与卸载](docs/zh-CN/installation.md)
+
+## Thor 下屏触摸驱动修复（实验）
+
+**本机实测，驱动修复改善了触点卡住和第二指点按失灵。** 2026-10-22 保持应用与配置不变，仅重新启用兼容的下屏驱动模块后，用户确认操作恢复正常。调整指针灵敏度无法清除原厂驱动残留的物理触点。
+
+v0.1.5 增加 **设置 → 试验性功能**：只读查看状态与内核兼容性，手动确认启用或恢复原厂。驱动组件单独安装；普通应用包不含内核模块，也不会自动启用。操作需要二次确认及管理员认证，只短暂重启本面板，生效至重启。**仅支持已测 Thor / Armada 20261010 / 匹配指纹的 Linux 7.2.6 构建；长期使用与休眠恢复仍需继续验证。** [排查证据](docs/zh-CN/thor-ft5452-contact-lifecycle.md) · [可选组件安装与回退](extras/thor-touch-driver/README.zh-CN.md#settings-controls)
 
 ## 文档导航
 
