@@ -1,6 +1,21 @@
 """UI catalogs. Stable keys are independent of input and configuration values."""
 
 ZH_CN = {
+    'installer.title': '安装 Armada Dual Screen Input',
+    'installer.desktop_name': '安装虚拟键鼠',
+    'installer.desktop_comment': '在 ArmadaOS 上下载并安装最新稳定版',
+    'installer.scope': '适用于 AYN Thor / ArmadaOS。安装到当前用户目录；保留个人配置与已有自启动选择，新安装默认不自启动。完成后从应用菜单打开，再进入 Steam 游戏模式使用。',
+    'installer.checking': '正在检查设备并查询最新稳定版…',
+    'installer.ready': '可安装稳定版 {tag}。点击“安装”开始下载。',
+    'installer.install': '安装',
+    'installer.retry': '重新检查',
+    'installer.downloading': '正在下载并校验稳定版安装包…',
+    'installer.verifying': '正在检查安装包文件与版本…',
+    'installer.installing': '正在安装，请等待完成后关闭窗口…',
+    'installer.success': '{tag} 安装完成。从桌面或应用菜单打开“虚拟键鼠”，然后进入 Steam 游戏模式。',
+    'installer.success_refresh': '{tag} 安装完成。从应用菜单打开“虚拟键鼠”；若图标尚未刷新，请退出并重新进入游戏模式。',
+    'installer.failed': '安装未完成。请查看下面的原因，处理后重新检查。',
+    'installer.no_gui': '无法打开安装窗口。请在 Armada 桌面会话运行；需要系统 Python 3、PyGObject 和 GTK3。请查阅项目安装指南。',
     'driver.tab': '试验性功能',
     'driver.title': 'Thor 下屏触摸驱动修复',
     'driver.not_checked': '尚未检查驱动兼容性',
@@ -263,6 +278,21 @@ ZH_CN = {
 }
 
 EN_US = {
+    'installer.title': 'Install Armada Dual Screen Input',
+    'installer.desktop_name': 'Install Armada Dual Screen Input',
+    'installer.desktop_comment': 'Download and install the latest stable release on ArmadaOS',
+    'installer.scope': 'For AYN Thor / ArmadaOS. Installs for the current user, preserving preferences and any existing autostart choice. New installs do not autostart. Open from the application menu, then enter Steam Game Mode to use it.',
+    'installer.checking': 'Checking the device and finding the latest stable release…',
+    'installer.ready': 'Stable release {tag} is available. Select Install to begin downloading.',
+    'installer.install': 'Install',
+    'installer.retry': 'Check again',
+    'installer.downloading': 'Downloading and verifying the stable release…',
+    'installer.verifying': 'Checking package files and version…',
+    'installer.installing': 'Installing. Please wait for completion before closing…',
+    'installer.success': '{tag} installed. Open Virtual Keyboard & Mouse from the desktop or application menu, then enter Steam Game Mode.',
+    'installer.success_refresh': '{tag} installed. Open Virtual Keyboard & Mouse from the application menu. If its icon has not refreshed, leave and re-enter Game Mode.',
+    'installer.failed': 'Installation did not complete. Review the details below, resolve the issue and check again.',
+    'installer.no_gui': 'Cannot open the installer. Run it in an Armada desktop session with system Python 3, PyGObject and GTK3. See the project installation guide.',
     'driver.tab': 'Experimental',
     'driver.title': 'Thor lower-screen touch fix · Experimental',
     'driver.not_checked': 'Driver compatibility not checked',

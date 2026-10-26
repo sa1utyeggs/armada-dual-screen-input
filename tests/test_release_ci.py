@@ -120,8 +120,8 @@ elif args[:2] == ['release', 'view']:
 elif args[:2] == ['release', 'upload'] and os.environ.get('FAIL_UPLOAD'):
     sys.exit(1)
 '''
-        checksum = '''import hashlib, pathlib
-for line in pathlib.Path('SHA256SUMS').read_text().splitlines():
+        checksum = '''import hashlib, pathlib, sys
+for line in pathlib.Path(sys.argv[-1]).read_text().splitlines():
     expected, name = line.split()
     assert hashlib.sha256(pathlib.Path(name).read_bytes()).hexdigest() == expected
 '''
@@ -131,7 +131,8 @@ print(json.load(sys.stdin)['object'][sys.argv[-1].rsplit('.', 1)[-1]])
         cases = [('stable', {}, True), ('preview', {'PRERELEASE': 'true'}, True),
                  ('annotated', {'ANNOTATED': '1'}, True), ('draft retry', {'DRAFT': 'true'}, True),
                  ('published', {'DRAFT': 'false'}, False), ('moved', {'MOVED': '1'}, False),
-                 ('upload failed', {'FAIL_UPLOAD': '1'}, False), ('tampered', {'TAMPERED': '1'}, False)]
+                 ('upload failed', {'FAIL_UPLOAD': '1'}, False), ('tampered', {'TAMPERED': '1'}, False),
+                 ('installer tampered', {'INSTALLER_TAMPERED': '1'}, False)]
         for label, options, success in cases:
             with self.subTest(case=label), tempfile.TemporaryDirectory() as work:
                 root = Path(work)
@@ -145,9 +146,15 @@ print(json.load(sys.stdin)['object'][sys.argv[-1].rsplit('.', 1)[-1]])
                 archive.write_bytes(b'fixture archive')
                 expected = hashlib.sha256(archive.read_bytes()).hexdigest()
                 (root / 'dist/SHA256SUMS').write_text(expected + '  ' + archive.name + '\n')
+                launcher = root / 'dist/Install-Armada-Dual-Screen-Input.desktop'
+                launcher.write_bytes(b'fixture launcher')
+                (root / 'dist/INSTALLER-SHA256SUMS').write_text(
+                    hashlib.sha256(launcher.read_bytes()).hexdigest() + '  ' + launcher.name + '\n')
                 (root / 'dist/release-notes.md').write_text('Fixture release notes')
                 if options.get('TAMPERED'):
                     archive.write_bytes(b'tampered archive')
+                if options.get('INSTALLER_TAMPERED'):
+                    launcher.write_bytes(b'tampered launcher')
                 env = dict(os.environ, PATH=str(root / 'bin') + os.pathsep + os.environ['PATH'],
                            CALL_LOG=str(root / 'calls'), GH_REPO='example/repo', GH_TOKEN='fixture',
                            RELEASE_TAG='v1.2.3', RELEASE_VERSION='1.2.3', PRERELEASE='false',
@@ -165,9 +172,12 @@ print(json.load(sys.stdin)['object'][sys.argv[-1].rsplit('.', 1)[-1]])
                     publish = next(call for call in calls if call[:2] == ['release', 'edit'])
                     self.assertIn('--draft=false', publish)
                     self.assertIn('--latest=false' if options.get('PRERELEASE') == 'true' else '--latest=true', publish)
+                    upload = next(call for call in calls if call[:2] == ['release', 'upload'])
+                    self.assertIn('dist/Install-Armada-Dual-Screen-Input.desktop', upload)
+                    self.assertIn('dist/INSTALLER-SHA256SUMS', upload)
                 else:
                     self.assertNotIn('edit', verbs)
-                    if label in ('published', 'moved', 'tampered'):
+                    if label in ('published', 'moved', 'tampered', 'installer tampered'):
                         self.assertNotIn('upload', verbs)
 
 

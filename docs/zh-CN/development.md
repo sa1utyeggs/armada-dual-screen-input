@@ -75,11 +75,27 @@ Mac 使用支持 RPM 的系统 libarchive tar；Linux 可用 `rpm2cpio` + `cpio`
 ```text
 armada-dual-screen-input-<VERSION>-aarch64.tar.gz
 SHA256SUMS
+Install-Armada-Dual-Screen-Input.desktop
+INSTALLER-SHA256SUMS
 ```
 
 包内 `manifest.json` 包含每个文件的 SHA-256、源版本标识和 bundle ID；有未提交修改时标识带 `-dirty`。
 同一输入树和版本标识下，压缩包的顺序、权限、uid/gid、时间戳固定，构建可重复。
 源码、模板、许可证和运行库进入白名单；测试、个人配置、日志、缓存、Git 历史和驱动实验不进入应用包。
+
+点击入口只内嵌安装器、稳定版下载器、公开 Release 查询、验证与主机检查助手、双语文案和项目许可证。首次安装通过官方网页重定向和固定校验附件查询，不请求 REST API；已有应用内更新继续使用 API 附件摘要检查。在临时 zip 中运行助手，下载用户确认的稳定版包，再通过 `--offline` 调用其现有安装器。独立的 `INSTALLER-SHA256SUMS` 保留应用 `SHA256SUMS` 的单条目格式，兼容旧版更新器。受版本控制的主页入口和 Release 入口必须包含生成器对应的源码与引导代码；不同 zlib 版本的压缩字节可能不同。修改任一内嵌助手后，重新生成主页文件：
+
+```bash
+python3 -B tools/build_click_installer.py --output .
+```
+
+检查会在源码目录之外运行内嵌入口的 `--help`，检查入口是否最新，并用假发布附件验证下载流程，不联网、不真实安装。Linux CI 使用 Xvfb 验证双语安装窗口布局，并继续运行原有文案和面板检查。在 Linux 桌面只预览安装器自己的窗口，不下载、不安装、不创建输入设备：
+
+```bash
+python3 -B tools/click_install.py --preview ready
+```
+
+浏览器下载行为、KDE 信任提示和 Thor 端到端安装仍需单独验收。
 
 ## 发布
 
@@ -100,7 +116,7 @@ SHA256SUMS
    ```
 
 4. 打开 Actions 的 **Build and release offline package**：该 tag 的完整 Linux/Python/JavaScript 检查通过后，CI 校验 tag 与 `VERSION` 一致、目标提交属于 `main`、中英文变更记录均存在且非空，再从该提交构建固定依赖的 aarch64 离线包并核对 SHA-256。发布 job 还会核对远端 tag 仍指向已构建提交。
-5. CI 创建 Release 草稿，上传 `armada-dual-screen-input-<VERSION>-aarch64.tar.gz` 和同次构建的 `SHA256SUMS`，最后发布。发布说明取自对应版本的两份 Changelog，英文在前、简体中文在后；任一语言缺失会阻止发布；预览版不标为 Latest。只有发布 job 获得 `contents: write`，检查和构建只读，不需要配置个人访问令牌。
+5. CI 创建 Release 草稿，上传 `armada-dual-screen-input-<VERSION>-aarch64.tar.gz`、同次构建的 `SHA256SUMS`、`Install-Armada-Dual-Screen-Input.desktop` 和 `INSTALLER-SHA256SUMS`，最后发布；上传前核对两份校验文件。发布说明取自对应版本的两份 Changelog，英文在前、简体中文在后，附带点击安装与离线安装步骤；任一语言缺失会阻止发布；预览版不标为 Latest，其点击安装器仍选择最新稳定应用。只有发布 job 获得 `contents: write`，检查和构建只读，不需要配置个人访问令牌。
 6. 在 AYN Thor 上验证全新安装、保留配置升级、版本回退和卸载，再扩大支持范围。隔离环境检查与实机验收分别记录。不要用 GitHub 自动生成的 Source code 压缩包替代安装包；仓库私有时，Release 也不能匿名下载。
 
 保留 **Run workflow** 手动入口：只运行检查和构建，上传包含安装包、校验文件与发布说明的 Actions artifact，不发布 Release。涉及发布流程的 PR 也会构建验证，但不会发布。

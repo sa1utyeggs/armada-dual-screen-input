@@ -33,12 +33,21 @@ def release_notes(root, value, *, ref=None):
         section = re.sub(r'(\]\()((?:docs/)[^\s)]+)(\))',
                          lambda m: m[1] + REPOSITORY + '/blob/' + ref + '/' + m[2] + m[3], section)
         if heading == 'English':
-            footer = (f'Package: `{APP}-{value}-aarch64.tar.gz`; checksums: `SHA256SUMS`.\n'
+            footer = ('Click installer: download `Install-Armada-Dual-Screen-Input.desktop`, open it from '
+                      'Dolphin in Armada Desktop Mode (remove a final `.download` suffix if Firefox added it), '
+                      'confirm the system run prompt and select Install. '
+                      'It installs the latest stable app, including when obtained from a prerelease. '
+                      'Launcher checksum: `INSTALLER-SHA256SUMS`.\n\n'
+                      f'Offline package: `{APP}-{value}-aarch64.tar.gz`; checksums: `SHA256SUMS`.\n'
                       'Download both assets, run `sha256sum -c SHA256SUMS`, extract the archive, '
                       'then run `bash install.sh` as your regular user.\n'
                       "GitHub-generated Source code archives do not replace the offline installer bundle.")
         else:
-            footer = (f'安装包：`{APP}-{value}-aarch64.tar.gz`，校验文件：`SHA256SUMS`。\n'
+            footer = ('点击安装：下载 `Install-Armada-Dual-Screen-Input.desktop`，在 Armada 桌面模式用 '
+                      'Dolphin 打开（Firefox 若添加了 `.download`，先去掉这个额外后缀），'
+                      '确认系统运行提示，再点击 Install / 安装。即使入口来自预览版，'
+                      '也安装最新稳定应用。入口校验文件：`INSTALLER-SHA256SUMS`。\n\n'
+                      f'离线安装包：`{APP}-{value}-aarch64.tar.gz`，校验文件：`SHA256SUMS`。\n'
                       '下载两个附件后执行 `sha256sum -c SHA256SUMS`，再解压并以普通用户运行 `bash install.sh`。\n'
                       'GitHub 自动生成的 Source code 压缩包不能替代离线安装包。')
         blocks.append('## ' + heading + '\n\n' + section + '\n\n' + footer)

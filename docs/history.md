@@ -160,3 +160,15 @@ Other sources:
 - [Official lower-screen service](https://github.com/armada-os/armada/blob/c3d178c/system_files/usr/lib/systemd/user/armada-bottom-screen.service)
 - [GTK layer shell API](https://wmww.github.io/gtk-layer-shell/)
 - [GDK touch events](https://docs.gtk.org/gdk3/struct.EventTouch.html)
+
+<a id="click-installer-20261026"></a>
+
+## Click installer device test (2026-10-26)
+
+On AYN Thor / Armada `20261010.c3d178c` / aarch64, the initial self-contained launcher was downloaded in Firefox `157.0.1` from a temporary LAN URL serving an attachment. Its bytes matched the built file. Firefox appended `.download`; removing that suffix allowed Dolphin launch. The user reported clipping on the lower display. Its measured desktop work area was `443×386` logical pixels, scale 3, while the initial window was 540 pixels wide. The revision uses a `419×322` window with scrolling content and fixed language/action controls. Sixteen English/Chinese state/layout combinations passed with Thor's actual fonts at normal and lower-screen sizes. The revised launchers were transferred to the device for further testing.
+
+The first version query hit GitHub REST HTTP 403 with zero anonymous requests remaining. Public Release discovery then selected `v0.1.5` and downloaded/verified its checksum and package without REST API requests. Seven isolated public-discovery checks passed on Thor. The user reported successful installation through the revised window. The installed bundle was `c32c83db8ae992fc`, source `1ce7f156dfa175068f12f34186821e3b35ffbd58`; all 138 manifest files, managed entries and runtime dependency checks passed. Personal-configuration hashes were unchanged and autostart stayed disabled.
+
+Rollback restored the original local candidate `c8d8e0c7aa377414` and the original `previous` pointer. The complete installation-state file and personal-configuration hashes matched the pre-test baseline. The service was active after installation and rollback retained that running state; this does not imply fresh-install autostart. Desktop KWin and Plasma process identities stayed unchanged across installation/rollback. No driver, boot-file or official-service action was performed, and no game input was automated. The Mac suite ran 676 Python checks with 111 Linux checks skipped; 15 Node checks passed there. These are separate from the device installation, seven discovery checks and sixteen layout combinations.
+
+This was an existing-installation reinstallation and rollback, with user-assisted launch and confirmation. A clean first install, the not-yet-published GitHub attachment button, other devices and long-session behavior remain unverified. The published `v0.1.5` tag/assets were unchanged. See [installation steps](installation.md#click-install), [GitHub Release links](https://docs.github.com/en/repositories/releasing-projects-on-github/linking-to-releases) and [Mozilla filename handling](https://bugzilla.mozilla.org/show_bug.cgi?id=1961777).
