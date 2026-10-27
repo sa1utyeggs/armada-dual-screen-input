@@ -6,3 +6,4 @@
 *.svg text eol=lf
 # Unified-diff context prefixes and kernel tabs are part of patch attachments.
 docs/patches/*.patch -whitespace
+extras/thor-touch-driver/read-path-experiment/read-chunks.patch -whitespace
