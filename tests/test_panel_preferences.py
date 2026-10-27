@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
-from armada_dual_screen_input.input_settings import DEFAULTS, SettingsDraft
+from armada_dual_screen_input.input_settings import DEFAULTS, SettingsDraft, marker_style_tiles
 from armada_dual_screen_input.scroll_output import ScaledScroll
 
 IS_LINUX = sys.platform == "linux"
@@ -161,21 +161,78 @@ class PanelPreferencesTests(unittest.TestCase):
         self.assertEqual(active_language(), 'zh_CN')
         self.assertFalse(self.bridge.events)
 
-    def test_color_palette_edits_only_the_draft_and_never_sends_game_input(self):
-        from armada_dual_screen_input.input_settings import color_swatches
-        self.enter();draft=self.app.preferences
-        draft.section='position'
-        top=dict(draft.rows())['marker_idle_color']
-        left,color,_=color_swatches()[-1]
-        self.app._preferences_down(10,left+30,top+44)
-        self.assertEqual(draft.values['marker_idle_color'],color)
-        self.assertEqual(self.app.input_cfg['marker_idle_color'],DEFAULTS['marker_idle_color'])
-        self.assertEqual(draft.values['marker_pressed_color'],DEFAULTS['marker_pressed_color'])
-        self.assertTrue(draft.dirty)
-        self.assertFalse(self.bridge.events)
+    def test_icon_presets_edit_only_the_draft_until_save_and_preserve_legacy_colors(self):
+        self.enter()
+        draft = self.app.preferences
+        draft.section = 'position'
+        tiles = {style: (left+width/2, top+height/2)
+                 for style, left, top, width, height in marker_style_tiles()}
+        colors = {key: self.app.input_cfg[key] for key in ('marker_idle_color', 'marker_pressed_color')}
+        for style in ('reticle', 'pixel_hand', 'glove', 'ring_white', 'ring'):
+            self.app._preferences_down(10, *tiles[style])
+            self.assertEqual(draft.values['position_marker_style'], style)
+            self.assertEqual(self.app.input_cfg['position_marker_style'], 'ring')
+            self.assertFalse(self.config.exists())
+            self.assertTrue(set(colors).isdisjoint(dict(draft.rows())))
+            for key, value in colors.items():
+                self.assertEqual(draft.values[key], value)
+        # Headers, card gaps and explanatory copy are not a cycling control.
+        before = dict(draft.values)
+        for x, y in ((1000, 420), (270, 494), (502, 494), (734, 494), (966, 494),
+                     (1000, 541), (680, 736)):
+            self.app._preferences_down(11, x, y)
+        self.assertEqual(draft.values, before)
         self.assertFalse(self.config.exists())
+        self.app._preferences_down(13, *tiles['ring_white'])
+        self.assertEqual(draft.values['position_marker_style'], 'ring_white')
         draft.discard()
-        self.assertEqual(draft.values['marker_idle_color'],DEFAULTS['marker_idle_color'])
+        self.assertEqual(draft.values['position_marker_style'], 'ring')
+        self.assertFalse(draft.dirty)
+        self.app._preferences_down(14, *tiles['ring_white'])
+        self.app._preferences_down(15, 1000, 1020)
+        self.assertEqual(self.app.input_cfg['position_marker_style'], 'ring_white')
+        saved = json.loads(self.config.read_text())
+        self.assertEqual(saved['position_marker_style'], 'ring_white')
+        for key, value in colors.items():
+            self.assertEqual(saved[key], value)
+        self.assertFalse(self.bridge.events)
+
+    def test_any_style_card_selects_directly_and_reselecting_it_does_not_cycle_or_emit_input(self):
+        self.enter()
+        draft = self.app.preferences
+        draft.section = 'position'
+        tiles = {style: (left+width/2, top+height/2)
+                 for style, left, top, width, height in marker_style_tiles()}
+        for style in ('ring', 'reticle', 'pixel_hand', 'glove', 'ring_white', 'ring', 'reticle'):
+            for repeat in range(2):
+                self.app._handle_touch_down(40, *tiles[style], 1.+repeat)
+                self.app._handle_touch_up(40, 1.1+repeat)
+                self.assertEqual(draft.values['position_marker_style'], style)
+                self.assertEqual(self.app.input_cfg['position_marker_style'], 'ring')
+                self.assertEqual(draft.dirty, style != 'ring')
+                self.assertFalse(self.config.exists())
+                self.assertFalse(self.bridge.events)
+        self.assertIsNone(draft.drag)
+        self.app._preferences_down(41, 100, 1020)
+        self.assertEqual(draft.values['position_marker_style'], 'ring')
+        self.assertFalse(draft.dirty)
+        self.assertFalse(self.bridge.events)
+
+    def test_frame_rate_and_keyboard_language_keep_their_existing_cycle_controls(self):
+        self.enter()
+        draft = self.app.preferences
+        for section, key, expected in (('position', 'marker_frame_rate', '120'),
+                                       ('keyboard', 'keyboard_language', 'zh_CN')):
+            draft.section = section
+            top = dict(draft.rows())[key]
+            self.assertEqual(draft.hit(1000, top+44), ('choice', key))
+            self.app._preferences_down(50, 1000, top+44)
+            self.assertEqual(draft.values[key], expected)
+        self.assertEqual(draft.values['position_marker_style'], 'ring')
+        self.assertEqual(self.app.input_cfg['marker_frame_rate'], 'auto')
+        self.assertEqual(self.app.input_cfg['keyboard_language'], 'en_US')
+        self.assertFalse(self.config.exists())
+        self.assertFalse(self.bridge.events)
 
     def test_leaving_preferences_discards_draft_and_releases_slider(self):
         self.enter()

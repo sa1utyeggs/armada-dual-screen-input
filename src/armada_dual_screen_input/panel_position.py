@@ -17,6 +17,7 @@ from .position_gesture import PositionGesture
 from .direct_touch import DirectTouchGesture, MAX_CONTACTS
 from .marker_frames import read_frame_rate
 from .marker_colors import DEFAULT_COLORS, MarkerColors
+from .marker_appearance import read_position_style
 
 TOUCH_MODES = ('position', 'direct')
 
@@ -28,7 +29,7 @@ class PanelPosition(LocalizedState):
     def __init__(self, *, runtime=None, resolve=None, focus_factory=FocusWatcher,
                  marker_factory=MarkerOverlay, native_factory=NativeTouchInput,
                  clock=time.monotonic, sensitivity=2.0, touch_mode='position', pad=None,
-                 frame_rate='auto', marker_colors=DEFAULT_COLORS):
+                 frame_rate='auto', marker_colors=DEFAULT_COLORS, position_style='ring'):
         if touch_mode not in TOUCH_MODES:
             raise ValueError('unsupported touch mode')
         if not isinstance(marker_colors, MarkerColors):
@@ -40,6 +41,7 @@ class PanelPosition(LocalizedState):
         self.native_factory, self.clock = native_factory, clock
         self.frame_rate = read_frame_rate(frame_rate)
         self.marker_colors = marker_colors
+        self.position_style = read_position_style(position_style)
         self.monitor_millihz = 0
         self.target = self.focus = self.marker = self.sender = self.expected = None
         self.active = self.armed = self.auto_requested = False
@@ -231,8 +233,9 @@ class PanelPosition(LocalizedState):
                 except ValueError:
                     self.message = msg('touch.wait_window')
                     return
+                options = {'position_style': self.position_style} if self.position_style != 'ring' else {}
                 self.marker = self.marker_factory(target=state.snapshot, frame_rate=self.frame_rate,
-                                                  colors=self.marker_colors)
+                                                  colors=self.marker_colors, **options)
                 self._update_marker()
             # poll() can receive a heartbeat newer than the pre-poll timestamp.
             # Read the new worker snapshot first, then refresh the clock.

@@ -117,6 +117,7 @@ class PanelApp(upstream.ThorApp):
         self.position = PanelPosition(sensitivity=self.input_cfg["position_sensitivity"],
                                       touch_mode=self.touch_mode, pad=touchscreen_selector.PAD,
                                       frame_rate=self.input_cfg["marker_frame_rate"],
+                                      position_style=self.input_cfg["position_marker_style"],
                                       marker_colors=MarkerColors(self.input_cfg['marker_idle_color'],
                                                                  self.input_cfg['marker_pressed_color']))
         self._position_revision = self.position.revision
@@ -268,6 +269,7 @@ class PanelApp(upstream.ThorApp):
         if self.position is not None:
             self.position.position_gesture.sensitivity = values["position_sensitivity"]
             self.position.frame_rate = values["marker_frame_rate"]
+            self.position.position_style = values["position_marker_style"]
             self.position.marker_colors = MarkerColors(values['marker_idle_color'], values['marker_pressed_color'])
         if getattr(self, "languages", None) is not None and self.languages.language != values["keyboard_language"]:
             self.languages.set_language(values["keyboard_language"])
@@ -802,7 +804,7 @@ class PanelApp(upstream.ThorApp):
             return
         if action in ("update_left", "install_update") and uninstall and uninstall.busy:
             return
-        if action in ('minus', 'plus', 'slider', 'toggle', 'choice', 'color',
+        if action in ('minus', 'plus', 'slider', 'toggle', 'choice', 'marker_style',
                       'defaults', 'discard', 'save'):
             if updates:
                 updates.confirming = False
@@ -874,8 +876,8 @@ class PanelApp(upstream.ThorApp):
         elif action == "choice":
             choices = list(CHOICES[key])
             draft.change(key, choices[(choices.index(draft.values[key]) + 1) % len(choices)])
-        elif action == 'color':
-            draft.change(*key)
+        elif action == 'marker_style':
+            draft.change('position_marker_style', key)
         elif action == "defaults":
             draft.reset_section()
         elif action == "discard":

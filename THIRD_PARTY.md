@@ -21,6 +21,18 @@ The application icon adapts the Armada sail mark from
 The Armada name and mark retain their original ownership; the project MIT license
 does not relicense that mark. The surrounding icon and input symbols are drawn for this application.
 
+## Project-generated glove marker artwork
+
+The optional positioning marker uses [aiming A](assets/markers/glove/idle.png) and [held F](assets/markers/glove/pressed.png). The artwork was generated and revised with the built-in ImageGen tool from the project's generated introduction-video glove illustration, then visually selected by the user on 2026-10-26. It was not extracted from the recorded Steam or game footage. The two production PNGs share a logical hotspot and are prepared on 64-pixel transparent canvases; pose changes do not change input coordinates.
+
+Source artwork, generation/edit prompts and comparison previews are retained as local design evidence under `outputs/glove-v7/`. Those high-resolution sources and discarded drafts are excluded from application bundles; only the four runtime marker PNGs for the glove and pixel hand are included alongside the application icons. The introduction-video asset provenance remains in [.github/assets/README.md](.github/assets/README.md). This artwork record does not replace the licenses or ownership of any third-party component listed above.
+
+## Pixel hand and procedural reticle
+
+The pixel-hand positioning style uses `assets/markers/pixel_hand/idle.png` and `assets/markers/pixel_hand/pressed.png`, on 64-pixel transparent canvases. These two-state assets were generated with the built-in ImageGen tool from the user's approved second concept image, then prepared for the application's marker path. They are a pixel hand, not the discarded cat-paw concept. The source PNG, generation prompts, normalization records and comparison evidence remain local under `outputs/pixel-hand-v1/`; discarded alternatives are excluded from bundles.
+
+The sci-fi reticle is defined as programmatic Cairo geometry in [the marker appearance implementation](src/armada_dual_screen_input/marker_appearance.py), with a fixed center hotspot on a 64-pixel canvas. Its two states are rasterized through the same prepared sprite path as the other styles. No downloaded artwork or AI-generated raster asset is used for the reticle, and no reticle PNG is added to the package.
+
 
 The Game Mode text adapter implements only the version-1 subset of Valve's
 [private Gamescope input-method protocol](https://github.com/ValveSoftware/gamescope/blob/master/protocol/gamescope-input-method.xml).

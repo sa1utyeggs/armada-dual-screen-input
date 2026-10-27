@@ -141,3 +141,18 @@ PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover -s extras/thor-touch-d
 [驱动绑定](https://docs.kernel.org/driver-api/driver-model/binding.html)、[Armada Issue #757](https://github.com/armada-os/armada/issues/757)。
 
 游戏模式下屏 KDE 使用独立 D-Bus 会话。驱动任务启动器需连接实际用户服务管理器，不能继承下屏私有总线；仅将它转交独立任务用于桌面通知 / 认证。若提示任务启动失败，且没有 `thor-panel-driver` 单元或 `driver.json`，说明尚未尝试切换驱动。
+
+## 被动读帧诊断
+
+`trace_reads.py` 是独立实验诊断工具，不进入应用包。它在确认的 Thor 下屏 FT5452 上，通过自己的临时 tracefs 实例记录现有 regmap 读取、I2C 写入／读取请求、实际返回数据及事务结果，不发起总线事务或输入，不更改驱动、模块、开机设置或全局追踪配置。操作 tracefs 需要 root；默认采集 180 秒，最长 600 秒，流数据上限 32 MiB。正常退出／信号结束会禁用并移除私有实例。追踪本身会增加开销，因此记录的是插桩后的耗时。记录数据载荷会增加体积；针对特定交叉动作宜短采集 10–20 秒，不能假定默认时长一定容纳得下。
+
+先安排好自有诊断窗口中的受控手动测试，再运行：
+
+```bash
+sudo python3 -I -B extras/thor-touch-driver/trace_reads.py collect --seconds 180 --output /tmp/thor-read-trace.txt
+python3 -B extras/thor-touch-driver/trace_reads.py decode /tmp/thor-read-trace.txt > /tmp/thor-read-frames.json
+```
+
+输出路径必须尚不存在。`--done /path/to/marker` 可在测试窗口关闭时结束采集。解码器保留不完整／非顺序读取、触点事件标记／ID／坐标及失败事务；默认完整帧长度为 33 个寄存器，与该 FT5452 驱动的五触点布局一致。数据包自洽本身不能证明物理静止，也不能排除跨帧采集；没有能区分原因的实验时，不应把寄存器变化直接认定为手部移动、传感器串扰或读取路径缺陷。
+
+新增的 `messages` 列表独立于 regmap 帧，保留 I2C 写入／返回消息的序号、地址、标志、声明长度和数据字节。载荷缺失、格式错误或截短时，`payload_complete` 为 `false`。没有这些事件的历史采集保持空列表，不能根据 regmap 数据推定缺失的返回字节。把差异归因到控制器之前，应先对照寄存器指针写入、实际返回值和独立解码结果。主机完整事务成功，不代表控制器保证锁存了同一次传感器扫描。本工具不切换工厂模式、不读取电容矩阵，也不验证通用 EDT 调参寄存器对 FT5452 是否适用。

@@ -5,21 +5,21 @@ backbuffer and draws at most ten tiny quads. No glFinish/readback occurs in
 the application render loop. Shader coordinates match Cairo device pixels.
 """
 import ctypes as c
-from .marker_paint import _ring_sprite, _PHASES, _SPRITE_SIZE, _SPRITE_ORIGIN
+from .marker_appearance import load_appearance, _PHASES
 
 VERTEX = b"""#version 150
 uniform vec2 canvas;
 uniform vec4 tile;
+uniform vec2 sizes;
 out vec2 uv;
 void main() {
     vec2 unit = vec2((gl_VertexID == 1 || gl_VertexID == 3) ? 1.0 : 0.0,
                      gl_VertexID >= 2 ? 1.0 : 0.0);
-    vec2 pos = tile.xy + unit * SPRITE_SIZE;
+    vec2 pos = tile.xy + unit * sizes.x;
     gl_Position = vec4(pos.x / canvas.x * 2.0 - 1.0,
                        1.0 - pos.y / canvas.y * 2.0, 0.0, 1.0);
-    uv = (tile.zw + unit * SPRITE_SIZE) / ATLAS_SIZE;
-}""".replace(b'SPRITE_SIZE', str(float(_SPRITE_SIZE)).encode()).replace(
-    b'ATLAS_SIZE', str(float(_PHASES*_SPRITE_SIZE)).encode())
+    uv = (tile.zw + unit * sizes.x) / sizes.y;
+}"""
 FRAGMENT = b"""#version 150
 uniform sampler2D atlas;
 in vec2 uv;
@@ -113,12 +113,14 @@ class GL:
 
 class Renderer:
 
-    def __init__(self, canvas, colors):
+    def __init__(self, canvas, colors, *, position_style='ring', appearance=None):
         self.gl = gl = GL()
         self.canvas = canvas
+        self.appearance = appearance or load_appearance(position_style, colors)
         self.program = 0
         self.vao = c.c_uint()
         self.textures = []
+        self.position_textures = []
         self.info = {k: gl.GetString(v).decode(errors='replace') for (k, v) in (('version', GL_VERSION), ('renderer', GL_RENDERER))}
         if any(name in self.info['renderer'].lower() for name in ('llvmpipe', 'softpipe', 'swrast')):
             raise RuntimeError('Native marker requires a hardware renderer')
@@ -151,11 +153,16 @@ class Renderer:
             self.canvas_location = gl.GetUniformLocation(self.program, b'canvas')
             self.tile_location = gl.GetUniformLocation(self.program, b'tile')
             self.atlas_location = gl.GetUniformLocation(self.program, b'atlas')
-            if min(self.canvas_location, self.tile_location, self.atlas_location) < 0:
+            self.sizes_location = gl.GetUniformLocation(self.program, b'sizes')
+            if min(self.canvas_location, self.tile_location, self.atlas_location, self.sizes_location) < 0:
                 raise RuntimeError('Missing sprite uniforms')
             gl.GenVertexArrays(1, c.byref(self.vao))
-            for rgba in (colors.idle_rgba, colors.pressed_rgba):
-                self.textures.append(self.make_atlas(rgba))
+            ring = self.appearance.for_mode('direct')
+            for pressed in (False, True):
+                self.textures.append(self.make_atlas(ring, pressed))
+            if self.appearance.style != 'ring':
+                for pressed in (False, True):
+                    self.position_textures.append(self.make_atlas(self.appearance, pressed))
             self.check()
         except Exception:
             self.close()
@@ -169,16 +176,17 @@ class Renderer:
         if error:
             raise RuntimeError('GL error ' + hex(error))
 
-    def make_atlas(self, rgba):
+    def make_atlas(self, appearance, pressed):
         import cairo
-        size = _PHASES * _SPRITE_SIZE
+        tile_size = appearance.tile_size
+        size = _PHASES * tile_size
         surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, size, size)
         cr = cairo.Context(surface)
         cr.set_operator(cairo.OPERATOR_SOURCE)
         for y in range(_PHASES):
             for x in range(_PHASES):
-                cr.set_source_surface(_ring_sprite(rgba, x, y), x * _SPRITE_SIZE, y * _SPRITE_SIZE)
-                cr.rectangle(x * _SPRITE_SIZE, y * _SPRITE_SIZE, _SPRITE_SIZE, _SPRITE_SIZE)
+                cr.set_source_surface(appearance.sprite(pressed, x, y), x * tile_size, y * tile_size)
+                cr.rectangle(x * tile_size, y * tile_size, tile_size, tile_size)
                 cr.fill()
         surface.flush()
         data = rgba_pixels(surface.get_data())
@@ -192,10 +200,14 @@ class Renderer:
         gl.TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, size, size, 0, GL_RGBA, GL_UNSIGNED_BYTE, memory)
         return texture
 
-    def draw(self, rings):
+    def draw(self, rings, *, mode='legacy'):
         # Full clear avoids stale pixels regardless of buffer age. Uploaded
         # Cairo pixels are premultiplied, so use ONE/ONE_MINUS_SRC_ALPHA.
         gl = self.gl
+        appearance = self.appearance.for_mode(mode)
+        textures = self.position_textures if appearance.style != 'ring' else self.textures
+        tile_size = appearance.tile_size
+        ox, oy = appearance.origin
         (w, h) = self.canvas
         gl.Viewport(0, 0, w, h)
         gl.Disable(GL_SCISSOR_TEST)
@@ -211,22 +223,25 @@ class Renderer:
         gl.ActiveTexture(GL_TEXTURE0)
         gl.Uniform1i(self.atlas_location, 0)
         gl.Uniform2f(self.canvas_location, w, h)
+        gl.Uniform2f(self.sizes_location, tile_size, _PHASES * tile_size)
         bound = None
         for (u, v, pressed) in rings:
             (qx, qy) = (round(u * (w - 1) * _PHASES), round(v * (h - 1) * _PHASES))
-            texture = self.textures[int(pressed)].value
+            texture = textures[int(pressed)].value
             if texture != bound:
                 gl.BindTexture(GL_TEXTURE_2D, texture)
                 bound = texture
-            gl.Uniform4f(self.tile_location, qx // _PHASES - _SPRITE_ORIGIN, qy // _PHASES - _SPRITE_ORIGIN, qx % _PHASES * _SPRITE_SIZE, qy % _PHASES * _SPRITE_SIZE)
+            gl.Uniform4f(self.tile_location, qx // _PHASES - ox, qy // _PHASES - oy,
+                         qx % _PHASES * tile_size, qy % _PHASES * tile_size)
             gl.DrawArrays(5, 0, 4)
         gl.BindVertexArray(0)
         gl.UseProgram(0)
 
     def close(self):
-        for texture in self.textures:
+        for texture in (*self.textures, *self.position_textures):
             self.gl.DeleteTextures(1, c.byref(texture))
         self.textures = []
+        self.position_textures = []
         if self.vao.value:
             self.gl.DeleteVertexArrays(1, c.byref(self.vao))
             self.vao.value = 0

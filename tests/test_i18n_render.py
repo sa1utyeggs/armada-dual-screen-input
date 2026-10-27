@@ -2,10 +2,12 @@
 import sys
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from armada_dual_screen_input.i18n import configure, active_language, msg
-from armada_dual_screen_input.input_settings import SettingsDraft, SETTINGS_PAGES
+from armada_dual_screen_input.input_settings import (
+    SettingsDraft, SETTINGS_PAGES, CHOICES, position_preview_top, marker_style_tiles,
+)
 
 IS_LINUX = sys.platform == 'linux'
 if IS_LINUX:
@@ -60,6 +62,15 @@ def scenes(language):
         header(cr)
         settings_view.draw(cr, draft, updates, monitor_millihz=120000)
         yield section, image
+        if section == 'position':
+            for style in CHOICES['position_marker_style']:
+                if style == draft.saved['position_marker_style']:
+                    continue
+                draft.change('position_marker_style', style)
+                image, cr = surface()
+                header(cr)
+                settings_view.draw(cr, draft, updates, monitor_millihz=120000)
+                yield 'position-'+style, image
         if section == 'general':
             for variant in ('ready', 'confirm', 'busy', 'error'):
                 uninstall = SimpleNamespace(managed=True, phase='error' if variant == 'error' else 'ready',
@@ -113,11 +124,196 @@ class BilingualRenderTests(unittest.TestCase):
             for language in ('en_US', 'zh_CN'):
                 calls.clear()
                 rendered = list(scenes(language))
-                self.assertEqual(len(rendered), 20)
+                self.assertEqual(len(rendered), 19+len(CHOICES['position_marker_style']))
                 self.assertIn('Save settings' if language == 'en_US' else '保存设置', calls)
                 self.assertIn('Interface language' if language == 'en_US' else '界面语言', calls)
+                self.assertIn('Icon style' if language == 'en_US' else '图标样式', calls)
                 if language == 'en_US':
                     self.assertFalse(any(any('\u3400' <= c <= '\u9fff' for c in text) for text in calls))
+
+    def test_all_five_unlabeled_icon_cards_are_visible_in_both_languages(self):
+        image = cairo.ImageSurface(cairo.FORMAT_ARGB32, 1240, 1080)
+        cr = cairo.Context(image)
+        for language in ('en_US', 'zh_CN'):
+            configure(language)
+            for style in CHOICES['position_marker_style']:
+                draft = SettingsDraft({'position_marker_style': style})
+                draft.section = 'position'
+                with patch.object(steam_style, 'label', wraps=steam_style.label) as label, \
+                        patch.object(steam_style, 'rounded', wraps=steam_style.rounded) as rounded:
+                    settings_view.draw(cr, draft)
+                calls = label.call_args_list
+                texts = [str(call.args[1]) for call in calls]
+                self.assertIn(str(msg('settings.position_marker_style')), texts)
+                self.assertNotIn(str(msg('settings.idle_color')), texts)
+                self.assertNotIn(str(msg('settings.pressed_color')), texts)
+                self.assertNotIn(str(msg('settings.marker_preview')), texts)
+                for caption in CHOICES['position_marker_style'].values():
+                    self.assertNotIn(str(caption), texts)
+                self.assertIn(str(msg('settings.marker_style_pick_note')), texts)
+                for _, left, card_top, width, height in marker_style_tiles():
+                    self.assertTrue(any(call.args[1:5] == (left, card_top, width, height)
+                                        for call in rounded.call_args_list))
+                note = next(call for call in calls if str(call.args[1]) == str(msg('settings.marker_style_pick_note')))
+                layout = text_render.make_layout(cr, str(note.args[1]), note.args[4],
+                                                 max_width=note.kwargs.get('max_width'))
+                ink, logical = layout.get_pixel_extents()
+                self.assertLessEqual(note.args[3]+max(ink.height, logical.height),
+                                     min(tile[2] for tile in marker_style_tiles()))
+                top = position_preview_top(draft)
+                self.assertGreater(top, max(y+88 for _, y in draft.rows()))
+                for key in ('settings.touch_gesture', 'settings.touch_style'):
+                    draw = next(call for call in calls if str(call.args[1]) == str(msg(key)))
+                    self.assertGreaterEqual(draw.args[3], top)
+                    self.assertLess(draw.args[3]+draw.args[4], 934)
+
+    def test_marker_preview_is_cached_and_asset_failure_keeps_settings_usable(self):
+        draft = SettingsDraft({'position_marker_style': 'glove'})
+        draft.section = 'position'
+        image = cairo.ImageSurface(cairo.FORMAT_ARGB32, 1240, 1080)
+        cr = cairo.Context(image)
+        def appearance(style, **_):
+            kind = 'ring' if style.startswith('ring') else style
+            size = 36 if kind == 'ring' else 64
+            sprite = cairo.ImageSurface(cairo.FORMAT_ARGB32, size, size)
+            bounds = (3, 3, 33, 33) if kind == 'ring' else (8, 8, 56, 56)
+            return SimpleNamespace(style=kind, tile_size=size,
+                preview_bounds=lambda pressed=False: bounds,
+                sprite=lambda *_: sprite)
+        settings_view._preview_appearance.cache_clear()
+        self.addCleanup(settings_view._preview_appearance.cache_clear)
+        with patch('armada_dual_screen_input.marker_appearance.load_appearance', side_effect=appearance) as load:
+            settings_view.draw(cr, draft)
+            settings_view.draw(cr, draft)
+            self.assertEqual(load.call_count, len(CHOICES['position_marker_style']))
+        settings_view._preview_appearance.cache_clear()
+        with patch('armada_dual_screen_input.marker_appearance.load_appearance', side_effect=OSError('missing image')) as load, \
+                patch.object(steam_style, 'label', wraps=steam_style.label) as label:
+            settings_view.draw(cr, draft)
+            settings_view.draw(cr, draft)
+            self.assertEqual(load.call_count, len(CHOICES['position_marker_style']))
+            texts = [str(call.args[1]) for call in label.call_args_list]
+            self.assertIn(str(msg('settings.marker_preview_unavailable')), texts)
+            self.assertIn(str(msg('settings.save')), texts)
+
+    def test_preview_centers_each_visible_glyph_without_using_the_runtime_hotspot(self):
+        from armada_dual_screen_input.marker_appearance import load_appearance
+        image = cairo.ImageSurface(cairo.FORMAT_ARGB32, 1240, 1080)
+        cr = cairo.Context(image)
+        draft = SettingsDraft({'position_marker_style': 'glove'})
+        draft.section = 'position'
+        with patch.object(settings_view, 'marker_preview_transform',
+                          wraps=settings_view.marker_preview_transform) as transform:
+            settings_view.draw(cr, draft)
+        image.flush()
+        data, stride = bytes(image.get_data()), image.get_stride()
+        def pixel(x, y):
+            offset = y*stride+x*4
+            return data[offset:offset+4]
+        self.assertEqual(transform.call_count, 2*len(CHOICES['position_marker_style']))
+        targets = {'ring': 45, 'ring_white': 45, 'glove': 60, 'pixel_hand': 56, 'reticle': 44}
+        for index, (style, left, top, width, height) in enumerate(marker_style_tiles()):
+            appearance = load_appearance(style)
+            calls = transform.call_args_list[index*2:index*2+2]
+            self.assertAlmostEqual(sum(call.args[1] for call in calls)/2, left+width/2)
+            extent = max(max(x2-x1, y2-y1) for x1, y1, x2, y2 in
+                         (appearance.preview_bounds(False), appearance.preview_bounds(True)))
+            previous_right = None
+            for call, pressed in zip(calls, (False, True)):
+                center_x, center_y = call.args[1:]
+                self.assertAlmostEqual(center_x, left+width*(.72 if pressed else .28))
+                self.assertGreater(center_x, left)
+                self.assertLess(center_x, left+width)
+                self.assertEqual(center_y, top+height/2)
+                self.assertEqual(call.kwargs, {'pressed': pressed})
+                x, y, scale = settings_view.marker_preview_transform(appearance, center_x, center_y,
+                                                                     pressed=pressed)
+                x1, y1, x2, y2 = appearance.preview_bounds(pressed)
+                self.assertAlmostEqual(x+(x1+x2)*scale/2, center_x)
+                self.assertAlmostEqual(y+(y1+y2)*scale/2, center_y)
+                self.assertGreaterEqual(x+x1*scale, left+8)
+                self.assertLessEqual(x+x2*scale, left+width-8)
+                self.assertGreaterEqual(y+y1*scale, top+8)
+                self.assertLessEqual(y+y2*scale, top+height-8)
+                if previous_right is not None:
+                    self.assertLess(previous_right, x+x1*scale)
+                previous_right = x+x2*scale
+                self.assertAlmostEqual(scale, targets[style]/extent)
+                # Check actual painted extents, excluding the card border
+                # and selected stripe, rather than trusting transform math.
+                background = pixel(left+20, top+20)
+                points = [(px, py) for py in range(top+7, top+height-9)
+                          for px in range(round(center_x)-48, round(center_x)+48)
+                          if max(abs(pixel(px, py)[c]-background[c]) for c in (0, 1, 2)) >= 8]
+                self.assertTrue(points, (style, pressed))
+                px1, px2 = min(p[0] for p in points), max(p[0] for p in points)+1
+                py1, py2 = min(p[1] for p in points), max(p[1] for p in points)+1
+                self.assertAlmostEqual((px1+px2)/2, center_x, delta=1.5)
+                self.assertAlmostEqual((py1+py2)/2, center_y, delta=1.5)
+                self.assertAlmostEqual(px2-px1, (x2-x1)*scale, delta=3, msg=(style, pressed))
+                self.assertAlmostEqual(py2-py1, (y2-y1)*scale, delta=3, msg=(style, pressed))
+                if style == 'glove':
+                    _, oy = appearance.origin
+                    self.assertNotAlmostEqual(y+oy*scale, center_y)
+
+    def test_artwork_preview_does_not_mislabel_ring_resource_fallback(self):
+        settings_view._preview_appearance.cache_clear()
+        self.addCleanup(settings_view._preview_appearance.cache_clear)
+        with patch('armada_dual_screen_input.marker_appearance.load_appearance',
+                   return_value=SimpleNamespace(style='ring')):
+            for style in ('glove', 'pixel_hand', 'reticle'):
+                self.assertIsNone(settings_view._preview_appearance(style, '#FFFFFF', '#FFFFFF'))
+
+    def test_pixel_hand_previews_keep_nearest_sampling_while_other_styles_use_normal_sampling(self):
+        draft = SettingsDraft({})
+        draft.section = 'position'
+        cr = Mock()
+        def appearance(style, *_):
+            kind = 'ring' if style.startswith('ring') else style
+            return SimpleNamespace(style=kind, tile_size=64,
+                preview_bounds=lambda pressed=False: (8, 8, 56, 56),
+                sprite=lambda *_: object())
+        with patch.object(settings_view, '_preview_appearance', side_effect=appearance), \
+                patch.object(steam_style, 'label'), patch.object(steam_style, 'rounded'), \
+                patch.object(steam_style, 'line'):
+            settings_view.draw_marker_style_tiles(cr, draft, 398)
+        self.assertEqual(cr.paint.call_count, 2*len(CHOICES['position_marker_style']))
+        self.assertEqual(cr.get_source.return_value.set_filter.call_count, 2)
+        for call in cr.get_source.return_value.set_filter.call_args_list:
+            self.assertEqual(call.args, (cairo.FILTER_NEAREST,))
+
+    def test_selected_icon_card_has_a_distinct_fill_and_accent_stripe(self):
+        snapshots = {}
+        for selected in CHOICES['position_marker_style']:
+            image = cairo.ImageSurface(cairo.FORMAT_ARGB32, 1240, 1080)
+            cr = cairo.Context(image)
+            cr.set_source_rgb(*steam_style.BG)
+            cr.paint()
+            draft = SettingsDraft({'position_marker_style': selected})
+            draft.section = 'position'
+            settings_view.draw(cr, draft)
+            image.flush()
+            data, stride = bytes(image.get_data()), image.get_stride()
+            def pixel(x, y):
+                offset = y*stride+x*4
+                return tuple(data[offset:offset+4])
+            snapshots[selected] = {
+                style: (pixel(left+20, top+20),
+                        tuple(pixel(left+width//2, y) for y in range(top+height-7, top+height)))
+                for style, left, top, width, height in marker_style_tiles()
+            }
+        def accent(pixel):
+            return pixel[3] == 255 and all(abs(pixel[2-c]-round(steam_style.ACCENT[c]*255)) <= 1
+                                          for c in (0, 1, 2))
+        for style in CHOICES['position_marker_style']:
+            active_fill, active_band = snapshots[style][style]
+            self.assertTrue(any(accent(pixel) for pixel in active_band), style)
+            for other in CHOICES['position_marker_style']:
+                if other == style:
+                    continue
+                inactive_fill, inactive_band = snapshots[other][style]
+                self.assertNotEqual(active_fill, inactive_fill, style)
+                self.assertFalse(any(accent(pixel) for pixel in inactive_band), style)
 
     def test_layout_cache_separates_languages_for_identical_text(self):
         image = cairo.ImageSurface(cairo.FORMAT_ARGB32, 1240, 1080)

@@ -152,6 +152,66 @@ class CompactPanelLayoutTests(unittest.TestCase):
                     self.assertEqual(self.app.input_cfg['keyboard_language'], 'zh_CN')
                     self.assertEqual(config.read_bytes(), before)
 
+    def test_position_icon_changes_apply_only_after_successful_save(self):
+        from armada_dual_screen_input.input_settings import SettingsDraft, marker_style_tiles
+        legacy_colors = {'marker_idle_color': '#B494FF', 'marker_pressed_color': '#FFFFFF'}
+        draft = SettingsDraft({'position_marker_style': 'ring', **legacy_colors})
+        draft.section = 'position'
+        self.app.preferences = draft
+        self.app.input_cfg = dict(draft.saved)
+        self.app.scroll_output = SimpleNamespace(scale=1., rest_x=0., rest_y=0.)
+        self.app.languages = None
+        self.app.position.position_style = 'ring'
+        self.app.position.frame_rate = 'auto'
+        tiles = {style: (left+width/2, top+height/2)
+                 for style, left, top, width, height in marker_style_tiles()}
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / 'config.json'
+            config.write_text(json.dumps({'touch_mode': 'direct', 'future_field': 42, **legacy_colors}))
+            before = config.read_bytes()
+            with patch.object(self.panel.upstream, 'CONFIG_PATH', str(config)), \
+                    patch.object(self.panel, 'configure', return_value=False):
+                for style in ('reticle', 'pixel_hand', 'glove', 'ring_white'):
+                    self.app._preferences_down(10, *tiles[style])
+                    self.assertEqual(draft.values['position_marker_style'], style)
+                    self.assertEqual(self.app.position.position_style, 'ring')
+                    self.assertEqual(config.read_bytes(), before)
+                self.app._preferences_down(11, 750, 1020)
+                self.assertEqual(draft.values['position_marker_style'], 'ring')
+                self.assertFalse(draft.dirty)
+                self.app._preferences_down(12, *tiles['reticle'])
+                before_repeat = dict(draft.values)
+                self.app._preferences_down(12, *tiles['reticle'])
+                self.assertEqual(draft.values, before_repeat)
+                self.app._preferences_down(13, 1000, 1020)
+                self.assertEqual(self.app.position.position_style, 'reticle')
+                saved = json.loads(config.read_text())
+                self.assertEqual(saved['position_marker_style'], 'reticle')
+                self.assertEqual(saved['touch_mode'], 'direct')
+                self.assertEqual(saved['future_field'], 42)
+                for key, value in legacy_colors.items():
+                    self.assertEqual(saved[key], value)
+                self.assertFalse(draft.dirty)
+        self.app.position.start.assert_not_called()
+        self.app.position.touch.assert_not_called()
+        self.assertFalse(self.bridge.events)
+
+    def test_failed_position_icon_save_preserves_running_choice_and_draft(self):
+        from armada_dual_screen_input.input_settings import SettingsDraft
+        draft = SettingsDraft({})
+        draft.change('position_marker_style', 'glove')
+        self.app.preferences = draft
+        self.app.input_cfg = dict(draft.saved)
+        self.app.position.position_style = 'ring'
+        with patch.object(self.panel, 'write_settings', side_effect=OSError('full')):
+            self.app._save_preferences()
+        self.assertEqual(self.app.position.position_style, 'ring')
+        self.assertEqual(self.app.input_cfg['position_marker_style'], 'ring')
+        self.assertEqual(draft.values['position_marker_style'], 'glove')
+        self.assertTrue(draft.error)
+        self.assertTrue(draft.dirty)
+        self.assertFalse(self.bridge.events)
+
     def test_legacy_mode_calls_normalize_and_guard_tracks_visible_keyboard(self):
         for requested, expected, suppress in (("mirror", "split", True),
                                                ("keyboard", "split", True),

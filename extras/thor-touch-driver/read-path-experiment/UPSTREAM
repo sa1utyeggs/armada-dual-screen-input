@@ -1,0 +1,20 @@
+Diagnostic acquisition experiment, 2026-10-26. GPL-2.0-only.
+
+Applies read-chunks.patch to ../module/armada_thor_ft5452.c, whose SHA-256 is:
+9fdb33c22b2241a13f3a5371e01989b54f39d3fd687865d676ea6cc7875bdaba
+
+That baseline retains Linux 7.2.6, Armada c3d178c9e5cc7107aaa128b8c1f384a9c6bd8dfa,
+and hashtagbasit's lower-only DROP_UNUSED provenance in ../source.json and the
+source header. Original authorship and ../LICENSE remain applicable. The root
+application MIT license does not replace this driver's GPL license.
+
+Changes: add a root-only diagnostic read_chunk parameter. Mode 1 calls the
+unchanged baseline byte-at-a-time reader. Mode 6 reads the three-byte header
+then each six-byte contact in one transfer. Mode 33 reads the complete frame.
+The setting is sampled once per host frame. Contact parsing, event IDs,
+coordinates, IRQ settings, power management and lower-only matching retain
+the baseline code. Defaults and retry limits are unchanged. No input dead
+zone, smoothing or simulated movement is added.
+
+This source is an experiment, not a claimed fix. Building does not authorize
+loading it. No boot integration or application bundle inclusion is provided.

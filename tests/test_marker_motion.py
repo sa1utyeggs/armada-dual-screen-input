@@ -119,6 +119,26 @@ class MarkerMotionTests(unittest.TestCase):
         self.motion.accept(sample(((.5,.5,False),),1.025),1.025)
         self.assertEqual(self.motion.rings,((.5,.5,False),))
 
+    def test_mode_only_change_requests_a_redraw_for_the_same_contact_and_pressed_state(self):
+        rings = ((.5, .5, True),)
+        for force_snap in (False, True):
+            with self.subTest(coalesced_lifecycle_barrier=force_snap):
+                motion = MarkerMotion((1920, 1080))
+                motion.accept(sample(rings, 1., ids=(8,), mode='position'), 1.)
+                # Latest-state batching can discard an intervening empty
+                # sample. The surviving direct sample may have exactly the
+                # same point, identity and pressure as the positioning sample.
+                # Its mode still changes the visible glove into a ring.
+                self.assertTrue(motion.accept(sample(rings, 1.01, ids=(8,), mode='direct'),
+                                              1.01, force_snap=force_snap))
+                self.assertEqual(motion.mode, 'direct')
+                self.assertEqual(motion.rings, rings)
+                self.assertFalse(motion.animating)
+                self.assertFalse(motion.accept(sample(rings, 1.02, ids=(8,), mode='direct'), 1.02))
+                self.assertTrue(motion.accept(sample(rings, 1.03, ids=(8,), mode='position'), 1.03))
+                self.assertEqual(motion.mode, 'position')
+                self.assertEqual(motion.rings, rings)
+
     def test_coalesced_lifecycle_barrier_overrides_later_movement(self):
         self.motion.accept(sample(((.34,.5,False),),1.017),1.017,force_snap=True)
         self.assertEqual(self.motion.rings,((.34,.5,False),))

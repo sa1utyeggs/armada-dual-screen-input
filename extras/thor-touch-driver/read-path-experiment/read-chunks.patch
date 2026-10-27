@@ -1,0 +1,96 @@
+--- a/armada_thor_ft5452.c
++++ b/armada_thor_ft5452.c
+@@ -336,6 +336,66 @@
+ 	return 0;
+ }
+ 
++/* Diagnostic-only acquisition experiment; mode 1 retains baseline reads. */
++static unsigned int read_chunk = 1;
++
++static int edt_read_chunk_set(const char *value, const struct kernel_param *kp)
++{
++	unsigned int chunk;
++	int ret = kstrtouint(value, 0, &chunk);
++
++	if (ret)
++		return ret;
++	switch (chunk) {
++	case 1:
++	case 6:
++	case 33:
++		WRITE_ONCE(*(unsigned int *)kp->arg, chunk);
++		return 0;
++	default:
++		return -EINVAL;
++	}
++}
++
++static int edt_read_chunk_get(char *buffer, const struct kernel_param *kp)
++{
++	return scnprintf(buffer, 16, "%u\n",
++			 READ_ONCE(*(unsigned int *)kp->arg));
++}
++
++static const struct kernel_param_ops edt_read_chunk_ops = {
++	.set = edt_read_chunk_set,
++	.get = edt_read_chunk_get,
++};
++module_param_cb(read_chunk, &edt_read_chunk_ops, &read_chunk, 0600);
++MODULE_PARM_DESC(read_chunk, "Diagnostic reads: 1 bytewise, 6 contact-aligned, 33 full frame");
++
++static int edt_chunk_read(struct regmap *map, unsigned int start,
++			  void *val, size_t len, unsigned int chunk)
++{
++	u8 *dst = val;
++	size_t off = 0;
++
++	while (off < len) {
++		/* Three header bytes precede the five six-byte contacts. */
++		size_t count = chunk == 6 && off == 0 ?
++			min_t(size_t, 3, len) : min_t(size_t, chunk, len - off);
++		int ret, tries;
++
++		for (tries = 0; tries < 3; tries++) {
++			ret = regmap_bulk_read(map, start + off, dst + off, count);
++			if (!ret)
++				break;
++			if (ret == -ETIMEDOUT || ret == -EAGAIN)
++				usleep_range(2000, 4000);
++		}
++		if (tries == 3)
++			return ret ? ret : -EIO;
++		off += count;
++	}
++	return 0;
++}
++
+ static irqreturn_t edt_ft5x06_ts_isr(int irq, void *dev_id)
+ {
+ 	struct edt_ft5x06_ts_data *tsdata = dev_id;
+@@ -346,8 +406,15 @@
+ 
+ 	memset(rdbuf, 0, sizeof(rdbuf));
+ 	if(tsdata->no_regmap_bulk_read) {
+-		error = edt_bulk_read(tsdata->regmap, tsdata->tdata_cmd, rdbuf,
+-					tsdata->tdata_len);
++		/* Snapshot once: a mode change cannot split one host read. */
++		unsigned int chunk = READ_ONCE(read_chunk);
++
++		if (chunk == 1)
++			error = edt_bulk_read(tsdata->regmap, tsdata->tdata_cmd,
++					      rdbuf, tsdata->tdata_len);
++		else
++			error = edt_chunk_read(tsdata->regmap, tsdata->tdata_cmd,
++					       rdbuf, tsdata->tdata_len, chunk);
+ 	} else {
+ 		error = regmap_bulk_read(tsdata->regmap, tsdata->tdata_cmd, rdbuf,
+ 					tsdata->tdata_len);
+@@ -1558,6 +1625,6 @@
+ module_i2c_driver(edt_ft5x06_ts_driver);
+ 
+ MODULE_AUTHOR("Simon Budig <simon.budig@kernelconcepts.de>");
+-MODULE_DESCRIPTION("Experimental AYN Thor lower FT5452 contact lifecycle driver");
+-MODULE_VERSION("0.1.0-test1");
++MODULE_DESCRIPTION("Diagnostic AYN Thor lower FT5452 read acquisition comparison");
++MODULE_VERSION("0.1.0-readpath-test.1");
+ MODULE_LICENSE("GPL v2");

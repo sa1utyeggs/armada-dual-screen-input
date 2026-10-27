@@ -1,11 +1,12 @@
 """Focus-free settings surface using the same logical hit rectangles as input."""
 from .i18n import msg
 from . import steam_style as s
-import math
+from functools import lru_cache
 from .input_settings import (BOOLEANS, CHOICES, NUMBERS, settings_tabs, choice_caption,
-                             color_swatches, GENERAL_UPDATE_BUTTON_TOP, GENERAL_UNINSTALL_BUTTON_TOP,
+                             position_preview_top, row_height, marker_style_tiles,
+                             GENERAL_UPDATE_BUTTON_TOP, GENERAL_UNINSTALL_BUTTON_TOP,
                              GENERAL_ACTION_HEIGHT)
-from .marker_colors import COLOR_SETTINGS, COLOR_PRESETS, color_rgb
+from .marker_colors import MarkerColors
 
 TITLES = {"mouse": msg('settings.mouse'), "position": msg('common.touch'), "keyboard": msg('settings.keyboard'),
           "general": msg("settings.general"), 'driver': msg('driver.tab')}
@@ -19,9 +20,8 @@ CHOICE_LABELS = {
     "ui_language": (msg("settings.ui_language"), msg("settings.ui_language_note")),
     'keyboard_language': (msg('settings.input_language'), msg('settings.input_language_note')),
     'marker_frame_rate': (msg('settings.fps'), msg('settings.fps_note')),
+    'position_marker_style': (msg('settings.position_marker_style'), msg('settings.position_marker_style_note')),
 }
-COLOR_LABELS = {'marker_idle_color': msg('settings.idle_color'),
-                'marker_pressed_color': msg('settings.pressed_color')}
 
 
 def draw(cr, draft, updates=None, *, monitor_millihz=0, uninstall=None, driver=None):
@@ -39,22 +39,9 @@ def draw(cr, draft, updates=None, *, monitor_millihz=0, uninstall=None, driver=N
                                                    (uninstall and uninstall.busy)))
         return
     for key, top in draft.rows():
-        s.rounded(cr, 24, top, 1192, 88, 8, s.SURFACE)
-        if key in COLOR_SETTINGS:
-            value = draft.values[key]
-            caption = dict(COLOR_PRESETS).get(value, msg('common.custom'))
-            cr.set_source_rgb(*s.FG)
-            s.label(cr, COLOR_LABELS[key], 44, top+12, 26, max_width=490)
-            cr.set_source_rgb(*s.MUTED)
-            s.label(cr, msg('settings.palette', caption=caption, value=value), 44, top+55, 21, max_width=550)
-            for left, color, _ in color_swatches():
-                s.button(cr, left, top+14, 60, 60, '', value == color)
-                for width, rgb in ((6, (0,0,0)), (3, color_rgb(color))):
-                    cr.set_line_width(width)
-                    cr.set_source_rgb(*rgb)
-                    cr.new_sub_path()
-                    cr.arc(left+30, top+44, 16, 0, math.tau)
-                    cr.stroke()
+        s.rounded(cr, 24, top, 1192, row_height(key), 8, s.SURFACE)
+        if key == 'position_marker_style':
+            draw_marker_style_tiles(cr, draft, top)
             continue
         if key in CHOICES:
             title, note = CHOICE_LABELS[key]
@@ -91,17 +78,83 @@ def draw(cr, draft, updates=None, *, monitor_millihz=0, uninstall=None, driver=N
         draw_uninstall(cr, draft, uninstall, updates, blocked=bool(driver and driver.busy))
     if draft.section == "position":
         cr.set_source_rgb(*s.MUTED)
-        for text, y in ((msg('settings.touch_idle'), 730),
-                        (msg('settings.touch_gesture'), 780),
-                        (msg('settings.touch_style'), 830),
-                        (msg('settings.touch_scope'), 880)):
-            s.label(cr, text, 44, y, 25, max_width=1140)
+        top = position_preview_top(draft)
+        for text, y in ((msg('settings.touch_gesture'), top+30),
+                        (msg('settings.touch_style'), top+76)):
+            s.label(cr, text, 390, y, 21, max_width=802)
     if draft.section != 'general':
         cr.set_source_rgb(*(s.DANGER if draft.error else s.ACCENT if draft.dirty else s.MUTED))
         s.label(cr, draft.message, 28, 934, 24, max_width=1180)
     s.button(cr, 24, 996, 270, 64, msg('settings.defaults'))
     s.button(cr, 662, 996, 250, 64, msg('settings.discard'))
     s.button(cr, 936, 996, 280, 64, msg('settings.save'), True)
+
+
+@lru_cache(maxsize=16)
+def _preview_appearance(style, idle, pressed):
+    # Resolve bundled pixels only on this settings page. Repainting an
+    # unchanged draft never decodes or rescales the source artwork again.
+    from .marker_appearance import load_appearance
+    try:
+        appearance = load_appearance(style, colors=MarkerColors(idle, pressed))
+        expected = 'ring' if style.startswith('ring') else style
+        return appearance if appearance.style == expected else None
+    except (OSError, ValueError, RuntimeError):
+        return None
+
+
+def marker_preview_transform(appearance, center_x, center_y, *, pressed=False):
+    """Center visible artwork; runtime touch hotspots are irrelevant here."""
+    left, top, right, bottom = appearance.preview_bounds(pressed)
+    target = {'ring': 45, 'glove': 60, 'pixel_hand': 56, 'reticle': 44}[appearance.style]
+    extent = max(max(x2-x1, y2-y1) for x1, y1, x2, y2 in
+                 (appearance.preview_bounds(False), appearance.preview_bounds(True)))
+    if extent <= 0:
+        raise ValueError('invalid marker preview bounds')
+    scale = target/extent
+    return (center_x-(left+right)*scale/2,
+            center_y-(top+bottom)*scale/2, scale)
+
+
+def draw_marker_style_tiles(cr, draft, top):
+    cr.set_source_rgb(*s.FG)
+    s.label(cr, msg('settings.position_marker_style'), 44, top+12, 26, max_width=310)
+    cr.set_source_rgb(*s.MUTED)
+    s.label(cr, msg('settings.marker_style_pick_note'), 390, top+16, 21, max_width=802)
+    for style, left, tile_top, width, height in marker_style_tiles():
+        selected = draft.values['position_marker_style'] == style
+        s.rounded(cr, left, tile_top, width, height, 8,
+                  s.KEY_LATCHED if selected else s.PANEL,
+                  border=s.ACCENT if selected else s.BORDER, border_width=2 if selected else 1)
+        if selected:
+            s.line(cr, left+16, tile_top+height-5, left+width-16, tile_top+height-5, s.ACCENT, 3)
+        appearance = _preview_appearance(style, draft.values['marker_idle_color'],
+                                         draft.values['marker_pressed_color'])
+        failed = appearance is None
+        if not failed:
+            for pressed, center in ((False, left+width*.28), (True, left+width*.72)):
+                cr.save()
+                try:
+                    sprite = appearance.sprite(pressed, 0, 0)
+                    x, y, scale = marker_preview_transform(appearance, center, tile_top+height/2,
+                                                           pressed=pressed)
+                    cr.translate(x, y)
+                    cr.scale(scale, scale)
+                    cr.set_source_surface(sprite, 0, 0)
+                    if appearance.style == 'pixel_hand':
+                        import cairo
+                        cr.get_source().set_filter(cairo.FILTER_NEAREST)
+                    cr.paint()
+                except (OSError, ValueError, RuntimeError):
+                    failed = True
+                finally:
+                    cr.restore()
+                if failed:
+                    break
+        if failed:
+            cr.set_source_rgb(*s.MUTED)
+            s.label(cr, msg('settings.marker_preview_unavailable'), left+width/2,
+                    tile_top+height/2, 20, centered=True, max_width=width-32)
 
 
 def draw_updates(cr, draft, updates, *, blocked=False):
