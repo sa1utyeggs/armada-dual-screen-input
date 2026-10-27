@@ -13,7 +13,8 @@ import tempfile
 from .scroll_output import read_scroll_scale
 from .keyboard_languages import LANGUAGES, read_language
 from .marker_frames import FRAME_RATES, read_frame_rate
-from .marker_colors import COLOR_SETTINGS, COLOR_PRESETS, read_color
+from .marker_colors import COLOR_SETTINGS, read_color
+from .marker_appearance import POSITION_STYLES, read_position_style
 
 
 @dataclass(frozen=True)
@@ -60,12 +61,14 @@ NUMBERS = {
 BOOLEANS = {"tap_to_click": True, "glide": True, "keyboard_repeat_enabled": True,
             "touch_display_mode": False}
 CHOICES = {"keyboard_language": LANGUAGES, "marker_frame_rate": FRAME_RATES,
+           "position_marker_style": POSITION_STYLES,
            "ui_language": {**UI_LANGUAGES, "auto": msg("settings.follow_system")}}
 DEFAULTS = {**{key: spec.default for key, spec in NUMBERS.items()}, **BOOLEANS,
-            "keyboard_language": "en_US", "ui_language": "en_US", "marker_frame_rate": "auto", **COLOR_SETTINGS}
+            "keyboard_language": "en_US", "ui_language": "en_US", "marker_frame_rate": "auto",
+            "position_marker_style": "ring", **COLOR_SETTINGS}
 SECTIONS = {
     "mouse": ("sensitivity", "scroll_speed", "scroll_scale", "tap_to_click", "glide", "friction"),
-    "position": ("position_sensitivity", "marker_frame_rate", "marker_idle_color", "marker_pressed_color"),
+    "position": ("position_sensitivity", "position_marker_style", "marker_frame_rate"),
     "keyboard": ("keyboard_language", "keyboard_repeat_enabled", "keyboard_repeat_delay_ms",
                  "keyboard_repeat_interval_ms", "keyboard_caps_window_ms"),
     "general": ("ui_language", "touch_display_mode"),
@@ -83,8 +86,19 @@ def settings_tabs():
                  for index, section in enumerate(SETTINGS_PAGES))
 
 
-def color_swatches():
-    return tuple((650+index*68, color, caption) for index, (color, caption) in enumerate(COLOR_PRESETS))
+def position_preview_top(draft):
+    """Place the static preview below the visible touch-settings rows."""
+    return draft.rows()[-1][1] + 102
+
+
+def row_height(key):
+    return 156 if key == 'position_marker_style' else 88
+
+
+def marker_style_tiles():
+    """Shared visible/interactive bounds for the five direct style choices."""
+    return tuple((style, 44+index*232, 448, 220, 92)
+                 for index, style in enumerate(POSITION_STYLES))
 
 
 def choice_caption(key, value, monitor_millihz=0):
@@ -106,6 +120,7 @@ def read_settings(config):
     values["ui_language"] = read_ui_language(config.get("ui_language"))
     values["keyboard_language"] = read_language(config)
     values["marker_frame_rate"] = read_frame_rate(config.get("marker_frame_rate"))
+    values["position_marker_style"] = read_position_style(config.get("position_marker_style"))
     values.update({key: read_color(config.get(key), default) for key, default in COLOR_SETTINGS.items()})
     return values
 
@@ -178,8 +193,12 @@ class SettingsDraft(LocalizedState):
         self.message, self.error = msg('settings.discarded'), False
 
     def rows(self):
-        return [(key, GENERAL_TOUCH_DISPLAY_TOP if key == 'touch_display_mode' else 300 + index * 98)
-                for index, key in enumerate(SECTIONS.get(self.section, ()))]
+        keys = SECTIONS.get(self.section, ())
+        rows, top = [], 300
+        for key in keys:
+            rows.append((key, GENERAL_TOUCH_DISPLAY_TOP if key == 'touch_display_mode' else top))
+            top += row_height(key)+12 if key == 'position_marker_style' else 98
+        return rows
 
     def hit(self, x, y):
         for section, left, width in settings_tabs():
@@ -210,12 +229,12 @@ class SettingsDraft(LocalizedState):
                 if left <= x <= left + width:
                     return key, None
         for key, top in self.rows():
-            if not top <= y <= top + 88:
+            if not top <= y <= top + row_height(key):
                 continue
-            if key in COLOR_SETTINGS:
-                for left, color, _ in color_swatches():
-                    if left <= x <= left+60 and top+14 <= y <= top+74:
-                        return 'color', (key, color)
+            if key == 'position_marker_style':
+                for style, left, tile_top, width, height in marker_style_tiles():
+                    if left <= x <= left+width and tile_top <= y <= tile_top+height:
+                        return 'marker_style', style
                 return None, None
             if key in CHOICES:
                 return ("choice", key) if 790 <= x <= 1192 else (None, None)

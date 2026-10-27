@@ -1,0 +1,4 @@
+interface:
+  display_name: "触控图标生成"
+  short_description: "Design and integrate two-state touch marker icons"
+  default_prompt: "使用 $create-marker-icons 按我的要求生成或接入定位／按住两态图标，核对造型、透明素材、热点及绘制一致性。"

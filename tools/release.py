@@ -16,6 +16,8 @@ import urllib.request
 APP = 'armada-dual-screen-input'
 ROOT_FILES = ('VERSION', 'README.md', 'README.en.md', 'README.zh-CN.md', 'CHANGELOG.md', 'CHANGELOG.zh-CN.md', 'LICENSE', 'THIRD_PARTY.md', 'THIRD_PARTY.zh-CN.md', 'install.sh', 'uninstall.sh')
 TREES = ('src', 'vendor', 'assets', 'packaging')
+MARKER_ASSETS = frozenset(('markers/glove/idle.png', 'markers/glove/pressed.png',
+                           'markers/pixel_hand/idle.png', 'markers/pixel_hand/pressed.png'))
 TOOLS = ('manage.py', 'release.py', 'run.py', 'update.py', 'uninstall.py', 'desktop_cache.py', 'driver.py')
 DOC_GUIDES = ('README.md', 'installation.md', 'usage.md', 'compatibility.md', 'development.md',
               'history.md', 'multilingual-keyboard.md', 'i18n.md', 'keyboard-latency.md',
@@ -119,8 +121,11 @@ def prepare(source, destination, *, runtime_rpm=None, cache=None, offline=False)
                 continue
             if directory == 'vendor' and path.suffix != '.py' and path.name not in ('UPSTREAM', 'LICENSE', 'CREDITS.md'):
                 continue
-            if directory == 'assets' and path.suffix not in ('.svg', '.png'):
-                continue
+            if directory == 'assets':
+                asset = path.relative_to(source / 'assets')
+                if (path.suffix not in ('.svg', '.png')
+                        or (asset.parts[0] != 'icons' and asset.as_posix() not in MARKER_ASSETS)):
+                    continue
             if directory == 'packaging' and path.suffix not in ('.in', '.json'):
                 continue
             names.append(path)

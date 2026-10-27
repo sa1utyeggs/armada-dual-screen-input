@@ -152,3 +152,18 @@ References: [Linux external modules](https://docs.kernel.org/kbuild/modules.html
 [driver binding](https://docs.kernel.org/driver-api/driver-model/binding.html), [Armada Issue #757](https://github.com/armada-os/armada/issues/757).
 
 Game Mode uses a private D-Bus instance for the lower KDE session. The driver-task launcher must discover the real user service manager rather than inherit that private bus; only the detached worker receives it for desktop notifications/authentication. A startup failure with no `thor-panel-driver` unit or `driver.json` means no driver switch was attempted.
+
+## Passive read diagnostics
+
+`trace_reads.py` is a separate experimental diagnostic, excluded from application bundles. On a verified Thor lower FT5452 it records existing regmap reads, I2C write/read requests, received replies and transfer results in its own temporary tracefs instance. It generates no bus transaction or input and changes no driver, module, boot setting or global trace configuration. Root is required to operate tracefs; the default capture is 180 seconds, with a 600-second maximum and 32 MiB stream bound. Normal exit/signals disable and remove the private instance. Tracing itself adds overhead, so recorded durations are instrumented timings. Payload tracing adds volume; use a short 10–20-second capture for a targeted crossing rather than assuming the default duration will fit.
+
+After arranging a controlled manual test in an owned diagnostic window:
+
+```bash
+sudo python3 -I -B extras/thor-touch-driver/trace_reads.py collect --seconds 180 --output /tmp/thor-read-trace.txt
+python3 -B extras/thor-touch-driver/trace_reads.py decode /tmp/thor-read-trace.txt > /tmp/thor-read-frames.json
+```
+
+The output path must not already exist. `--done /path/to/marker` can end collection when a test closes. The decoder retains incomplete/nonsequential reads, contact event flags/IDs/coordinates and unsuccessful transfers; its default complete-frame length is 33 registers, matching this FT5452 driver's five-contact layout. Packet consistency alone cannot prove physical immobility or exclude cross-frame acquisition. Do not label register variation as hand movement, sensor interference or a read-path defect without a distinguishing experiment.
+
+The additional `messages` list preserves I2C write/reply message indices, addresses, flags, declared lengths and payload bytes separately from regmap frames. Missing, malformed or shortened payloads have `payload_complete: false`. Historical captures without these events keep an empty list; their missing reply evidence must not be inferred from regmap data. Compare the register-pointer write and actual reply with the independently decoded frame before attributing a discrepancy to the controller. A successful complete host transfer does not establish that the controller latched one sensor scan atomically. This tool does not switch factory mode, read a capacitance matrix or validate generic EDT tuning registers for FT5452.

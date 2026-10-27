@@ -8,6 +8,7 @@ from armada_dual_screen_input.panel_position import PanelPosition
 from armada_dual_screen_input.marker_target import MarkerTarget
 from armada_dual_screen_input.touchscreen_selector import PAD
 from armada_dual_screen_input.marker_colors import DEFAULT_COLORS, MarkerColors
+from armada_dual_screen_input.toolkit_touch import ToolkitTouch
 
 
 class Marker:
@@ -135,6 +136,43 @@ class PanelPositionTests(unittest.TestCase):
         self.p.touch('end',11,self.now)
         self.assertFalse(self.p.marker.motion[-1]['active'])
         self.assertTrue(self.p.marker.motion[-1]['snap'])
+
+    def test_stationary_aim_and_moving_confirm_keep_marker_and_native_position(self):
+        self.arm()
+        touch = ToolkitTouch(
+            lambda tid, x, y, now: self.p.touch('begin', tid, now, x, y),
+            lambda *_: self.fail('timed motion callback required'),
+            lambda tid, now: self.p.touch('end', tid, now),
+            lambda tid, now: self.p.touch('cancel', tid, now),
+            on_timed_update=lambda tid, x, y, now, interval: self.p.touch(
+                'move', tid, now, x, y, motion_interval=interval),
+            clock=lambda: self.now,
+        )
+        touch.begin('aim', 300, 300, source_ms=1000, starts_new_group=True)
+        self.now += 1
+        touch.begin('confirm', 800, 600, source_ms=2000)
+        point = self.p.gesture.point
+        for step, (x, y) in enumerate(((850, 600), (850, 650), (800, 650), (800, 600)), 1):
+            self.now += .02
+            touch.update('confirm', x, y, source_ms=2000 + 20 * step)
+            self.assertEqual(self.p.gesture.point, point)
+            self.assertEqual(self.p.marker.updates[-1], (point, True))
+            self.assertEqual(self.p.marker.motion[-1]['ids'], (touch.active[0].tid,))
+            self.assertEqual([event.kind for event in self.p.sender.events], ['down'])
+
+        # The original finger still owns motion after all second-finger moves.
+        self.now += .02
+        touch.update('aim', 320, 300, source_ms=2100)
+        moved = self.p.gesture.point
+        self.assertGreater(moved[0], point[0])
+        self.assertEqual(moved[1], point[1])
+        self.assertEqual(self.p.sender.events[-1].kind, 'move')
+        self.assertEqual(self.p.sender.events[-1].position, moved)
+        touch.end('confirm')
+        self.assertEqual(self.p.sender.events[-1].kind, 'up')
+        self.assertEqual(self.p.sender.events[-1].position, moved)
+        self.assertEqual(self.p.gesture.aim, touch.active[0].tid)
+        touch.end('aim')
 
     def test_direct_visual_contacts_keep_native_ids_and_clear_on_cancel(self):
         self.p.set_touch_mode('direct')

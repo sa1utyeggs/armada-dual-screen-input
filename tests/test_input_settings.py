@@ -6,10 +6,11 @@ import unittest
 from unittest.mock import patch
 
 from armada_dual_screen_input.input_settings import (
-    DEFAULTS, NUMBERS, CHOICES, SECTIONS, SettingsDraft, read_settings, write_settings, color_swatches,
+    DEFAULTS, NUMBERS, CHOICES, SECTIONS, SettingsDraft, read_settings, write_settings, position_preview_top,
+    marker_style_tiles, row_height,
     settings_tabs, GENERAL_TOUCH_DISPLAY_TOP, GENERAL_UPDATE_BUTTON_TOP, GENERAL_UNINSTALL_BUTTON_TOP,
 )
-from armada_dual_screen_input.marker_colors import COLOR_SETTINGS, COLOR_PRESETS
+from armada_dual_screen_input.marker_colors import COLOR_SETTINGS
 
 
 class InputSettingsTests(unittest.TestCase):
@@ -19,6 +20,106 @@ class InputSettingsTests(unittest.TestCase):
         self.assertEqual(DEFAULTS["position_sensitivity"], 2.)
         self.assertTrue(DEFAULTS["keyboard_repeat_enabled"])
         self.assertFalse(DEFAULTS['touch_display_mode'])
+        self.assertEqual(DEFAULTS['position_marker_style'], 'ring')
+
+    def test_position_icon_style_is_strict_and_draft_edits_are_reversible(self):
+        styles = ('ring', 'ring_white', 'glove', 'pixel_hand', 'reticle')
+        self.assertEqual(tuple(CHOICES['position_marker_style']), styles)
+        self.assertNotIn('ring_blue', CHOICES['position_marker_style'])
+        self.assertNotIn('ring_green', CHOICES['position_marker_style'])
+        for style in styles:
+            self.assertEqual(read_settings({'position_marker_style': style})['position_marker_style'], style)
+        for invalid in (None, {}, [], True, 1, 'Glove', 'glove ', 'ring_red', 'unknown'):
+            self.assertEqual(read_settings({'position_marker_style': invalid})['position_marker_style'], 'ring')
+        draft = SettingsDraft({'position_marker_style': 'glove', 'marker_frame_rate': '60',
+                               'marker_idle_color': '#FFFFFF', 'scroll_scale': .001})
+        draft.change('position_marker_style', 'ring')
+        self.assertTrue(draft.dirty)
+        self.assertEqual(draft.saved['position_marker_style'], 'glove')
+        draft.discard()
+        self.assertEqual(draft.values['position_marker_style'], 'glove')
+        self.assertFalse(draft.dirty)
+        draft.change('position_marker_style', {})
+        self.assertEqual(draft.values['position_marker_style'], 'ring')
+        draft.section = 'position'
+        draft.reset_section()
+        self.assertEqual(draft.values['position_marker_style'], 'ring')
+        self.assertEqual(draft.values['marker_frame_rate'], 'auto')
+        self.assertEqual(draft.values['marker_idle_color'], '#FFFFFF')
+        self.assertEqual(draft.values['scroll_scale'], .001)
+
+    def test_position_icon_style_round_trip_preserves_ring_colors_and_unknown_fields(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'config.json'
+            original = {'mode': 'position', 'touch_mode': 'direct', 'scroll_scale': .001,
+                        'marker_idle_color': '#B494FF', 'marker_pressed_color': '#FFFFFF',
+                        'future': {'keep': True}}
+            path.write_text(json.dumps(original))
+            draft = SettingsDraft(original)
+            draft.change('position_marker_style', 'glove')
+            write_settings(path, read_settings(draft.values))
+            draft.mark_saved()
+            saved = json.loads(path.read_text())
+            for key, value in original.items():
+                self.assertEqual(saved[key], value)
+            self.assertEqual(saved['position_marker_style'], 'glove')
+            self.assertEqual(SettingsDraft(saved).values['position_marker_style'], 'glove')
+            self.assertFalse(draft.dirty)
+
+    def test_position_icon_cards_have_direct_hits_and_leave_header_and_gaps_inert(self):
+        draft = SettingsDraft({})
+        draft.section = 'position'
+        for style in CHOICES['position_marker_style']:
+            draft.change('position_marker_style', style)
+            self.assertEqual(draft.rows(), [('position_sensitivity', 300),
+                                            ('position_marker_style', 398), ('marker_frame_rate', 566)])
+            self.assertEqual(position_preview_top(draft), 668)
+            self.assertEqual(row_height('position_marker_style'), 156)
+            for key in ('position_sensitivity', 'marker_frame_rate'):
+                self.assertEqual(row_height(key), 88)
+            tiles = marker_style_tiles()
+            self.assertEqual(tiles, (('ring', 44, 448, 220, 92),
+                                     ('ring_white', 276, 448, 220, 92),
+                                     ('glove', 508, 448, 220, 92),
+                                     ('pixel_hand', 740, 448, 220, 92),
+                                     ('reticle', 972, 448, 220, 92)))
+            self.assertEqual(tuple(tile[0] for tile in tiles), tuple(CHOICES['position_marker_style']))
+            for selected, left, top, width, height in tiles:
+                for x in (left, left+width/2, left+width):
+                    for y in (top, top+height/2, top+height):
+                        self.assertEqual(draft.hit(x, y), ('marker_style', selected))
+                self.assertLess(top+height, dict(draft.rows())['marker_frame_rate'])
+            self.assertLess(398+row_height('position_marker_style'), 566)
+            self.assertEqual(draft.hit(1000, 610), ('choice', 'marker_frame_rate'))
+            for x, y in ((1000, 420), (620, 442), (620, 447), (43, 494),
+                         (270, 494), (502, 494), (734, 494), (966, 494),
+                         (1193, 494), (1000, 541), (1000, 555), (680, 736)):
+                self.assertEqual(draft.hit(x, y), (None, None))
+
+    def test_direct_style_selection_is_idempotent_and_retains_save_discard_reset_semantics(self):
+        draft = SettingsDraft({'position_marker_style': 'ring_white', 'marker_frame_rate': '60'})
+        draft.section = 'position'
+        for style in ('reticle', 'pixel_hand', 'glove', 'ring', 'ring_white', 'reticle'):
+            left, top, width, height = next(tile[1:] for tile in marker_style_tiles() if tile[0] == style)
+            action, selected = draft.hit(left+width/2, top+height/2)
+            self.assertEqual(action, 'marker_style')
+            draft.change('position_marker_style', selected)
+            self.assertEqual(draft.values['position_marker_style'], style)
+            before, dirty = dict(draft.values), draft.dirty
+            draft.change('position_marker_style', selected)
+            self.assertEqual(draft.values, before)
+            self.assertEqual(draft.dirty, dirty)
+            self.assertEqual(draft.saved['position_marker_style'], 'ring_white')
+        draft.discard()
+        self.assertEqual(draft.values['position_marker_style'], 'ring_white')
+        self.assertFalse(draft.dirty)
+        draft.change('position_marker_style', 'glove')
+        draft.mark_saved()
+        self.assertEqual(draft.saved['position_marker_style'], 'glove')
+        self.assertFalse(draft.dirty)
+        draft.reset_section()
+        self.assertEqual(draft.values['position_marker_style'], 'ring')
+        self.assertEqual(draft.values['marker_frame_rate'], 'auto')
 
     def test_touch_display_is_opt_in_and_preserves_other_preferences(self):
         for invalid in ('true',1,None,{}):
@@ -82,18 +183,24 @@ class InputSettingsTests(unittest.TestCase):
         draft.discard()
         self.assertEqual(draft.values['marker_pressed_color'],DEFAULTS['marker_pressed_color'])
         draft.section='position';draft.reset_section()
-        self.assertEqual(draft.values['marker_idle_color'],DEFAULTS['marker_idle_color'])
+        self.assertEqual(draft.values['marker_idle_color'],'#FFFFFF')
         self.assertEqual(draft.values['scroll_scale'],.001)
 
-    def test_color_swatches_have_independent_hits_without_changing_other_controls(self):
-        draft=SettingsDraft({});draft.section='position'
-        for key, top in draft.rows():
-            if key not in COLOR_SETTINGS:continue
-            for left, color, _ in color_swatches():
-                self.assertEqual(draft.hit(left+30,top+44),('color',(key,color)))
-                self.assertEqual(draft.hit(left+63,top+44),(None,None))
-            self.assertEqual(draft.hit(500,top+44),(None,None))
-        self.assertEqual(len(COLOR_PRESETS),8)
+    def test_legacy_ring_colors_are_preserved_without_editable_rows(self):
+        original = {'marker_idle_color': '#B494FF', 'marker_pressed_color': '#FFFFFF'}
+        draft = SettingsDraft(original)
+        draft.section = 'position'
+        for style in CHOICES['position_marker_style']:
+            draft.change('position_marker_style', style)
+            self.assertTrue(set(COLOR_SETTINGS).isdisjoint(dict(draft.rows())))
+            for key, value in original.items():
+                self.assertEqual(draft.values[key], value)
+        draft.discard()
+        for key, value in original.items():
+            self.assertEqual(draft.values[key], value)
+        draft.reset_section()
+        for key, value in original.items():
+            self.assertEqual(draft.values[key], value)
 
     def test_colors_round_trip_with_unknown_configuration_and_other_preferences(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -146,9 +253,10 @@ class InputSettingsTests(unittest.TestCase):
             draft.section = section
             for key, top in draft.rows():
                 self.assertGreaterEqual(top, 300)
-                self.assertLess(top + 88, 996 if section=='general' else 934)
-                if key in COLOR_SETTINGS:
-                    self.assertEqual(draft.hit(680,top+44),('color',(key,COLOR_PRESETS[0][0])))
+                self.assertLess(top + row_height(key), 996 if section=='general' else 934)
+                if key == 'position_marker_style':
+                    style, left, card_top, width, height = marker_style_tiles()[0]
+                    self.assertEqual(draft.hit(left+width/2, card_top+height/2), ('marker_style', style))
                     continue
                 expected = "slider" if key in NUMBERS else "choice" if key in CHOICES else "toggle"
                 self.assertEqual(draft.hit(800 if key in NUMBERS else 1000, top + 50),

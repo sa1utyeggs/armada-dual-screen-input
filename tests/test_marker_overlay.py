@@ -96,6 +96,33 @@ class MarkerOverlayTests(unittest.TestCase):
             finally:
                 marker.close();marker.wait()
 
+    def test_position_style_is_worker_configuration_not_per_contact_data(self):
+        for style in ('glove', 'pixel_hand', 'reticle'):
+            with self.subTest(style=style), \
+                 patch('armada_dual_screen_input.marker_overlay.subprocess.Popen') as spawn:
+                spawn.return_value.poll.return_value = None
+                marker = MarkerOverlay(target=self.expected, schedule=self.dispatch.add,
+                                       cancel=self.dispatch.cancel, position_style=style)
+                try:
+                    args = spawn.call_args.args[0]
+                    self.assertEqual(args[args.index('--position-style')+1], style)
+                    self.assertEqual(dict(os.environ), self.parent_environment)
+                    marker.update((.2, .4), True, motion=self.motion())
+                    self.assertEqual(marker.pending['contacts'], ((.2, .4, True),))
+                    self.assertNotIn('style', marker.pending)
+                    self.assertNotIn('image', marker.pending)
+                finally:
+                    marker.close(); marker.wait()
+
+    def test_invalid_position_style_is_rejected_before_opening_a_worker(self):
+        for style in (None, True, 1, {}, [], 'hand', 'GLOVE'):
+            with self.subTest(style=style), \
+                 patch('armada_dual_screen_input.marker_overlay.subprocess.Popen') as spawn:
+                with self.assertRaises(ValueError):
+                    MarkerOverlay(target=self.expected, schedule=self.dispatch.add,
+                                  cancel=self.dispatch.cancel, position_style=style)
+                spawn.assert_not_called()
+
     def test_own_window_is_identified_separately_from_the_game(self):
         self.ready()
         self.assertTrue(self.marker.owns_focus(replace(self.expected,window=200)))

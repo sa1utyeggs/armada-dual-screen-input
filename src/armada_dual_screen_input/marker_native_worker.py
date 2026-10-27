@@ -13,13 +13,15 @@ import socket
 import time
 
 from .marker_colors import DEFAULT_COLORS
+from .marker_appearance import load_appearance
 
 
 class NativeUnavailable(RuntimeError):
     """Native setup failed with no published/mapped window or consumed IPC."""
 
 
-def run(fd, target, frame_rate='auto', *, colors=DEFAULT_COLORS):
+def run(fd, target, frame_rate='auto', *, colors=DEFAULT_COLORS, position_style='ring', appearance=None):
+    appearance = appearance or load_appearance(position_style, colors)
     os.environ.update(GDK_BACKEND='x11', DISPLAY=target.surface_display, NO_AT_BRIDGE='1')
     import gi
     gi.require_version('Gdk', '3.0')
@@ -74,7 +76,7 @@ def run(fd, target, frame_rate='auto', *, colors=DEFAULT_COLORS):
         # Cleanup in finally completes before the dispatcher starts GTK fallback.
         try:
             surface = Surface(focus, target)
-            renderer = Renderer(canvas, colors)
+            renderer = Renderer(canvas, colors, position_style=position_style, appearance=appearance)
             display = Gdk.Display.open(target.surface_display)
             if display is None:
                 raise RuntimeError('upper monitor display unavailable')
@@ -95,13 +97,13 @@ def run(fd, target, frame_rate='auto', *, colors=DEFAULT_COLORS):
             return monitor.get_refresh_rate() if monitor is not None else 0
 
         def paint_pending():
-            scene.update(motion.sample(time.monotonic()))
+            scene.update(motion.sample(time.monotonic()), appearance.for_mode(motion.mode))
             rectangles = scene.take_damage()
             if not rectangles:
                 if motion.animating:
                     frames.request()
                 return
-            renderer.draw(scene.rings)
+            renderer.draw(scene.rings, mode=motion.mode)
             surface.swap(rectangles)
             state['draws'] += 1
             if not state['ready']:

@@ -10,6 +10,7 @@ from unittest.mock import patch
 from armada_dual_screen_input import i18n
 from armada_dual_screen_input.i18n import configure, msg, tr, LocalizedState
 from armada_dual_screen_input.input_settings import SettingsDraft, read_settings, write_settings
+from armada_dual_screen_input.input_settings import choice_caption, marker_style_tiles
 from armada_dual_screen_input.keyboard_language_view import visible
 from armada_dual_screen_input.keyboard_languages import KeyboardLanguages
 from armada_dual_screen_input.panel_position import PanelPosition
@@ -72,6 +73,25 @@ class I18nTests(unittest.TestCase):
             for language in ('en_US', 'zh_CN'):
                 configure(language)
                 self.assertTrue(tr(key, **{field: '42' for field in en_fields}))
+
+    def test_position_icon_choices_follow_ui_language_without_changing_saved_value(self):
+        draft = SettingsDraft({'position_marker_style': 'glove', 'keyboard_language': 'zh_CN'})
+        tiles = marker_style_tiles()
+        for language, rings, glove in (('en_US', ('Blue / orange ring', 'White / green ring'), 'Glove'),
+                                       ('zh_CN', ('蓝／橙圆环', '白／绿圆环'), '手套')):
+            configure(language)
+            self.assertEqual(marker_style_tiles(), tiles)
+            self.assertEqual(tuple(tile[0] for tile in tiles),
+                             ('ring', 'ring_white', 'glove', 'pixel_hand', 'reticle'))
+            for style, caption in zip(('ring', 'ring_white'), rings):
+                self.assertEqual(choice_caption('position_marker_style', style), caption)
+            self.assertEqual(choice_caption('position_marker_style', draft.values['position_marker_style']), glove)
+            self.assertEqual(choice_caption('position_marker_style', 'pixel_hand'),
+                             'Pixel hand' if language == 'en_US' else '像素手')
+            self.assertEqual(choice_caption('position_marker_style', 'reticle'),
+                             'Sci-fi reticle' if language == 'en_US' else '科幻准星')
+            self.assertEqual(draft.values['position_marker_style'], 'glove')
+            self.assertEqual(draft.values['keyboard_language'], 'zh_CN')
 
     def test_fallback_is_english_and_unknown_keys_remain_identifiable(self):
         configure('zh_CN')

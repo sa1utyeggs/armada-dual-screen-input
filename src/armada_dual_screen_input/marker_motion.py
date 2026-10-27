@@ -37,6 +37,10 @@ class MarkerMotion:
         return tuple(self._points[tid] for tid in self._order)
 
     @property
+    def mode(self):
+        return self._mode or 'legacy'
+
+    @property
     def animating(self):
         return any(self._points[tid] != self._targets[tid] for tid in self._order)
 
@@ -70,6 +74,7 @@ class MarkerMotion:
                 and sample.sampled_at < self._source_at):
             return False  # Never animate or replay a reordered sample.
         before = self.rings
+        mode_changed = sample.mode != self._mode
         previous_at = self._at
         self._advance(now)
         snap = (force_snap or sample.snap or not sample.active or sample.mode != self._mode
@@ -93,7 +98,7 @@ class MarkerMotion:
         # and freeze all subsequent genuine samples.
         self._source_at = (sample.sampled_at if sample.mode != 'legacy'
                            and sample.sampled_at <= now+.005 else None)
-        return self.rings != before or self.animating
+        return mode_changed or self.rings != before or self.animating
 
     def sample(self, now):
         self._advance(now)

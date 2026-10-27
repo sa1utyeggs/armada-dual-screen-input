@@ -12,15 +12,21 @@ import json
 import socket
 
 from .marker_colors import DEFAULT_COLORS, MarkerColors, parse_color
+from .marker_appearance import POSITION_STYLES, load_appearance, read_position_style
 
 
-def run(fd, target, frame_rate='auto', *, colors=DEFAULT_COLORS):
+def run(fd, target, frame_rate='auto', *, colors=DEFAULT_COLORS, position_style='ring'):
+    if read_position_style(position_style) != position_style:
+        raise ValueError('unsupported positioning marker style')
+    appearance = load_appearance(position_style, colors)
     from .marker_native_worker import NativeUnavailable, run as native_run
     try:
-        return native_run(fd, target, frame_rate, colors=colors)
+        return native_run(fd, target, frame_rate, colors=colors,
+                          position_style=position_style, appearance=appearance)
     except NativeUnavailable:
         from .marker_gtk_worker import run as gtk_run
-        return gtk_run(fd, target, frame_rate, colors=colors)
+        return gtk_run(fd, target, frame_rate, colors=colors,
+                       position_style=position_style, appearance=appearance)
 
 
 if __name__ == '__main__':
@@ -32,10 +38,12 @@ if __name__ == '__main__':
     parser.add_argument('--frame-rate', choices=FRAME_RATES, default='auto')
     parser.add_argument('--idle-color', type=parse_color, default=DEFAULT_COLORS.idle)
     parser.add_argument('--pressed-color', type=parse_color, default=DEFAULT_COLORS.pressed)
+    parser.add_argument('--position-style', choices=POSITION_STYLES, default='ring')
     args = parser.parse_args()
     try:
         run(args.fd, args.target, args.frame_rate,
-            colors=MarkerColors(args.idle_color, args.pressed_color))
+            colors=MarkerColors(args.idle_color, args.pressed_color),
+            position_style=args.position_style)
     except Exception as error:
         try:
             socket.socket(fileno=args.fd).send(json.dumps({'error': str(error)}).encode())

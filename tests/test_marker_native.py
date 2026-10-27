@@ -6,6 +6,8 @@ from unittest.mock import Mock, patch
 
 from armada_dual_screen_input.marker_egl import Surface, damage_values
 from armada_dual_screen_input.marker_gpu import Renderer, rgba_pixels
+from armada_dual_screen_input.marker_appearance import MarkerAppearance
+from armada_dual_screen_input.marker_colors import DEFAULT_COLORS
 from armada_dual_screen_input.marker_native_worker import NativeUnavailable
 from armada_dual_screen_input import marker_worker
 
@@ -23,6 +25,37 @@ class MarkerBackendTests(unittest.TestCase):
             with patch.dict('sys.modules', {'armada_dual_screen_input.marker_gtk_worker': SimpleNamespace(run=gtk)}):
                 self.assertEqual(marker_worker.run(7, 'target', '60'), 11)
         self.assertEqual(gtk.call_args.args, (7, 'target', '60'))
+
+    def test_position_style_reaches_both_backends_without_changing_fallback_rules(self):
+        for style in ('glove', 'pixel_hand', 'reticle'):
+            with self.subTest(style=style):
+                with patch('armada_dual_screen_input.marker_native_worker.run', return_value=42) as native:
+                    self.assertEqual(marker_worker.run(7, 'target', '60', position_style=style), 42)
+                self.assertEqual(native.call_args.kwargs['position_style'], style)
+                gtk = Mock(return_value=11)
+                with patch('armada_dual_screen_input.marker_native_worker.run',
+                           side_effect=NativeUnavailable('no alpha visual')) as native:
+                    with patch.dict('sys.modules', {'armada_dual_screen_input.marker_gtk_worker':
+                                                  SimpleNamespace(run=gtk)}):
+                        self.assertEqual(marker_worker.run(7, 'target', '60', position_style=style), 11)
+                self.assertEqual(native.call_args.kwargs['position_style'], style)
+                self.assertEqual(gtk.call_args.kwargs['position_style'], style)
+                self.assertEqual(gtk.call_args.args, (7, 'target', '60'))
+
+    def test_startup_artwork_fallback_is_resolved_once_and_shared_across_backends(self):
+        fallback = MarkerAppearance('ring')
+        for style in ('glove', 'pixel_hand'):
+            with self.subTest(style=style):
+                gtk = Mock(return_value=11)
+                with patch.object(marker_worker, 'load_appearance', return_value=fallback) as resolve, \
+                     patch('armada_dual_screen_input.marker_native_worker.run',
+                           side_effect=NativeUnavailable('no EGL surface')) as native:
+                    with patch.dict('sys.modules', {'armada_dual_screen_input.marker_gtk_worker':
+                                                  SimpleNamespace(run=gtk)}):
+                        self.assertEqual(marker_worker.run(7, 'target', position_style=style), 11)
+                resolve.assert_called_once_with(style, DEFAULT_COLORS)
+                self.assertIs(native.call_args.kwargs['appearance'], fallback)
+                self.assertIs(gtk.call_args.kwargs['appearance'], fallback)
 
     def test_runtime_or_target_failure_never_switches_live_backends(self):
         gtk = Mock()
@@ -141,7 +174,10 @@ class GPUSpriteTests(unittest.TestCase):
         renderer.canvas = (101, 101)
         renderer.program, renderer.vao = 2, c.c_uint(3)
         renderer.textures = [c.c_uint(4), c.c_uint(5)]
+        renderer.position_textures = []
+        renderer.appearance = MarkerAppearance()
         renderer.canvas_location, renderer.tile_location, renderer.atlas_location = 6, 7, 8
+        renderer.sizes_location = 9
         renderer.draw(((.20125, .30125, False), (.7, .8, True)))
         gl.ClearColor.assert_called_once_with(0, 0, 0, 0)
         gl.Clear.assert_called_once_with(0x4000)
@@ -150,10 +186,58 @@ class GPUSpriteTests(unittest.TestCase):
         self.assertEqual(gl.Uniform4f.call_args_list[0].args, (7, 2, 12, 36, 36))
         self.assertEqual(gl.BindTexture.call_args_list[0].args, (0x0DE1, 4))
         self.assertEqual(gl.BindTexture.call_args_list[1].args, (0x0DE1, 5))
+        gl.TexImage2D.assert_not_called()
         gl.reset_mock()
         renderer.draw(())
         gl.Clear.assert_called_once_with(0x4000)
         gl.DrawArrays.assert_not_called()
+        gl.TexImage2D.assert_not_called()
+
+    def test_position_pose_changes_keep_each_hotspot_and_direct_contacts_use_ring_atlas(self):
+        renderer = Renderer.__new__(Renderer)
+        renderer.gl = gl = Mock()
+        renderer.canvas = (201, 121)
+        renderer.program, renderer.vao = 2, c.c_uint(3)
+        renderer.textures = [c.c_uint(4), c.c_uint(5)]
+        renderer.position_textures = [c.c_uint(40), c.c_uint(41)]
+        renderer.canvas_location, renderer.tile_location, renderer.atlas_location = 6, 7, 8
+        renderer.sizes_location = 9
+        for style in ('glove', 'pixel_hand', 'reticle'):
+            with self.subTest(style=style):
+                renderer.appearance = MarkerAppearance(style)
+                positions = []
+                for pressed, texture in ((False, 40), (True, 41)):
+                    gl.reset_mock()
+                    renderer.draw(((.5, .5, pressed),), mode='position')
+                    positions.append(gl.Uniform4f.call_args.args)
+                    gl.BindTexture.assert_called_once_with(0x0DE1, texture)
+                    gl.Uniform2f.assert_any_call(9, 64, 512)
+                    gl.TexImage2D.assert_not_called()
+                    gl.GenTextures.assert_not_called()
+                    gl.DrawArrays.assert_called_once_with(5, 0, 4)
+                ox, oy = renderer.appearance.origin
+                self.assertEqual(positions, [(7, 100-ox, 60-oy, 0, 0)]*2)
+                for mode in ('direct', 'legacy'):
+                    gl.reset_mock()
+                    renderer.draw(((.5, .5, True),), mode=mode)
+                    gl.BindTexture.assert_called_once_with(0x0DE1, 5)
+                    gl.Uniform2f.assert_any_call(9, 36, 288)
+                    gl.Uniform4f.assert_called_once_with(7, 82, 42, 0, 0)
+                    gl.TexImage2D.assert_not_called()
+
+    def test_renderer_close_releases_both_atlases_and_is_idempotent(self):
+        renderer = Renderer.__new__(Renderer)
+        renderer.gl = gl = Mock()
+        renderer.program, renderer.vao = 2, c.c_uint(3)
+        renderer.textures = [c.c_uint(4), c.c_uint(5)]
+        renderer.position_textures = [c.c_uint(40), c.c_uint(41)]
+        renderer.close()
+        self.assertEqual(gl.DeleteTextures.call_count, 4)
+        gl.DeleteVertexArrays.assert_called_once()
+        gl.DeleteProgram.assert_called_once_with(2)
+        gl.reset_mock()
+        renderer.close()
+        self.assertFalse(gl.mock_calls)
 
 
 if __name__ == '__main__':

@@ -13,9 +13,14 @@ import os
 import socket
 import time
 from .marker_colors import DEFAULT_COLORS, MarkerColors, parse_color
+from .marker_appearance import load_appearance, prepare_sprites
 
 
-def run(fd, target, frame_rate='auto', *, colors=DEFAULT_COLORS):
+def run(fd, target, frame_rate='auto', *, colors=DEFAULT_COLORS, position_style='ring', appearance=None):
+    appearance = appearance or load_appearance(position_style, colors)
+    prepare_sprites(appearance)
+    if appearance.style != 'ring':
+        prepare_sprites(appearance.for_mode('direct'))
     os.environ['GDK_BACKEND'] = 'x11'
     os.environ['DISPLAY'] = target.surface_display
     os.environ['NO_AT_BRIDGE'] = '1'
@@ -125,8 +130,7 @@ def run(fd, target, frame_rate='auto', *, colors=DEFAULT_COLORS):
 
     def draw(widget, cr):
         state['draws'] += 1
-        draw_rings(cr, scene.rings, canvas, colors)
-        # Open center keeps small card text and targets visible.
+        draw_rings(cr, scene.rings, canvas, colors, scene.appearance)
         if not state['ready']:
             state['ready'] = True
             send({'ready': True, 'size': size, 'refresh_millihz': frames.monitor_millihz})
@@ -139,7 +143,7 @@ def run(fd, target, frame_rate='auto', *, colors=DEFAULT_COLORS):
     def paint_pending():
         if not window.get_mapped():
             return  # Keep damage; map-event requests a frame when visible.
-        scene.update(motion.sample(time.monotonic()))
+        scene.update(motion.sample(time.monotonic()), appearance.for_mode(motion.mode))
         rectangles = scene.take_damage()
         if not rectangles:
             if motion.animating:

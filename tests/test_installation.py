@@ -207,6 +207,15 @@ class InstallTests(unittest.TestCase):
         (source/'src/private-config.json').write_text('private')
         (source/'src/ui.log').write_text('private log')
         (source/'extras').mkdir();(source/'extras/driver.ko').write_bytes(b'not an app payload')
+        for name in ('markers/glove-v1/idle.png', 'markers/glove/reference.png',
+                     'markers/pixel_hand/reference.png', 'markers/paw/idle.png', 'private-preview.png'):
+            draft=source/'assets'/name;draft.parent.mkdir(parents=True,exist_ok=True)
+            draft.write_bytes(b'not a runtime asset')
+        for state in ('idle', 'pressed'):
+            marker=source/'assets/markers/pixel_hand'/f'{state}.png'
+            marker.parent.mkdir(parents=True,exist_ok=True)
+            marker.write_bytes(b'pixel-hand runtime fixture')
+        icon=source/'assets/icons/extra.png';icon.write_bytes(b'additional application icon')
         target=self.work/'prepared'
         with patch('release.runtime_package',return_value=(self.work/'unused.rpm',{})),patch('release.extract_runtime'):
             manifest=prepare(source,target)
@@ -218,6 +227,11 @@ class InstallTests(unittest.TestCase):
         self.assertIn('src/armada_dual_screen_input/ui_catalogs.py', manifest['files'])
         self.assertIn('docs/i18n.md', manifest['files'])
         self.assertIn('tools/uninstall.py', manifest['files'])
+        self.assertEqual({name for name in manifest['files'] if name.startswith('assets/markers/')},
+                         {'assets/markers/glove/idle.png', 'assets/markers/glove/pressed.png',
+                          'assets/markers/pixel_hand/idle.png', 'assets/markers/pixel_hand/pressed.png'})
+        self.assertIn('assets/icons/extra.png', manifest['files'])
+        self.assertNotIn('assets/private-preview.png', manifest['files'])
 
     def test_dry_run_writes_no_home_files_or_services(self):
         env=dict(os.environ,HOME=str(self.paths.home),XDG_DATA_HOME=str(self.paths.data),XDG_CONFIG_HOME=str(self.paths.config),PYTHONDONTWRITEBYTECODE='1')

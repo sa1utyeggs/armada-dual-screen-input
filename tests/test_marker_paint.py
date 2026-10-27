@@ -3,6 +3,7 @@ import sys
 import unittest
 
 from armada_dual_screen_input.marker_paint import MarkerScene, draw_rings
+from armada_dual_screen_input.marker_appearance import MarkerAppearance
 
 
 class MarkerSceneTests(unittest.TestCase):
@@ -41,6 +42,50 @@ class MarkerSceneTests(unittest.TestCase):
         scene.invalidate(full=True)
         self.assertEqual(scene.take_damage(),((0,0,320,180),))
         self.assertEqual(scene.rings,((.5,.5,False),))
+
+    def test_stationary_style_switch_damages_old_ring_and_complete_position_sprite_extents(self):
+        for style in ('glove', 'pixel_hand', 'reticle'):
+            with self.subTest(style=style):
+                scene = MarkerScene((201, 161))
+                rings = ((.5, .5, False),)
+                scene.update(rings)
+                old_ring = set(scene.take_damage())
+                appearance = MarkerAppearance(style)
+                self.assertTrue(scene.update(rings, appearance))
+                rectangles = set(scene.take_damage())
+                self.assertTrue(old_ring <= rectangles)
+                ox, oy = appearance.origin
+                left, top = 100-ox, 80-oy
+                self.assertTrue(any(x <= left and y <= top and x+w >= left+64 and y+h >= top+64
+                                    for x, y, w, h in rectangles))
+                self.assertFalse(scene.update(rings, appearance))
+                self.assertEqual(scene.take_damage(), ())
+                self.assertTrue(scene.update(rings, MarkerAppearance('ring')))
+                self.assertEqual(set(scene.take_damage()), rectangles)
+
+    def test_position_press_switch_and_lift_clear_old_pose_even_without_position_change(self):
+        for style in ('glove', 'pixel_hand', 'reticle'):
+            with self.subTest(style=style):
+                scene = MarkerScene((201, 121), MarkerAppearance(style))
+                scene.update(((.5, .5, False),))
+                visible = scene.take_damage()
+                self.assertTrue(scene.update(((.5, .5, True),)))
+                self.assertEqual(scene.take_damage(), visible)
+                self.assertTrue(scene.update(()))
+                self.assertEqual(scene.take_damage(), visible)
+
+    def test_position_bounds_clip_at_all_corners_without_moving_touch_points(self):
+        for style in ('glove', 'pixel_hand', 'reticle'):
+            with self.subTest(style=style):
+                scene = MarkerScene((80, 80), MarkerAppearance(style))
+                rings = ((0., 0., False), (1., 0., True), (0., 1., False), (1., 1., True))
+                scene.update(rings)
+                rectangles = scene.take_damage()
+                self.assertEqual(scene.rings, rings)
+                self.assertEqual(len(rectangles), 4)
+                for x, y, width, height in rectangles:
+                    self.assertTrue(0 <= x < x+width <= 80)
+                    self.assertTrue(0 <= y < y+height <= 80)
 
 
 @unittest.skipUnless(sys.platform=='linux','Offscreen Cairo checks require Linux runtime')
@@ -83,6 +128,22 @@ class MarkerPixelTests(unittest.TestCase):
             draw_rings(a,rings,canvas)
             self.vector_reference(b,rings,canvas,DEFAULT_COLORS)
             self.assert_pixels_match(actual,reference)
+
+    def test_ring_appearance_colors_are_consistent_in_cached_and_scaled_paths(self):
+        import cairo
+        from armada_dual_screen_input.marker_colors import MarkerColors
+        colors = MarkerColors('#FF0000', '#00FF00')
+        appearance = MarkerAppearance('ring', colors)
+        canvas = (96, 48)
+        rings = ((.25, .5, False), (.75, .5, True))
+        for scale in (1, 2):
+            actual = cairo.ImageSurface(cairo.FORMAT_ARGB32, canvas[0]*scale, canvas[1]*scale)
+            reference = cairo.ImageSurface(cairo.FORMAT_ARGB32, canvas[0]*scale, canvas[1]*scale)
+            actual.set_device_scale(scale, scale)
+            reference.set_device_scale(scale, scale)
+            draw_rings(cairo.Context(actual), rings, canvas, appearance=appearance)
+            draw_rings(cairo.Context(reference), rings, canvas, colors)
+            self.assert_pixels_match(actual, reference)
 
     def test_cache_is_bounded_when_colors_change(self):
         from armada_dual_screen_input.marker_paint import _ring_sprite
@@ -134,6 +195,44 @@ class MarkerPixelTests(unittest.TestCase):
                 reference.set_device_scale(scale,scale)
                 draw_rings(cairo.Context(reference),scene.rings,canvas)
                 self.assert_pixels_match(actual,reference)
+
+    def test_position_style_partial_pixels_match_full_frames_across_poses_modes_edges_and_clear(self):
+        import cairo
+        from armada_dual_screen_input.marker_appearance import load_appearance
+        appearances = [load_appearance(style) for style in ('glove', 'pixel_hand', 'reticle')]
+        self.assertEqual([appearance.style for appearance in appearances], ['glove', 'pixel_hand', 'reticle'])
+        canvas = (192, 128)
+        # Switch the entire shape at a fixed coordinate before checking
+        # motion, contact changes and fallback back to direct-touch rings.
+        frames = [(((.25, .3, False),), appearance) for appearance in appearances]
+        for appearance in appearances:
+            frames.extend((
+                (((.25, .3, False),), appearance),
+                (((.25, .3, True),), appearance),
+                (((.25, .3, True),), appearance.for_mode('direct')),
+                (((0., 0., False), (1., 1., True)), appearance),
+                (((1., 0., True), (0., 1., False)), appearance),
+                (((.45, .55, True), (.46, .56, False)), appearance),
+                ((), appearance),
+            ))
+            frames.extend(((((.2+step/1000, .5, bool(step % 2)),), appearance)
+                          for step in range(40)))
+            frames.append(((), appearance))
+        for scale in (1, 2):
+            scene = MarkerScene(canvas)
+            actual = cairo.ImageSurface(cairo.FORMAT_ARGB32, canvas[0]*scale, canvas[1]*scale)
+            actual.set_device_scale(scale, scale)
+            for rings, appearance in frames:
+                scene.update(rings, appearance)
+                cr = cairo.Context(actual)
+                for rectangle in scene.take_damage():
+                    cr.rectangle(*rectangle)
+                cr.clip()
+                draw_rings(cr, scene.rings, canvas, appearance=scene.appearance)
+                reference = cairo.ImageSurface(cairo.FORMAT_ARGB32, canvas[0]*scale, canvas[1]*scale)
+                reference.set_device_scale(scale, scale)
+                draw_rings(cairo.Context(reference), rings, canvas, appearance=appearance)
+                self.assert_pixels_match(actual, reference)
 
     def test_unrelated_partial_expose_does_not_forget_old_visible_ring(self):
         import cairo
