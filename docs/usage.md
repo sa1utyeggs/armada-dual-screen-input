@@ -65,7 +65,7 @@ Visual smoothing continuously moves only the upper indicator toward the latest t
 
 ## Check and install updates
 
-Select Settings → General → Updates → Check for updates to view current/latest stable versions. Checks are manual and run in the background: no startup network request/download or switch to prereleases. An exhausted anonymous GitHub quota shows a rate-limit message; wait and manually retry rather than reinstalling.
+Select Settings → General → Updates → Check for updates to view current/latest stable versions. Checks are manual and run in the background: no startup network request/download or switch to prereleases. The app and its independent update task share the click installer’s public release discovery: follow the public `releases/latest` redirect, require a stable version tag, read that pinned tag’s `SHA256SUMS` and check the archive headers. They make no REST API request or REST fallback, avoiding the shared anonymous REST quota. GitHub or its CDN can still throttle public pages and downloads, including HTTP 429 responses; respect any retry delay, then check again manually. There is no automatic retry, and reinstalling does not reset a server-side limit.
 
 When a version is available, select Update to v…, then Confirm update and restart. First save/discard any input edits. Downloads verify official asset SHA-256, `SHA256SUMS` and the internal manifest before the existing installer upgrades. Personal settings, autostart and the previous-version rollback entry are retained.
 

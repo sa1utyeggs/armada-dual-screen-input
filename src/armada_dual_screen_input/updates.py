@@ -2,18 +2,15 @@
 from .i18n import msg
 from dataclasses import dataclass
 import hashlib
-import json
 from pathlib import Path, PurePosixPath
 import re
 import shutil
 import tarfile
 import time
-from urllib.error import HTTPError
 from urllib.parse import unquote, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 REPO = 'sa1utyeggs/armada-dual-screen-input'
-API = 'https://api.github.com/repos/' + REPO + '/releases/latest'
 APP = 'armada-dual-screen-input'
 MAX_ARCHIVE = 64 * 1024 * 1024
 MAX_EXPANDED = 128 * 1024 * 1024
@@ -25,18 +22,28 @@ class UpdateError(Exception):
 
 
 class HTTPSRedirects(HTTPRedirectHandler):
+    # Python 3.10 lacks the 308 dispatch alias; keep method-preserving
+    # redirects consistent with newer urllib versions.
+    http_error_308 = HTTPRedirectHandler.http_error_302
+
     def redirect_request(self, req, fp, code, status_message, headers, newurl):
         url = urlsplit(newurl)
         if url.scheme != 'https' or url.hostname not in (
-                'github.com', 'api.github.com', 'release-assets.githubusercontent.com',
+                'github.com', 'release-assets.githubusercontent.com',
                 'objects.githubusercontent.com'):
             raise UpdateError(msg('update.redirect'))
-        return super().redirect_request(req, fp, code, status_message, headers, newurl)
+        redirected = super().redirect_request(req, fp, 307 if code == 308 else code,
+                                              status_message, headers, newurl)
+        # urllib otherwise replaces a redirected HEAD with GET, which would
+        # start an archive transfer during a metadata-only version check.
+        if redirected is not None and req.get_method() == 'HEAD':
+            redirected.method = 'HEAD'
+        return redirected
 
 
 def open_url(url):
     return build_opener(HTTPSRedirects()).open(Request(url, headers={
-        'User-Agent': APP + '-updater', 'Accept': 'application/vnd.github+json',
+        'User-Agent': APP + '-updater', 'Accept': '*/*',
     }), timeout=15)
 
 
@@ -105,19 +112,15 @@ def parse_release(data):
                    selected[0][2], selected[1][2])
 
 
-def latest_release(*, opener=open_url):
-    try:
-        with opener(API) as response:
-            return parse_release(json.loads(limited_read(response, 1024 * 1024)))
-    except UpdateError:
-        raise
-    except HTTPError as error:
-        headers = error.headers or {}
-        if error.code == 429 or (error.code == 403 and headers.get('X-RateLimit-Remaining') == '0'):
-            raise UpdateError(msg('update.rate_limit')) from error
-        raise UpdateError(msg('update.http', code=error.code)) from error
-    except Exception as error:
-        raise UpdateError(msg('update.network')) from error
+def latest_release(*, opener=None):
+    """Use the installer's public discovery for both the UI and update worker.
+
+    Import lazily: public discovery uses the shared descriptor/download helpers
+    in this module. Its opener supports HEAD as well as GET; never fall back to
+    anonymous REST requests when a public release request fails.
+    """
+    from .installer_release import latest_install_release
+    return latest_install_release() if opener is None else latest_install_release(opener=opener)
 
 
 def download(url, target, size, expected, *, opener=open_url):

@@ -1,4 +1,4 @@
-"""Public stable-release discovery for first installs, without REST API quotas.
+"""Shared public stable-release discovery, without anonymous REST API quotas.
 
 GitHub's /releases/latest redirect selects the tag. Its HTTPS checksum asset
 pins both downloads between review and installation. The existing bounded
@@ -59,6 +59,9 @@ def latest_install_release(*, opener=open_release_url):
     except UpdateError:
         raise
     except HTTPError as error:
+        headers = error.headers or {}
+        if error.code == 429 or (error.code == 403 and headers.get('X-RateLimit-Remaining') == '0'):
+            raise UpdateError(msg('update.rate_limit')) from error
         raise UpdateError(msg('update.http', code=error.code)) from error
     except Exception as error:
         raise UpdateError(msg('update.network')) from error

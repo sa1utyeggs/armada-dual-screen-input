@@ -11,6 +11,7 @@ import update as worker
 from manage import Installer, Paths
 from release import PackageError, seal
 import test_installation as fixture
+from test_updates import public_release_fixture, public_requests
 
 
 class WorkerTests(unittest.TestCase):
@@ -65,6 +66,50 @@ class WorkerTests(unittest.TestCase):
         self.assertTrue(all(call[0] not in ('enable', 'disable') for call in self.services.calls))
         self.assertTrue(all('steam' not in str(call) and 'armada' not in str(call) for call in self.services.calls))
         self.assertEqual(self.status.call_args.args[0], 'success')
+
+    def test_default_worker_fetch_uses_shared_public_discovery_without_rest(self):
+        from armada_dual_screen_input import installer_release
+        selected, _, calls, opener = public_release_fixture()
+        discover = installer_release.latest_install_release
+        prepare = Mock(side_effect=lambda release, _: self.bundle(release.version))
+        with patch.object(installer_release, 'latest_install_release',
+                          side_effect=lambda **_: discover(opener=opener)) as shared, \
+             patch('armada_dual_screen_input.updates.open_url',
+                   side_effect=AssertionError('REST discovery forbidden')) as rest, \
+             patch('urllib.request.OpenerDirector.open',
+                   side_effect=AssertionError('Real network forbidden')):
+            worker.perform(selected.tag, prepare=prepare, installer=self.installer,
+                           paths=self.paths, status=self.status, check_host=Mock(),
+                           check_runtime=lambda _: {'all': True})
+        shared.assert_called_once()
+        rest.assert_not_called()
+        self.assertEqual(calls, public_requests(selected))
+        self.assertEqual(prepare.call_args.args[0], selected)
+        self.assertEqual((self.paths.root/'current/VERSION').read_text(), selected.version)
+        self.assertEqual(self.config.read_bytes(), self.original)
+        self.assertEqual(self.status.call_args.args[0], 'success')
+
+    def test_default_public_lookup_rejects_an_outdated_confirmation_before_download(self):
+        from armada_dual_screen_input import installer_release
+        selected, _, calls, opener = public_release_fixture()
+        discover = installer_release.latest_install_release
+        prepare = Mock(side_effect=AssertionError('No download after changed release'))
+        with patch.object(installer_release, 'latest_install_release',
+                          side_effect=lambda **_: discover(opener=opener)), \
+             patch('armada_dual_screen_input.updates.open_url',
+                   side_effect=AssertionError('REST discovery forbidden')) as rest, \
+             patch('urllib.request.OpenerDirector.open',
+                   side_effect=AssertionError('Real network forbidden')):
+            with self.assertRaisesRegex(worker.UpdateError, '已变化'):
+                worker.perform('v0.1.9', prepare=prepare, installer=self.installer,
+                               paths=self.paths, status=self.status, check_host=Mock(),
+                               check_runtime=lambda _: {'all': True})
+        rest.assert_not_called()
+        self.assertEqual(calls, public_requests(selected))
+        prepare.assert_not_called()
+        self.assertEqual((self.paths.root/'current').resolve(), self.current)
+        self.assertEqual(self.config.read_bytes(), self.original)
+        self.assertFalse(self.services.calls)
 
     def test_download_failure_keeps_files_links_and_service_untouched(self):
         with self.assertRaises(OSError):

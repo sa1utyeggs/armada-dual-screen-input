@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 
 from armada_dual_screen_input.update_controller import UpdateController, start_worker
 from armada_dual_screen_input.updates import UpdateError, parse_release
-from test_updates import release_data
+from test_updates import public_release_fixture, public_requests, release_data
 
 
 class ControllerTests(unittest.TestCase):
@@ -44,6 +44,31 @@ class ControllerTests(unittest.TestCase):
         self.assertEqual(self.controller.phase, 'checking')
         self.delivery.pop()()
         self.assertTrue(self.controller.available)
+        self.launch.assert_not_called()
+
+    def test_default_check_uses_shared_public_discovery_without_rest_or_real_network(self):
+        from armada_dual_screen_input import installer_release
+        selected, _, calls, opener = public_release_fixture()
+        discover = installer_release.latest_install_release
+        controller = UpdateController(self.root, dispatch=self.delivery.append,
+            changed=self.changed, launch=self.launch, background=self.work.append,
+            status_file=self.root/'public-status.json', deadline=lambda *_: Mock())
+        controller.managed = True
+        self.addCleanup(controller.close)
+        with patch.object(installer_release, 'latest_install_release',
+                          side_effect=lambda **_: discover(opener=opener)) as shared, \
+             patch('armada_dual_screen_input.updates.open_url',
+                   side_effect=AssertionError('REST discovery forbidden')) as rest, \
+             patch('urllib.request.OpenerDirector.open',
+                   side_effect=AssertionError('Real network forbidden')):
+            controller.check()
+            self.finish()
+        shared.assert_called_once()
+        rest.assert_not_called()
+        self.assertEqual(calls, public_requests(selected))
+        self.assertEqual(controller.latest, selected)
+        self.assertTrue(controller.available)
+        self.fetch.assert_not_called()
         self.launch.assert_not_called()
 
     def test_closing_panel_ignores_late_network_callback(self):
