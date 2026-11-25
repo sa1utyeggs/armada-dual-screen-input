@@ -57,7 +57,7 @@ def status(metadata, system):
     profile = system.profile()
     lower, upper = system.targets()
     compatible = ('ayn,thor' in profile['board_compatible'] and
-                  all(profile.get(k) == v for k, v in metadata['host'].items()) and
+                  profile['architecture'] == metadata['host']['architecture'] == 'aarch64' and
                   not profile['modules_disabled'] and
                   system.driver(lower) in ('edt_ft5x06', 'armada_thor_ft5452') and
                   system.driver(upper) == 'edt_ft5x06')
@@ -78,7 +78,7 @@ def perform(action, metadata, control, system=None):
         package = control.Package(DATA/'packages'/metadata['module_sha256'])
         if package.manifest['sha256'] != metadata['module_sha256']:
             raise ValueError('Wrong fixed driver package')
-        package.verify(system)  # Full fingerprints and payload checks before writes.
+        package.verify(system)  # Device, architecture and payload checks before writes.
     else:
         package = None
     store = control.Store()

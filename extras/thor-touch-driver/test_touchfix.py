@@ -95,13 +95,41 @@ class DriverPackageTests(unittest.TestCase):
         self.assertEqual(self.system.events, [])
         self.assertEqual(self.store.saved, [])
 
-    def test_all_fingerprint_mismatches_are_rejected_before_actions(self):
-        for key in ('kernel_release', 'architecture', 'kernel_notes_sha256', 'kernel_config_sha256'):
-            with self.subTest(key=key):
-                self.system.host = deepcopy(HOST); self.system.host[key] = 'different'
+    def test_system_updates_do_not_block_explicit_apply(self):
+        self.system.host.update(kernel_release='new-kernel', kernel_notes_sha256='different-build',
+                                kernel_config_sha256='different-config')
+        self.controller.apply(self.package())
+        self.assertEqual(self.store.state['phase'], 'active')
+        self.assertEqual(self.system.driver('4-0038'), t.ORIGINAL)
+
+    def test_missing_live_fingerprints_do_not_block_apply(self):
+        del self.system.host['kernel_notes_sha256']
+        del self.system.host['kernel_config_sha256']
+        self.controller.apply(self.package())
+        self.assertEqual(self.store.state['phase'], 'active')
+
+    def test_architecture_mismatch_is_rejected_before_actions(self):
+        self.system.host['architecture'] = 'x86_64'
+        with self.assertRaises(t.Refused): self.controller.apply(self.package())
+        self.assertEqual(self.system.events, [])
+        self.assertEqual(self.store.saved, [])
+
+    def test_module_identity_still_has_to_match_the_package(self):
+        for info in ({'name': 'other', 'vermagic': self.manifest['vermagic']},
+                     {'name': t.MODULE, 'vermagic': 'different'}):
+            with self.subTest(info=info), patch.object(self.system, 'module_info', return_value=info):
                 with self.assertRaises(t.Refused): self.controller.apply(self.package())
                 self.assertEqual(self.system.events, [])
                 self.assertEqual(self.store.saved, [])
+
+    def test_kernel_rejection_after_update_keeps_stock_driver(self):
+        self.system.host['kernel_release'] = 'new-kernel'
+        self.system.fail = 'load'
+        with self.assertRaises(OSError): self.controller.apply(self.package())
+        self.assertEqual(self.store.state['phase'], 'reverted')
+        self.assertEqual(self.system.driver('1-0038'), t.ORIGINAL)
+        self.assertEqual(self.system.driver('4-0038'), t.ORIGINAL)
+        self.assertFalse(any(e[0] == 'unbind' for e in self.system.events))
 
     def test_wrong_board_disabled_modules_and_changed_upper_are_rejected(self):
         for host, upper in ((dict(HOST, board_compatible=['other']), t.ORIGINAL),
