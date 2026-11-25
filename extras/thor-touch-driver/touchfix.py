@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import argparse
 from contextlib import contextmanager
-import gzip
 import hashlib
 import json
 import os
@@ -73,13 +72,14 @@ class Package:
     def verify(self, system):
         actual = system.profile()
         require('ayn,thor' in actual['board_compatible'], 'Not an AYN Thor')
-        for key in ('kernel_release', 'architecture', 'kernel_notes_sha256', 'kernel_config_sha256'):
-            require(actual[key] == self.manifest['host'][key], 'Host mismatch: ' + key)
+        require(actual['architecture'] == self.manifest['host']['architecture'] == 'aarch64',
+                'Host mismatch: architecture')
+        # Build fingerprints in the manifest are provenance, not a version gate.
+        # Let normal insmod enforce the running kernel's module compatibility.
         require(not actual['modules_disabled'], 'Kernel module loading has been disabled')
         info = system.module_info(self.directory / PAYLOAD)
         require(info['name'] == MODULE and info['vermagic'] == self.manifest['vermagic'],
                 'Unexpected module name/vermagic')
-        require(info['vermagic'].split()[0] == actual['kernel_release'], 'Wrong kernel release')
         lower, upper = system.targets()
         require(system.driver(lower) in (ORIGINAL, MODULE), 'Unexpected current lower driver')
         require(system.driver(upper) == ORIGINAL, 'Unexpected upper driver; refusing takeover')
@@ -94,8 +94,6 @@ class Linux:
         return {
             'kernel_release': os.uname().release,
             'architecture': os.uname().machine,
-            'kernel_notes_sha256': sha(Path('/sys/kernel/notes').read_bytes()),
-            'kernel_config_sha256': sha(gzip.decompress(Path('/proc/config.gz').read_bytes())),
             'board_compatible': Path('/sys/firmware/devicetree/base/compatible').read_bytes()
                 .rstrip(b'\0').decode().split('\0'),
             'modules_disabled': Path('/proc/sys/kernel/modules_disabled').read_text().strip() != '0',

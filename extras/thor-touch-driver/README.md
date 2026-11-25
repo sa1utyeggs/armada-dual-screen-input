@@ -48,11 +48,10 @@ A candidate contains `manifest.json`, `armada_thor_ft5452.ko`, `touchfix.py`, li
 Only explicit operations copy the module/manifest into root-managed `/var/lib/armada-touch-fix/packages/<SHA256>/`; old packages remain.
 The tool does not download code. Trusted release downloads and a graphical update interface are not implemented.
 
-Each enable checks architecture, kernel release, running-config SHA-256, `/sys/kernel/notes` SHA-256, module name, vermagic and file checksums.
-Other builds named `7.2.6` are therefore refused too. Continue using official system updates; on mismatch, keep the stock driver and wait for a matching package.
-This provides no cross-kernel ABI guarantee and uses no forced loading, version bypass or signature bypass.
+Each enable checks the Thor device, AArch64 architecture, lower/upper driver targets, module name, packaged vermagic and file checksums. Kernel release, running-config and kernel-notes fingerprints no longer block preparation, the read-only plan or manual activation after a system update. Live status does not require `/proc/config.gz` or `/sys/kernel/notes`.
+Normal `insmod` still enforces the kernel's module checks, including version and signature checks; there is no forced loading or cross-kernel ABI guarantee. If loading is rejected, the tool keeps/restores the stock driver and reports failure. A module built for the new kernel may still be needed.
 
-The current package supports only these fingerprints:
+The original build/validation used these fingerprints; they remain provenance, not activation requirements:
 
 ```text
 kernel notes: 868b1eab0643a777197361333300dea114aabf6ae65549c4750b11e8a0f18775
@@ -67,18 +66,18 @@ kernel config: 3cae56750274cbd5b90a788335389dfbd38ad9fcb526505593ee878dc208a04f
 
 ### Optional Settings controls
 
-The current app source provides **Settings → Experimental**. The app remains unprivileged and its normal installer/bundle still excludes the module and these experimental scripts. First install a trusted, exact-kernel module package separately, then explicitly prepare the optional root-owned GUI component from this repository:
+The current app source provides **Settings → Experimental**. The app remains unprivileged and its normal installer/bundle still excludes the module and these experimental scripts. First obtain a trusted module package separately, then explicitly prepare the optional root-owned GUI component from this repository:
 
 ```bash
 sudo python3 extras/thor-touch-driver/install_gui.py /path/to/module-package
 python3 -I -B /var/lib/armada-touch-fix-ui/gui_bridge.py status
 ```
 
-Preparation verifies the package against the running kernel, persists it in the existing root-managed package store and installs only `/var/lib/armada-touch-fix-ui/` metadata/control code. It **does not change the active driver**, create a service/polkit/sudoers rule, enable boot loading or replace boot files. Normal app updates/removal leave this optional root component unchanged.
+Preparation verifies the package, device and architecture, persists it in the existing root-managed package store and installs only `/var/lib/armada-touch-fix-ui/` metadata/control code. It **does not change the active driver**, create a service/polkit/sudoers rule, enable boot loading or replace boot files. Normal app updates/removal leave this optional root component unchanged. Existing installations must rerun the preparation command above from the updated repository to replace the old version-gating helpers; this does not activate the driver.
 
-The settings page reads status only when opened or refreshed. With matching fingerprints, **Enable fix until reboot** and **Restore stock driver** each require confirmation and the system's administrator authentication. Unsaved input settings or an update/uninstall block actions. A detached ordinary-user task locks against app updates, stops this panel to release its virtual input, calls only the fixed root-owned bridge through `pkexec`, and reopens the panel even after cancellation/failure. The bridge takes no GUI-supplied module/script path, verifies the fixed package again and rebinds only the lower device. Root command waits are bounded; a hung/panicking kernel still needs reboot.
+The settings page reads status only when opened or refreshed. **Enable fix until reboot** and **Restore stock driver** each require confirmation and the system's administrator authentication. Unsaved input settings or an update/uninstall block actions. A detached ordinary-user task locks against app updates, stops this panel to release its virtual input, calls only the fixed root-owned bridge through `pkexec`, and reopens the panel even after cancellation/failure. The bridge takes no GUI-supplied module/script path, verifies the fixed package again and rebinds only the lower device. Root command waits are bounded; a hung/panicking kernel still needs reboot.
 
-Save/exit games before switching. Status and actual touch acceptance are separate: a successful operation does not prove all gestures, long-session or sleep behavior. There is no background polling outside the settings page and no default autoload. A kernel update with different fingerprints refuses enable; stock restore remains available for an active module. To restore from a terminal:
+Save/exit games before switching. Status and actual touch acceptance are separate: a successful operation does not prove all gestures, long-session or sleep behavior. There is no background polling outside the settings page and no default autoload. System updates no longer disable the enable button solely because of version/fingerprint changes. Readiness means a manual load can be attempted, not that kernel compatibility has been established; stock restore remains available for an active module. To restore from a terminal:
 
 ```bash
 sudo python3 -I -B /var/lib/armada-touch-fix-ui/gui_bridge.py revert

@@ -129,15 +129,24 @@ class RootDriverBridgeTests(unittest.TestCase):
         return dict(kernel_release='7.2.6',architecture='aarch64',kernel_notes_sha256='n',
                     kernel_config_sha256='c',board_compatible=['ayn,thor'],modules_disabled=False)
 
-    def test_read_only_status_checks_full_fingerprints_and_upper_driver(self):
+    def test_read_only_status_allows_system_updates_and_checks_device(self):
         profile=self.profile();meta={'host':{k:profile[k] for k in (
             'kernel_release','architecture','kernel_notes_sha256','kernel_config_sha256')}}
         s=SimpleNamespace(profile=lambda:profile,targets=lambda:('lower','upper'),
                           driver=lambda node:'edt_ft5x06')
         self.assertTrue(bridge.status(meta,s)['compatible'])
-        profile['kernel_notes_sha256']='different-build'
-        self.assertFalse(bridge.status(meta,s)['compatible'])
-        profile['kernel_notes_sha256']='n';s.driver=lambda _: 'unexpected'
+        profile.update(kernel_release='new-kernel',kernel_notes_sha256='different-build',
+                       kernel_config_sha256='different-config')
+        self.assertTrue(bridge.status(meta,s)['compatible'])
+        del profile['kernel_notes_sha256'];del profile['kernel_config_sha256']
+        self.assertTrue(bridge.status(meta,s)['compatible'])
+        self.assertEqual(bridge.status(meta,s)['kernel'],'new-kernel')
+        for key,value in (('architecture','x86_64'),('board_compatible',['other']),
+                          ('modules_disabled',True)):
+            original=profile[key];profile[key]=value
+            self.assertFalse(bridge.status(meta,s)['compatible'])
+            profile[key]=original
+        s.driver=lambda _: 'unexpected'
         self.assertFalse(bridge.status(meta,s)['compatible'])
 
     def test_failed_package_verification_prevents_store_or_controller_mutations(self):

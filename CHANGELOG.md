@@ -2,6 +2,10 @@ English · [简体中文](CHANGELOG.zh-CN.md)
 
 # Changelog
 
+## 0.1.8 · 2026-11-25
+
+- Remove kernel release/config/build-fingerprint gates from the optional Thor touch-fix preparation, command-line tool and Settings readiness check, allowing users to attempt manual activation after system updates. Retain device/architecture, payload integrity, administrator authentication and stock recovery checks; normal kernel module loading may still reject an incompatible module. Existing root-owned components require a separate helper update. New-kernel device behavior remains unverified.
+
 ## 0.1.7 · 2026-10-28
 
 - Fix in-app update checks still using anonymous REST discovery after the click installer had moved to public Release pages. The app and independent update task now reuse the installer’s public latest redirect, strict stable-tag validation, same-tag `SHA256SUMS` and archive-header check, with no REST fallback. Selected-tag confirmation, download checksums, safe extraction and manifest verification remain unchanged. Checks stay manual with no automatic retry; GitHub/CDN web throttling such as HTTP 429 can still occur.
